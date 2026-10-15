@@ -3,7 +3,7 @@
 
 Ловит класс ошибок, из-за которого интерфейс молча ломается: скрипт ссылается
 на id, которого нет в разметке, или использует класс без соответствующих
-стилей. Оба случая не дают ошибок в консоли — просто ничего не работает.
+стилей. В обоих случаях в консоли нет ошибок: просто ничего не работает.
 
 Запуск: python3 check_ui.py
 """
@@ -29,7 +29,7 @@ print(f"id: {len(used)} используется, все найдены")
 toggled = set(re.findall(r"classList\.(?:add|remove)\('([\w-]+)'\)", HTML))
 css_classes = set(re.findall(r"\.([a-zA-Z][\w-]*)\s*[,{:]", HTML))
 
-# classList.add('open') — это состояние, а не имя класса в разметке
+# classList.add('open') означает состояние, а не имя класса в разметке
 missing_css = sorted(c for c in toggled if c not in css_classes)
 if missing_css:
     print("КЛАСС БЕЗ СТИЛЕЙ:", ", ".join(missing_css))
@@ -40,13 +40,13 @@ print(f"классы-переключатели: {len(toggled)}, у всех е�
 overlays = re.findall(r'<div class="ov[^"]*" id="([\w-]+)"', HTML)
 fixed = len(re.findall(r"\.ov\s*\{[^}]*position:\s*fixed", HTML))
 if overlays and not fixed:
-    print("ОВЕРЛЕЙ БЕЗ position:fixed — раздвинет страницу")
+    print("ОВЕРЛЕЙ БЕЗ position:fixed, раздвинет страницу")
     sys.exit(1)
 print(f"оверлеи: {len(overlays)}, position:fixed есть")
 
 # --- внешние скрипты не должны появляться: сервис работает без сборки ---
 if re.search(r"<script[^>]+src=", HTML):
-    print("ВНЕШНИЙ СКРИПТ — сборка не нужна, но он подключается извне")
+    print("ВНЕШНИЙ СКРИПТ: сборка не нужна, но он подключается извне")
     sys.exit(1)
 print("внешних скриптов нет")
 

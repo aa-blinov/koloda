@@ -94,7 +94,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
 .meta .stat{display:flex;align-items:center;gap:4px;color:var(--faint);font-variant-numeric:tabular-nums}
 
-.post img,.post video{width:100%;display:block;border-radius:10px;margin:4px 0 11px;
+.post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:10px;margin:4px 0 11px;
   background:var(--media-bg);border:1px solid var(--line)}
 .txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68}
 .post.read .txt{color:var(--dim)}
@@ -670,7 +670,7 @@ function showFeedWarning(){
   warning.hidden=false;
   warning.textContent=channels.length
     ? 'Не удалось обновить '+channels.length+' '+(channels.length===1?'канал':'канала')+': '+channels.join(', ')+'. Показаны доступные посты.'
-    : 'Не удалось загрузить следующую часть ленты. Попробуйте ещё раз.';
+    : 'Не удалось загрузить следующую часть ленты. Попробуй ещё раз.';
 }
 
 function render(posts,append=false){
