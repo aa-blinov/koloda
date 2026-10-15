@@ -804,7 +804,8 @@ class Handler(BaseHTTPRequestHandler):
                               (username,)).fetchone():
                     return self._send(409, json.dumps({"error": "Это имя уже занято. Выбери другое."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if db.execute("SELECT 1 FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone():
+                # без почты поле пустое, и второй профиль без почты совпал бы с первым
+                if email and db.execute("SELECT 1 FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone():
                     return self._send(409, json.dumps({"error": "Эта почта уже привязана к профилю"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 profile = secrets.token_urlsafe(24)
@@ -816,7 +817,8 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute("INSERT INTO accounts "
                                "(username,profile,salt,digest,created,email,email_verified) "
                                "VALUES (?,?,?,?,?,?,?)",
-                               (username, profile, salt, digest, int(time.time()), email,
+                               (username, profile, salt, digest, int(time.time()),
+                                email or None,   # пустая почта = NULL, иначе ломается accounts_email
                                 0 if email else 1))
                     token = issue_auth_token(db, profile, "email_verify", email) if email else ""
                     db.commit()
