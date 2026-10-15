@@ -1,0 +1,16 @@
+services:
+  feed:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8090:8000"         # 8000 на машине занят другими процессами
+    volumes:
+      - feed-data:/data     # только база; код остаётся в образе
+    environment:
+      LOG: "${LENTELE_LOG:-0}"   # 1 — включить логи запросов
+      COOKIE_SECURE: "${COOKIE_SECURE:-0}"  # 1 — сайт работает за HTTPS
+    restart: unless-stopped
+
+volumes:
+  feed-data:

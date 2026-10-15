@@ -1,0 +1,6 @@
+{
+  "//": "Необязательно. Без этого файла используются официальные ключи Telegram Desktop и вход по QR. Скопируй этот файл как config.json и подставь свои api_id/api_hash с https://my.telegram.org/apps, если нужен свой ключ.",
+  "api_id": 2040,
+  "api_hash": "b18441a1ff607e10a989891a5462e627",
+  "limit_per_channel": 50
+}

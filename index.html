@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Лента</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f14; --surf:#141821; --raise:#1b2029; --line:#242b38;
+  --fg:#e9ecf3; --dim:#98a1b5; --faint:#7a8397;
+  --acc:#5aa2ff; --acc-ink:#0b1220;
+  --line-hover:#303a4c; --line-hover-strong:#3a4557;
+  --scroll-thumb:#2a3242; --scroll-thumb-hover:#3a4557;
+  --paid:#f0b429; --error:#f07c83; --media-bg:#000; --selection-fg:#fff;
+  --overlay:rgba(0,0,0,.72);
+  /* Тени несут смещение и размытие — плоский ореол это декор, а не глубина */
+  --sh-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
+  --sh-2:0 8px 24px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
+  --r:14px;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-6:24px; --space-8:32px;
+}
+html{scrollbar-color:var(--scroll-thumb) transparent}
+[hidden]{display:none!important}
+body{
+  background:var(--bg); color:var(--fg);
+  font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  padding-bottom:env(safe-area-inset-bottom);
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:color-mix(in srgb, var(--acc) 34%, transparent); color:var(--selection-fg)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:99px;border:3px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover)}
+:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:6px}
+svg.i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- Шапка ---------- */
+header{position:sticky;top:0;z-index:20;
+  background:color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter:blur(14px) saturate(140%); backdrop-filter:blur(14px) saturate(140%);
+  border-bottom:1px solid var(--line);
+  padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top))}
+.bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.brand{flex:0 0 auto;font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--fg)}
+#sectionTabs{flex:0 0 auto}
+#unreadBtn,#meBtn{flex:0 0 auto}
+.seg{display:flex;background:var(--surf);border:1px solid var(--line);border-radius:11px;padding:3px}
+.seg button{border:0;background:none;color:var(--dim);min-height:44px;padding:8px 13px;border-radius:8px;
+  font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.seg button[aria-selected=true]{background:var(--raise);color:var(--fg);box-shadow:var(--sh-1)}
+.toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;border-radius:11px;cursor:pointer;
+  background:var(--surf);border:1px solid var(--line);color:var(--dim);white-space:nowrap;
+  transition:color .16s,border-color .16s,background .16s}
+.toggle[aria-pressed=true]{background:color-mix(in srgb, var(--acc) 16%, var(--surf));
+  border-color:color-mix(in srgb, var(--acc) 46%, var(--line));color:var(--acc);font-weight:600}
+.search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:8px;
+  background:var(--surf);border:1px solid var(--line);border-radius:11px;padding:0 11px}
+.search:focus-within{border-color:var(--acc)}
+.search svg.i{color:var(--faint)}
+.search input{flex:1;min-width:0;background:none;border:0;color:var(--fg);font:inherit;font-size:16px;
+  padding:9px 0;outline:none}
+.search input::placeholder{color:var(--faint)}
+
+/* ---------- Лента ---------- */
+nav{max-width:780px;margin:0 auto;display:flex;gap:7px;padding:12px 16px 8px;overflow-x:auto;
+  scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:99px;
+  background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:0 20px 56px}
+#feed{max-width:748px;margin-inline:auto}
+.catalog-main{padding-top:28px}
+.catalog-head{margin:4px 0 22px}
+.catalog-head h2{font-size:23px;line-height:1.2;letter-spacing:-.025em}
+.catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
+
+.post{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);cursor:pointer;
+  transition:box-shadow .18s, border-color .18s, transform .18s, opacity .18s}
+.post:hover{border-color:var(--line-hover);box-shadow:var(--sh-2);transform:translateY(-1px)}
+.post:active{transform:translateY(0)}
+.post.read{background:color-mix(in srgb,var(--surf) 78%,var(--bg))}
+
+.meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:var(--dim)}
+.meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em}
+/* Непрочитанность — точка и вес, а не цветная полоса на карточке */
+.dot{width:7px;height:7px;border-radius:50%;background:var(--acc);flex:0 0 auto;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
+.meta .stat{display:flex;align-items:center;gap:4px;color:var(--faint);font-variant-numeric:tabular-nums}
+
+.post img,.post video{width:100%;display:block;border-radius:10px;margin:4px 0 11px;
+  background:var(--media-bg);border:1px solid var(--line)}
+.txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68}
+.post.read .txt{color:var(--dim)}
+.txt a{color:var(--acc);text-underline-offset:2px;text-decoration-thickness:1px}
+.txt a:hover{text-decoration-thickness:2px}
+.txt b,.txt strong{font-weight:650;color:var(--fg)}
+.txt i,.txt em{font-style:italic}
+.txt s,.txt del{color:var(--dim)}
+.txt code{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--raise);
+  padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
+.txt pre{background:var(--raise);border:1px solid var(--line);border-radius:9px;
+  padding:11px 13px;overflow-x:auto;margin:9px 0}
+.txt pre code{background:none;border:0;padding:0}
+.txt blockquote{border-left:2px solid var(--line);padding-left:12px;color:var(--dim);margin:8px 0}
+
+/* --- Реакции --- */
+.rx{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.rx span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 9px;
+  border-radius:99px;background:var(--raise);border:1px solid var(--line);color:var(--dim);
+  font-variant-numeric:tabular-nums}
+/* Кастомные эмодзи приходят без символа — показываем точку, а не выдуманный смайлик */
+.rx span.custom .mark{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.rx span.paid{color:var(--paid);border-color:color-mix(in srgb,var(--paid) 32%,var(--line))}
+
+/* --- Пересылка и цитата --- */
+.orig{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);margin-bottom:7px}
+.orig a{color:inherit;text-decoration:none}
+.orig a:hover{color:var(--acc)}
+.quote{border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:0 0 10px;
+  font-size:13.5px;color:var(--dim)}
+.quote .who{color:var(--fg);font-weight:600}
+.quote .line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60ch}
+
+/* --- Файл --- */
+.doc{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;margin-top:10px;
+  background:var(--raise);border:1px solid var(--line);color:inherit;text-decoration:none;
+  transition:border-color .16s}
+.doc:hover{border-color:var(--acc)}
+.doc .nm{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc .mt{font-size:12px;color:var(--dim)}
+
+/* --- Карточка ссылки --- */
+.preview{display:flex;gap:12px;margin-top:11px;padding:11px;border-radius:11px;
+  background:var(--raise);border:1px solid var(--line);color:inherit;text-decoration:none;
+  transition:border-color .16s}
+.preview:hover{border-color:var(--acc)}
+.preview img{width:84px;height:62px;object-fit:cover;border-radius:8px;flex:0 0 auto;margin:0}
+.preview .body{min-width:0;display:grid;gap:2px;align-content:center}
+.preview .site{font-size:11.5px;color:var(--acc);letter-spacing:.01em}
+.preview .nm{font-size:13.5px;font-weight:600;line-height:1.35}
+.preview .ds{font-size:12.5px;color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.sticker{width:132px;margin-top:9px;display:block}
+
+/* ---------- Каталог ---------- */
+.filters{display:flex;gap:8px;overflow-x:auto;padding:4px 0 14px;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.filter-scroll{position:relative}
+.filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
+  pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
+.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:99px;
+  background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
+.filters button[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
+
+.channel-list{display:grid;gap:2px}
+.channel-entry{padding:8px 0;border-bottom:1px solid var(--line)}
+.channel-row{display:flex;align-items:center;gap:12px;min-height:64px}
+.channel-open{flex:1;min-width:0;display:flex;align-items:center;gap:13px;padding:8px 10px;
+  border:0;border-radius:12px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
+  transition:background .16s}
+.channel-open:hover,.channel-open[aria-expanded=true]{background:var(--surf)}
+.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:12px;
+  background:var(--raise);color:var(--dim);font-size:15px;font-weight:650}
+.channel-copy{display:grid;gap:3px;min-width:0;flex:1}
+.channel-name{font-size:15px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-preview-label{flex:0 0 auto;color:var(--acc);font-size:12px;font-weight:600}
+.channel-meta{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
+.channel-count small{color:var(--faint);font-size:11px}
+.channel-action{flex:0 0 auto;min-width:108px;min-height:42px;padding:8px 12px;border-radius:10px;
+  background:transparent;border:1px solid var(--line);color:var(--dim);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.channel-action:hover{border-color:var(--acc);color:var(--acc)}
+.channel-action.is-on{background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:color-mix(in srgb,var(--acc) 32%,var(--line));color:var(--acc)}
+.channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:12px;
+  animation:preview-in .2s cubic-bezier(.2,.8,.2,1) both}
+.channel-preview[hidden]{display:none}
+.channel-preview-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+.channel-preview-head strong{font-size:13px}
+.channel-preview-head a{font-size:12px;color:var(--dim);text-decoration:underline;text-underline-offset:3px}
+.channel-preview-post{padding:13px 0;border-top:1px solid var(--line)}
+.channel-preview-post:first-child{border-top:0;padding-top:5px}
+.channel-preview-post time{display:block;margin-bottom:6px;color:var(--faint);font-size:11.5px}
+.channel-preview-post .txt{font-size:13.5px;line-height:1.58}
+.channel-preview-post img,.channel-preview-post video{max-height:240px;object-fit:cover}
+.channel-preview-state{color:var(--dim);font-size:13px;padding:16px 0}
+@keyframes preview-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.empty-action{color:var(--acc);border:0;background:none;font:inherit;font-weight:650;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.channel-form{display:flex;gap:8px;margin:2px 0 8px}
+.channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 12px;border-radius:10px;
+  background:var(--surf);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:16px}
+.channel-form input::placeholder{color:var(--faint)}
+.channel-state{min-height:0;margin:0 0 8px;color:var(--dim);font-size:12.5px}
+.channel-state:empty{display:none}
+.channel-state[data-error="true"]{color:var(--error)}
+.auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px}
+.auth-card{width:min(100%,440px);padding:30px;background:var(--surf);border-radius:16px;box-shadow:var(--sh-2)}
+.auth-card h1{font-size:26px;line-height:1.2;letter-spacing:-.03em}
+.auth-card>p{margin-top:9px;color:var(--dim);font-size:14px;line-height:1.55}
+.auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:24px 0 18px;
+  background:var(--bg);border-radius:11px}
+.auth-modes button{min-height:42px;border:0;border-radius:8px;background:none;color:var(--dim);font:inherit;cursor:pointer}
+.auth-modes button[aria-pressed=true]{background:var(--raise);color:var(--fg);font-weight:650}
+.auth-form{display:grid;gap:8px}
+.auth-form label{margin-top:8px;font-size:13px;font-weight:600}
+.auth-form input{width:100%;min-height:46px;padding:10px 12px;border-radius:10px;background:var(--bg);
+  border:1px solid var(--line);color:var(--fg);font:inherit;font-size:16px}
+.auth-form input:focus{border-color:var(--acc);outline:2px solid color-mix(in srgb,var(--acc) 25%,transparent)}
+.auth-help{min-height:20px;color:var(--dim);font-size:12.5px}
+.auth-message{min-height:20px;color:var(--error);font-size:13px}
+.auth-message[data-success="true"]{color:var(--acc)}
+.auth-form .btn{width:100%;margin-top:5px}
+.auth-footnote{margin-top:20px!important;font-size:12px!important;color:var(--faint)!important}
+.account-name{padding:12px 0;font-size:15px;font-weight:650}
+.account-actions{display:flex;gap:8px;margin-top:12px}
+.account-actions button{flex:1}
+.feed-warning{margin:0 0 12px;padding:10px 12px;border-radius:10px;
+  background:color-mix(in srgb,var(--error) 10%,var(--surf));color:var(--fg);font-size:13px}
+.load-more{display:block;margin:16px auto 28px}
+.feed-empty-more{padding:20px 16px;text-align:center;color:var(--dim)}
+
+/* ---------- Состояния ---------- */
+.empty{color:var(--dim);text-align:center;padding:64px 24px;display:grid;gap:10px;justify-items:center}
+.empty svg.i{width:28px;height:28px;color:var(--faint)}
+.empty p{max-width:38ch;font-size:14px;line-height:1.6}
+.btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:9px;cursor:pointer;
+  background:var(--acc);border:1px solid var(--acc);color:var(--acc-ink);font-weight:600}
+/* Оверлей профиля. position:fixed обязателен — иначе блок раздвигает страницу. */
+.ov{position:fixed;inset:0;z-index:100;background:var(--overlay);
+  display:none;align-items:center;justify-content:center;padding:16px}
+.ov.open{display:flex}
+/* Панель внутри оверлея обязана иметь свой непрозрачный фон: иначе сквозь неё
+   видно страницу под ней. Форму даёт тень, а не волосяная рамка: та и другая
+   вместе — безвкусная связка, которую ловит детектор. */
+.ov .dlg{width:min(420px,100%);max-height:86vh;overflow:auto;display:flex;flex-direction:column;
+  background:var(--surf);color:var(--fg);
+  border-radius:var(--r);padding:18px;box-shadow:var(--sh-2)}
+.ov .dlg h2{font-size:17px;margin-bottom:4px;letter-spacing:-.01em}
+.ov .dlg p{color:var(--dim);font-size:13px;margin-bottom:14px;line-height:1.55}
+.ov .dlg .empty{padding:20px}
+.ov .dlgbtns{display:flex;gap:8px;margin-top:16px}
+.ov .dlgbtns button{flex:1}
+.ov .dlgbtns .btn{flex:1}
+.ov .dlgbtns .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:9px;
+  cursor:pointer;background:var(--raise);border:1px solid var(--line);color:var(--fg)}
+.ov .dlg input{min-height:44px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
+.read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
+  margin:-10px 0 -10px -10px;border-radius:8px}
+.read-toggle{border:0;background:none;color:var(--acc);cursor:pointer}
+.read-toggle:hover{background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.read-toggle .dot{width:8px;height:8px}
+.read-status{color:var(--dim)}
+
+.skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+  padding:15px 17px;margin-bottom:12px}
+.skel i{display:block;height:10px;border-radius:5px;background:var(--raise);margin-bottom:9px;
+  animation:breathe 1.4s ease-in-out infinite}
+.skel i:nth-child(2){width:42%}
+.skel i:nth-child(3){width:100%;height:56px}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
+.view[hidden]{display:none}
+.view.enter{animation:rise .28s cubic-bezier(.16,1,.3,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+@media(max-width:640px){
+  header{padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top))}
+  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"sections profile" "search search" "unread unread";gap:8px}
+  .brand{display:none}
+  #sectionTabs{grid-area:sections;justify-self:start}
+  #meBtn{grid-area:profile;justify-self:end}
+  #unreadBtn{grid-area:unread;justify-self:start}
+  .search{grid-area:search;width:100%}
+  .seg button{padding:8px 10px;font-size:13px}
+  main,nav{padding-left:14px;padding-right:14px}
+  .catalog-main{padding-top:22px}
+  .catalog-head{margin-bottom:18px}
+  .catalog-head h2{font-size:21px}
+  .auth-card{padding:24px 20px}
+  .auth-card h1{font-size:23px}
+  .post{padding:16px 16px;margin-bottom:13px}
+  .txt{max-width:none}
+  .channel-form{align-items:stretch}
+  .channel-form .btn{padding-left:11px;padding-right:11px}
+  .channel-row{gap:8px}
+  .channel-open{gap:10px;padding:7px 4px}
+  .channel-mark{width:38px;height:38px;flex-basis:38px}
+  .channel-count{display:none}
+  .channel-action{min-width:86px;min-height:40px;padding:7px 9px;font-size:12px}
+  .channel-desc{display:none}
+  .channel-preview{margin:7px 0 8px;padding:13px}
+}
+</style>
+</head>
+<body>
+<div id="appShell" hidden>
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-rss" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5 10-11"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 8v5"/><circle cx="12" cy="16.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="9"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="2.5" y="5" width="14" height="14" rx="2"/><path d="m16.5 10.5 5-3v9l-5-3z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-9.5 9.5M21 3l-6.5 18-3.5-7-7-3.5Z"/></symbol>
+</svg>
+
+<header>
+  <h1 class="brand">Лента</h1>
+  <div class="bar">
+    <div class="seg" role="tablist" aria-label="Разделы" id="sectionTabs">
+      <button role="tab" id="tabFeed" aria-controls="viewFeed" aria-selected="true" tabindex="0"><svg class="i"><use href="#i-rss"/></svg>Лента</button>
+      <button role="tab" id="tabCat" aria-controls="viewCat" aria-selected="false" tabindex="-1"><svg class="i"><use href="#i-grid"/></svg>Каталог</button>
+    </div>
+    <label class="search">
+      <svg class="i"><use href="#i-search"/></svg>
+      <input id="q" type="search" placeholder="Поиск по постам" autocomplete="off" aria-label="Поиск по постам">
+    </label>
+    <button id="unreadBtn" class="toggle" aria-pressed="false">Непрочитанные</button>
+    <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
+  </div>
+  <p class="sync-status" id="syncStatus" role="status" aria-live="polite" hidden></p>
+</header>
+
+<section class="view" id="viewFeed" role="tabpanel" aria-labelledby="tabFeed" tabindex="0">
+  <nav id="tabs" role="tablist" aria-label="Каналы"></nav>
+    <main id="feed" role="tabpanel" aria-label="Публикации канала" tabindex="0"></main>
+</section>
+
+<section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" tabindex="0" hidden>
+  <main class="catalog-main">
+    <div class="catalog-head">
+      <h2>Собери свою ленту</h2>
+      <p>Открой канал, посмотри последние публикации и добавь только то, что хочется читать.</p>
+    </div>
+    <form id="channelForm" class="channel-form">
+      <label class="sr-only" for="channelInput">Ссылка или имя публичного канала Telegram</label>
+      <input id="channelInput" type="text" placeholder="@username или t.me/username"
+             autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="120">
+      <button class="btn" id="channelAdd" type="submit">Добавить по ссылке</button>
+    </form>
+    <p class="channel-state" id="channelState" role="status" aria-live="polite"></p>
+    <div class="filter-scroll" id="filterScroll"><div class="filters" id="cats" role="group" aria-label="Категории"></div></div>
+    <div id="catList"></div>
+  </main>
+</section>
+
+<div class="ov" id="meOvl" role="dialog" aria-modal="true" aria-labelledby="meTitle" aria-describedby="meDescription" aria-hidden="true" tabindex="-1">
+  <div class="dlg" style="max-width:420px">
+    <h2 id="meTitle">Твой профиль</h2>
+    <p id="meDescription">Твоя подборка каналов хранится отдельно от других профилей.</p>
+    <div class="account-name" id="accountName"></div>
+    <p id="accountEmailState" aria-live="polite"></p>
+    <form class="auth-form" id="emailForm">
+      <label for="profileEmail">Почта для восстановления</label>
+      <input id="profileEmail" type="email" autocomplete="email" maxlength="254" required>
+      <label for="profilePassword">Текущий пароль</label>
+      <input id="profilePassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+      <p class="auth-message" id="emailMessage" role="status" aria-live="polite"></p>
+      <button class="btn" id="emailSubmit" type="submit">Подтвердить почту</button>
+    </form>
+    <div class="account-actions">
+      <button id="logoutBtn" class="quiet-btn">Выйти</button>
+      <button id="meClose" class="btn">Готово</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<main class="auth-screen" id="authScreen">
+  <section class="auth-card" aria-labelledby="authTitle">
+    <h1 id="authTitle">Своя лента</h1>
+    <p>Выбирай каналы и читай их публикации в одном месте. У каждого профиля своя подборка.</p>
+    <div class="auth-modes" id="authModes" role="group" aria-label="Действие с профилем">
+      <button type="button" id="authLoginMode" aria-pressed="true">Войти</button>
+      <button type="button" id="authRegisterMode" aria-pressed="false">Создать профиль</button>
+    </div>
+    <form class="auth-form" id="authForm">
+      <label id="authEmailLabel" for="authEmail" hidden>Почта</label>
+      <input id="authEmail" name="email" type="email" autocomplete="email" maxlength="254" hidden>
+      <label id="authUsernameLabel" for="authUsername">Имя профиля</label>
+      <input id="authUsername" name="username" autocomplete="username" minlength="3" maxlength="32" required>
+      <label id="authPasswordLabel" for="authPassword">Пароль</label>
+      <input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+      <label id="authConfirmLabel" for="authConfirm" hidden>Повтори пароль</label>
+      <input id="authConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" hidden>
+      <p class="auth-help" id="authHelp">Введи имя и пароль своего профиля.</p>
+      <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
+      <button class="btn" id="authSubmit" type="submit">Войти</button>
+      <button class="empty-action" id="authForgot" type="button">Забыл пароль?</button>
+      <button class="empty-action" id="authResend" type="button" hidden>Отправить письмо ещё раз</button>
+      <button class="empty-action" id="authBack" type="button" hidden>Вернуться ко входу</button>
+    </form>
+    <p class="auth-footnote">Для ленты не нужен аккаунт Telegram. Восстановить пароль можно по подтверждённой почте.</p>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const LS = {sub:'tg.subs', read:'tg.read', pending:'tg.pending', only:'tg.only', view:'tg.view', migrated:'tg.migrated'};
+const readJSON = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || ''); } catch(e) { return fallback; } };
+const subs  = () => { const v=readJSON(LS.sub,[]); return Array.isArray(v)?v.filter(c=>typeof c==='string'):[]; };
+const seen  = () => { const v=readJSON(LS.read,[]); return new Set(Array.isArray(v)?v.filter(k=>typeof k==='string'):[]); };
+const pendingOps = () => { const v=readJSON(LS.pending,[]); return Array.isArray(v)?v:[]; };
+const key   = p => p.channel + '/' + p.msg_id;
+const esc   = s => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+const icon  = n => '<svg class="i" aria-hidden="true" focusable="false"><use href="#i-'+n+'"/></svg>';
+const kfmt  = n => n >= 1e6 ? (n/1e6).toFixed(1).replace('.0','')+'M'
+                : n >= 1e3 ? Math.round(n/1e3)+'K' : String(n);
+
+/* --- Состояние профиля с проверкой пароля --- */
+let accountName = '', stateReady = false, stateQueue = Promise.resolve();
+function stateBody(){ return {subs:subs(), reads:[...seen()]}; }
+function saveSubs(v){ localStorage.setItem(LS.sub, JSON.stringify(v)); }
+function saveRead(s){ localStorage.setItem(LS.read, JSON.stringify([...s].slice(-20000))); }
+function applyState(data){
+  localStorage.setItem(LS.sub, JSON.stringify(Array.isArray(data.subs)?data.subs:[]));
+  localStorage.setItem(LS.read, JSON.stringify(Array.isArray(data.reads)?data.reads:[]));
+}
+function replayPending(){
+  const nextSubs = new Set(subs()), nextReads = seen();
+  pendingOps().forEach(op => {
+    if(op.type === 'subscription') op.subscribed ? nextSubs.add(op.channel) : nextSubs.delete(op.channel);
+    if(op.type === 'read') nextReads.add(op.post);
+  });
+  saveSubs([...nextSubs]); saveRead(nextReads);
+}
+function setSyncStatus(message, retry=false){
+  const el=$('#syncStatus'); el.hidden=!message; el.replaceChildren();
+  if(!message) return;
+  el.append(document.createTextNode(message));
+  if(retry){ const b=document.createElement('button'); b.type='button'; b.textContent='Повторить'; b.onclick=drainStateOps; el.append(' ',b); }
+}
+async function postState(path, data){
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const body=await r.json().catch(()=>({}));
+  if(r.status===401){ showAuth('Сессия завершилась. Войди в профиль ещё раз.'); throw new Error('Нужно войти в профиль'); }
+  if(!r.ok) throw new Error(body.error || 'Не удалось сохранить изменения');
+  return body;
+}
+function queueStateOp(op){
+  const queued=pendingOps(); queued.push(op);
+  localStorage.setItem(LS.pending,JSON.stringify(queued)); replayPending();
+  if(stateReady) drainStateOps();
+}
+function drainStateOps(){
+  if(!stateReady) return Promise.resolve();
+  stateQueue=stateQueue.catch(()=>{}).then(async()=>{
+    while(pendingOps().length){
+      const op=pendingOps()[0];
+      const data=op.type==='subscription'
+        ? await postState('/api/state/subscription',{channel:op.channel,subscribed:op.subscribed})
+        : await postState('/api/state/read',{posts:[op.post]});
+      localStorage.setItem(LS.pending,JSON.stringify(pendingOps().slice(1)));
+      applyState(data); replayPending(); setSyncStatus('');
+    }
+  }).catch(()=>setSyncStatus('Не удалось сохранить изменения. Проверь соединение и повтори попытку.',true));
+  return stateQueue;
+}
+async function loadAccountState({migrate=false, legacy=null}={}){
+  stateReady=false;
+  localStorage.setItem(LS.pending,'[]');
+  if(migrate && localStorage.getItem(LS.migrated)!=='1'){
+    const r=await fetch('/api/state/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(legacy || {subs:[],reads:[]})});
+    if(!r.ok) throw new Error('Не удалось перенести прежнюю ленту');
+    applyState(await r.json()); localStorage.setItem(LS.migrated,'1');
+  }else{
+    const r=await fetch('/api/state');
+    if(r.status===401) throw new Error('Войди в профиль ещё раз.');
+    if(!r.ok) throw new Error('Не удалось загрузить твою ленту');
+    applyState(await r.json());
+  }
+  stateReady=true; replayPending();
+}
+function setFormMessage(id,message,success=false){
+  const node=$('#'+id); node.textContent=message; node.dataset.success=String(success);
+}
+function showAuth(message=''){
+  stateReady=false; $('#appShell').hidden=true; $('#authScreen').hidden=false;
+  setFormMessage('authMessage',message);
+  const focusTarget=$('#authEmail').hidden?($('#authUsername').hidden?$('#authSubmit'):$('#authUsername')):$('#authEmail');
+  focusTarget.focus({preventScroll:true});
+}
+let accountEmail='';
+function showApp(account){
+  accountName=account.username; accountEmail=account.email||'';
+  $('#accountName').textContent='@'+accountName;
+  $('#profileEmail').value=accountEmail;
+  $('#profilePassword').value=''; setFormMessage('emailMessage','');
+  $('#accountEmailState').textContent=accountEmail
+    ? (account.email_verified?'Почта подтверждена. Её можно использовать для восстановления пароля.':'Подтверди почту по ссылке из письма.')
+    : 'Добавь почту, чтобы восстановить пароль, если забудешь его.';
+  $('#authScreen').hidden=true; $('#appShell').hidden=false;
+  setSyncStatus(''); renderTabs();
+  const initialView=localStorage.getItem(LS.view)==='cat'?'cat':'feed';
+  show(initialView); load();
+  setInterval(pullState,15000);
+  window.addEventListener('focus',pullState);
+  document.addEventListener('visibilitychange',pullState);
+}
+async function pullState(){
+  if(!stateReady || document.hidden) return;
+  await stateQueue.catch(()=>{});
+  try{
+    const r=await fetch('/api/state');
+    if(r.status===401){ showAuth('Сессия завершилась. Войди в профиль ещё раз.'); return; }
+    if(!r.ok) return;
+    const data=await r.json(), old=JSON.stringify(stateBody());
+    applyState(data); replayPending();
+    if(old!==JSON.stringify(stateBody())){ renderTabs(); load(); }
+    await drainStateOps();
+  }catch(e){ /* продолжаем показывать уже загруженную ленту */ }
+}
+
+let tab = '', onlyUnread = localStorage.getItem(LS.only) === '1', titles = {};
+let catalogCat = 'all', timer, catTimer, feedQuery='', catalogQuery='', expandedChannel='', previewCache=new Map(), catalogItems=new Map();
+let feedCursor=null, feedHasMore=false, feedErrors=[], feedRequestId=0, feedController=null, feedLoading=false;
+let feedPageFailed=false;
+
+const markRead = p => {
+  const post=key(p), s=seen();
+  if(s.has(post)) return;
+  s.add(post); saveRead(s); queueStateOp({type:'read',post});
+};
+
+function when(ts){
+  if(!ts) return '';
+  const diff = Date.now()/1000 - ts;
+  if(diff < 3600)   return Math.floor(diff/60) + ' мин';
+  if(diff < 86400)  return Math.floor(diff/3600) + ' ч';
+  if(diff < 604800) return Math.floor(diff/86400) + ' дн';
+  return new Date(ts*1000).toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+}
+function emptyState(glyph, text, action){
+  return '<div class="empty" role="status" aria-live="polite">'+icon(glyph)+'<p>'+esc(text)+'</p>'+
+         (action ? '<button class="btn" data-act="'+action[0]+'">'+esc(action[1])+'</button>' : '')+'</div>';
+}
+const skeleton = () => '<div class="sr-only" role="status">Загружаю данные…</div>'+
+  '<div class="skel" aria-hidden="true"><i></i><i></i><i></i></div>'.repeat(3);
+
+/* ---------- Лента ---------- */
+async function load(append=false){
+  const box = $('#feed');
+  const list = tab ? subs().filter(c => c === tab) : subs();
+  if(!list.length){
+    feedController?.abort(); feedRequestId++; feedLoading=false;
+    feedCursor=null; feedHasMore=false; feedErrors=[];
+    box.innerHTML = tab
+      ? emptyState('rss', 'У канала @'+tab+' пока нет постов.')
+      : emptyState('grid', 'Подписок пока нет. Открой каталог и выбери каналы — они появятся в ленте.', ['cat','Открыть каталог']);
+    return;
+  }
+  if(append && (feedLoading || !feedHasMore)) return;
+  if(!append){
+    feedController?.abort(); feedController=new AbortController();
+    feedCursor=null; feedHasMore=false; feedErrors=[];
+    feedPageFailed=false;
+    box.innerHTML = skeleton();
+  }else{
+    const more=$('#loadMore'); if(more){ more.disabled=true; more.textContent='Загружаю…'; }
+  }
+  const requestId=++feedRequestId;
+  const controller=append ? new AbortController() : feedController;
+  if(append) feedController=controller;
+  feedLoading=true;
+  const q = feedQuery.trim();
+  try{
+    const params=new URLSearchParams({channels:list.join(','),q});
+    if(append && feedCursor){
+      params.set('before_ts',feedCursor.ts); params.set('before_channel',feedCursor.channel);
+      params.set('before_id',feedCursor.msg_id);
+    }
+    if(onlyUnread) params.set('unread','1');
+    const r = await fetch('/api/feed?'+params.toString(),{
+      signal:controller.signal
+    });
+    if(!r.ok) throw new Error('request failed');
+    const d = await r.json();
+    if(requestId!==feedRequestId) return;
+    titles = d.titles || {};
+    feedCursor=d.next || null; feedHasMore=Boolean(d.has_more); feedErrors=d.errors || [];
+    feedPageFailed=false;
+    renderTabs(); render(d.posts,append);
+  }catch(e){
+    if(e.name==='AbortError' || requestId!==feedRequestId) return;
+    if(append){
+      feedPageFailed=true;
+      feedErrors=[{channel:'',message:'ошибка загрузки'}];
+      showFeedWarning();
+    }else box.innerHTML = emptyState('alert', 'Не удалось загрузить ленту. Проверь соединение и попробуй ещё раз.', ['retry','Попробовать снова']);
+  }finally{
+    if(requestId===feedRequestId){
+      feedLoading=false;
+      const more=$('#loadMore');
+      if(more){ more.disabled=false; more.hidden=!feedHasMore; more.textContent=feedPageFailed?'Повторить загрузку':'Загрузить ещё'; }
+    }
+  }
+}
+
+const DOC_ICON = {audio:'audio', voice:'audio', video:'video', roundvideo:'video',
+                  gif:'file', sticker:'file', file:'file'};
+
+function extras(p){
+  let h = '';
+
+  if(p.fwd)
+    h += '<div class="orig">'+icon('send')+'<span>Переслано от <a href="'+esc(p.fwd.url)+
+         '" target="_blank" rel="noopener">'+esc(p.fwd.name)+'</a></span></div>';
+
+  if(p.quote)
+    h += '<a class="quote" href="'+esc(p.quote.url)+'" target="_blank" rel="noopener">'+
+         '<span class="who">'+esc(p.quote.author||'')+'</span>'+
+         (p.quote.text?'<div class="line">'+esc(p.quote.text)+'</div>':'')+'</a>';
+
+  if(p.image && !p.video)
+    h += '<img loading="lazy" src="'+esc(p.image)+'" alt="Изображение из публикации">';
+  if(p.video)
+    h += '<video controls preload="none" playsinline src="'+esc(p.video)+'"></video>';
+  if(p.sticker)
+    h += '<img class="sticker" loading="lazy" src="'+esc(p.sticker)+'" alt="Стикер из публикации">';
+
+  h += '<div class="txt">'+p.text+'</div>';
+
+  if(p.doc)
+    h += '<a class="doc" href="'+esc(p.doc.url)+'" target="_blank" rel="noopener">'+
+         icon(DOC_ICON[p.doc.kind] || 'file')+
+         '<span style="min-width:0"><span class="nm" style="display:block">'+esc(p.doc.title||'Файл')+'</span>'+
+         (p.doc.meta?'<span class="mt">'+esc(p.doc.meta)+'</span>':'')+'</span></a>';
+
+  const pv = p.preview;
+  if(pv && (pv.title || pv.site || pv.image))
+    h += '<a class="preview" href="'+esc(pv.url)+'" target="_blank" rel="noopener">'+
+         (pv.image?'<img loading="lazy" src="'+esc(pv.image)+'" alt="'+esc(pv.title||pv.site||'Предпросмотр ссылки')+'">':'')+
+         '<span class="body">'+
+           (pv.site?'<span class="site">'+esc(pv.site)+'</span>':'')+
+           (pv.title?'<span class="nm">'+esc(pv.title)+'</span>':'')+
+           (pv.desc?'<span class="ds">'+esc(pv.desc)+'</span>':'')+
+         '</span></a>';
+
+  if(p.reactions && p.reactions.length){
+    h += '<div class="rx">';
+    for(const r of p.reactions){
+      const cls = r.paid ? 'paid' : (r.emoji ? '' : 'custom');
+      const mark = r.emoji ? esc(r.emoji) : '<span class="mark"></span>';
+      h += '<span class="'+cls+'">'+mark+esc(r.count)+'</span>';
+    }
+    h += '</div>';
+  }
+  return h;
+}
+
+function showFeedWarning(){
+  const warning=$('#feedWarning');
+  if(!warning) return;
+  if(!feedErrors.length){ warning.hidden=true; warning.textContent=''; return; }
+  const channels=feedErrors.map(e=>e.channel).filter(Boolean);
+  warning.hidden=false;
+  warning.textContent=channels.length
+    ? 'Не удалось обновить '+channels.length+' '+(channels.length===1?'канал':'канала')+': '+channels.join(', ')+'. Показаны доступные посты.'
+    : 'Не удалось загрузить следующую часть ленты. Попробуйте ещё раз.';
+}
+
+function render(posts,append=false){
+  const box = $('#feed'), s = seen();
+  const list = onlyUnread ? posts.filter(p => !s.has(key(p))) : posts;
+  if(!append){
+    if(!list.length && feedErrors.length){
+      const message='Не удалось обновить каналы: '+feedErrors.map(e=>e.channel).filter(Boolean).join(', ')+'. Проверь соединение и попробуй ещё раз.';
+      box.innerHTML=emptyState('alert',message,['retry','Попробовать снова']);
+      return;
+    }
+    if(!list.length && !feedHasMore){
+      box.innerHTML = emptyState(onlyUnread?'rss':(posts.length?'rss':'search'),
+        onlyUnread ? 'Непрочитанных постов пока нет.'
+          : posts.length ? 'Всё прочитано. Новые посты появятся здесь.' : 'Ничего не нашлось. Попробуй другой запрос.',
+        (!onlyUnread && feedQuery ? ['clearFeed','Сбросить поиск'] : null));
+      return;
+    }
+    box.innerHTML='<div class="feed-warning" id="feedWarning" role="status" hidden></div><div id="postList"></div>'+
+      '<p class="feed-empty-more" id="feedPageNote" hidden></p><button class="btn load-more" id="loadMore" type="button" data-act="loadmore">Загрузить ещё</button>';
+  }
+  const postList=$('#postList');
+  if(!postList) return;
+  if(!list.length && feedHasMore){
+    const note=$('#feedPageNote'); note.hidden=false; note.textContent='В этой части нет непрочитанных постов.';
+  }
+  for(const p of list){
+    const read = s.has(key(p));
+    const el = document.createElement('article');
+    el.className = 'post' + (read ? ' read' : '');
+    el.innerHTML =
+      '<div class="meta">'+
+        (read ? '<span class="read-status">'+icon('check')+'<span class="sr-only">Прочитано</span></span>' :
+          '<button type="button" class="read-toggle" aria-label="Отметить пост прочитанным" aria-pressed="false"><span class="dot" aria-hidden="true"></span></button>')+
+        '<span class="who">'+esc(titles[p.channel] || p.channel)+'</span>'+
+        '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>· '+when(p.ts)+'</time>'+
+        (p.views ? '<span class="stat">'+icon('eye')+esc(p.views)+'</span>' : '')+
+      '</div>'+ extras(p);
+    const setRead = () => {
+      if(seen().has(key(p))) return;
+      markRead(p);
+      el.classList.add('read');
+      const control = el.querySelector('.read-toggle');
+      if(control){
+        const status = document.createElement('span');
+        status.className = 'read-status';
+        status.innerHTML = icon('check')+'<span class="sr-only">Прочитано</span>';
+        control.replaceWith(status);
+      }
+      if(onlyUnread) load();
+    };
+    el.addEventListener('click', ev => {
+      if(ev.target.closest('video,img,a,button')) return;
+      setRead();
+    });
+    el.querySelector('.read-toggle')?.addEventListener('click', setRead);
+    postList.appendChild(el);
+  }
+  showFeedWarning();
+  const more=$('#loadMore');
+  if(more){ more.hidden=!feedHasMore; more.textContent='Загрузить ещё'; }
+}
+
+function renderTabs(){
+  const nav = $('#tabs'), list = subs();
+  nav.innerHTML = '';
+  if(!list.length) return;
+  const selected = list.length === 1 ? list[0] : tab;
+  const mk = (label, val) => {
+    const b = document.createElement('button');
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','feed');
+    b.id = val === '' ? 'channelTabAll' : 'channelTab'+list.indexOf(val);
+    b.setAttribute('aria-selected', String(val === selected)); b.tabIndex = val === selected ? 0 : -1;
+    b.textContent = label;
+    b.onclick = () => { tab = val; load(); };
+    nav.appendChild(b);
+  };
+  if(list.length > 1) mk('Все', '');
+  list.forEach(c => mk(titles[c] || c, c));
+  const activeTab = [...nav.querySelectorAll('[role="tab"]')].find(b => b.getAttribute('aria-selected') === 'true');
+  if(activeTab){ $('#feed').setAttribute('aria-labelledby', activeTab.id); $('#feed').removeAttribute('aria-label'); }
+  else { $('#feed').removeAttribute('aria-labelledby'); $('#feed').setAttribute('aria-label','Публикации'); }
+}
+
+/* ---------- Каталог ---------- */
+async function loadCatalog(){
+  const box = $('#catList'), q = catalogQuery.trim();
+  box.innerHTML = skeleton();
+  try{
+    const r=await fetch('/api/catalog?q='+encodeURIComponent(q)+'&category='+encodeURIComponent(catalogCat));
+    if(!r.ok) throw new Error('catalog unavailable');
+    const {channels=[]}=await r.json();
+    catalogItems=new Map(channels.map(channel=>[channel.username,channel]));
+    if(!channels.length){
+      box.innerHTML=emptyState('search','Ничего не нашлось. Измени запрос или выбери категорию.',['clearCatalog','Сбросить поиск']);
+      return;
+    }
+    box.className='channel-list'; box.replaceChildren();
+    const have=new Set(subs());
+    for(const c of channels){
+      const entry=document.createElement('article'); entry.className='channel-entry';
+      const row=document.createElement('div'); row.className='channel-row';
+      const open=document.createElement('button'); open.type='button'; open.className='channel-open';
+      open.dataset.act='preview'; open.dataset.channel=c.username; open.setAttribute('aria-expanded',String(expandedChannel===c.username));
+      open.innerHTML='<span class="channel-mark" aria-hidden="true">'+esc((c.name[0]||'@').toUpperCase())+'</span>'+ 
+        '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+ 
+        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' · '+esc(c.cat):'')+'</span>'+ 
+        (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+ 
+        (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">'+(expandedChannel===c.username?'Скрыть':'Посмотреть')+'</span>';
+      const action=document.createElement('button'); action.type='button'; action.className='channel-action'+(have.has(c.username)?' is-on':'');
+      action.dataset.act='subscribe'; action.dataset.channel=c.username; action.setAttribute('aria-pressed',String(have.has(c.username)));
+      action.textContent=have.has(c.username)?'Убрать':'Добавить';
+      action.setAttribute('aria-label',have.has(c.username)?'Убрать '+c.name+' из ленты':'Добавить '+c.name+' в ленту');
+      row.append(open,action);
+      const panel=document.createElement('section'); panel.className='channel-preview'; panel.hidden=expandedChannel!==c.username;
+      panel.id='preview-'+c.username; panel.setAttribute('aria-label','Предпросмотр канала '+c.name);
+      if(!panel.hidden) renderPreview(panel,c);
+      entry.append(row,panel); box.append(entry);
+    }
+  }catch(e){
+    box.innerHTML=emptyState('alert','Каталог временно недоступен. Проверь соединение и попробуй ещё раз.',['retry','Повторить']);
+  }
+}
+function renderPreview(panel,channel){
+  panel.innerHTML='<div class="channel-preview-head"><strong>Последние публикации</strong><a href="https://t.me/'+encodeURIComponent(channel.username)+'" target="_blank" rel="noopener">Открыть канал</a></div>';
+  const cached=previewCache.get(channel.username);
+  if(!cached){ panel.insertAdjacentHTML('beforeend','<p class="channel-preview-state">Загружаю публикации…</p>'); fetchPreview(panel,channel); return; }
+  if(cached.error){ panel.insertAdjacentHTML('beforeend','<p class="channel-preview-state">Не удалось показать публикации. <button class="empty-action" data-act="preview-retry" data-channel="'+esc(channel.username)+'">Повторить</button></p>'); return; }
+  if(!cached.posts.length){ panel.insertAdjacentHTML('beforeend','<p class="channel-preview-state">Пока нет доступных публикаций.</p>'); return; }
+  for(const post of cached.posts){
+    const item=document.createElement('article'); item.className='channel-preview-post';
+    item.innerHTML='<time>'+esc(when(post.ts))+'</time>'+extras(post);
+    panel.append(item);
+  }
+}
+async function fetchPreview(panel,channel){
+  try{
+    const r=await fetch('/api/preview?c='+encodeURIComponent(channel.username));
+    if(!r.ok) throw new Error('preview unavailable');
+    const data=await r.json(); previewCache.set(channel.username,data);
+  }catch(e){ previewCache.set(channel.username,{error:true,posts:[]}); }
+  if(expandedChannel===channel.username && panel.isConnected) renderPreview(panel,channel);
+}
+function togglePreview(channel){
+  expandedChannel=expandedChannel===channel?'':channel;
+  for(const entry of $('#catList').querySelectorAll('.channel-entry')){
+    const button=entry.querySelector('.channel-open'), panel=entry.querySelector('.channel-preview');
+    const expanded=button.dataset.channel===expandedChannel;
+    button.setAttribute('aria-expanded',String(expanded));
+    button.querySelector('.channel-preview-label').textContent=expanded?'Скрыть':'Посмотреть';
+    panel.hidden=!expanded;
+    if(expanded) renderPreview(panel,catalogItems.get(expandedChannel));
+  }
+}
+
+function setSubscription(channel,subscribed){
+  const list=new Set(subs());
+  if(subscribed){
+    if(list.has(channel)) return;
+    if(list.size>=200){ setSyncStatus('В одной ленте может быть не больше 200 каналов.'); return; }
+    list.add(channel);
+  }else{
+    list.delete(channel);
+    if(tab===channel) tab='';
+  }
+  saveSubs([...list]);
+  queueStateOp({type:'subscription',channel,subscribed});
+  renderTabs();
+}
+
+function parseChannelInput(value){
+  const raw=value.trim();
+  const url=raw.match(/^(?:https?:\/\/)?(?:www\.)?t\.me\/(?:s\/)?([A-Za-z0-9_]{3,32})\/?$/i);
+  const username=raw.match(/^@?([A-Za-z0-9_]{3,32})$/);
+  return (url?.[1] || username?.[1] || '').toLowerCase();
+}
+
+$('#channelForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const input=$('#channelInput'), button=$('#channelAdd'), state=$('#channelState');
+  const channel=parseChannelInput(input.value);
+  state.dataset.error='false';
+  if(!channel){ state.textContent='Введи имя канала или ссылку вида t.me/username.'; state.dataset.error='true'; input.focus(); return; }
+  if(subs().includes(channel)){ state.textContent='Этот канал уже есть в твоей ленте.'; input.focus(); return; }
+  if(subs().length>=200){ state.textContent='В одной ленте может быть не больше 200 каналов.'; state.dataset.error='true'; return; }
+  button.disabled=true; button.textContent='Проверяю…'; state.textContent='Проверяю публичный канал Telegram…';
+  try{
+    const r=await fetch('/api/check?c='+encodeURIComponent(channel));
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error || 'Канал не найден или недоступен');
+    setSubscription(channel,true);
+    input.value=''; state.dataset.error='false';
+    state.textContent='Добавлен канал «'+data.title+'».';
+    loadCatalog(); load();
+  }catch(err){ state.textContent=err.message; state.dataset.error='true'; }
+  finally{ button.disabled=false; button.textContent='Добавить канал'; }
+});
+
+async function loadCategories(){
+  const row = $('#cats');
+  row.innerHTML = '';
+  try{
+    const d = await (await fetch('/api/categories')).json();
+    const mk = (label, val) => {
+      const b = document.createElement('button');
+      b.textContent = label; b.setAttribute('aria-pressed', String(val === catalogCat));
+      b.onclick = () => {
+        catalogCat = val;
+        row.querySelectorAll('button').forEach(item =>
+          item.setAttribute('aria-pressed', String(item === b)));
+        loadCatalog();
+      };
+      row.appendChild(b);
+    };
+    mk('Все', 'all');
+    (d.categories || []).forEach(c => mk(c.name, c.slug));
+    requestAnimationFrame(updateFilterScroll);
+  }catch(e){ /* категории необязательны: поиск работает и без них */ }
+}
+
+function updateFilterScroll(){
+  const wrap=$('#filterScroll'), row=$('#cats');
+  if(!wrap || !row) return;
+  wrap.dataset.end=String(row.scrollWidth<=row.clientWidth+1 || row.scrollLeft+row.clientWidth>=row.scrollWidth-1);
+}
+$('#cats').addEventListener('scroll',updateFilterScroll,{passive:true});
+window.addEventListener('resize',updateFilterScroll);
+
+/* ---------- Навигация ---------- */
+function show(which){
+  const cat = which === 'cat';
+  $('#viewFeed').hidden = cat; $('#viewCat').hidden = !cat;
+  $('#tabFeed').setAttribute('aria-selected', String(!cat));
+  $('#tabCat').setAttribute('aria-selected', String(cat));
+  $('#tabFeed').tabIndex = cat ? -1 : 0;
+  $('#tabCat').tabIndex = cat ? 0 : -1;
+  $('#unreadBtn').hidden = cat;
+  // Поиск относится к тому виду, где он уместен
+  $('#q').placeholder = cat ? 'Поиск по каталогу' : 'Поиск по постам';
+  $('#q').setAttribute('aria-label', cat ? 'Поиск по каталогу' : 'Поиск по постам');
+  $('#q').value = cat ? catalogQuery : feedQuery;
+  const v = $(cat ? '#viewCat' : '#viewFeed');
+  v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
+  localStorage.setItem(LS.view, which);
+  if(cat && !$('#catList').children.length){ loadCategories(); loadCatalog(); }
+}
+
+function enableTabKeyboard(tablist){
+  tablist.addEventListener('keydown', e => {
+    const items = [...tablist.querySelectorAll('[role="tab"]')];
+    const current = items.indexOf(e.target);
+    if(current < 0 || !items.length) return;
+    let next = current;
+    if(e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (current + 1) % items.length;
+    else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
+    else if(e.key === 'Home') next = 0;
+    else if(e.key === 'End') next = items.length - 1;
+    else return;
+    e.preventDefault();
+    items[next].focus();
+    items[next].click();
+  });
+}
+enableTabKeyboard($('#sectionTabs'));
+enableTabKeyboard($('#tabs'));
+
+$('#tabFeed').onclick = () => show('feed');
+$('#tabCat').onclick   = () => show('cat');
+$('#unreadBtn').onclick = e => {
+  onlyUnread = !onlyUnread;
+  localStorage.setItem(LS.only, onlyUnread ? '1' : '0');
+  e.currentTarget.setAttribute('aria-pressed', String(onlyUnread));
+  load();
+};
+$('#unreadBtn').setAttribute('aria-pressed', String(onlyUnread));
+$('#q').oninput = () => {
+  clearTimeout(timer); const cat=!$('#viewCat').hidden;
+  if(cat) catalogQuery=$('#q').value; else feedQuery=$('#q').value;
+  timer=setTimeout(cat?loadCatalog:load,320);
+};
+$('#feed').onclick = e => {
+  if(e.target.dataset?.act === 'cat')  show('cat');
+  if(e.target.dataset?.act === 'clearFeed'){ feedQuery=''; $('#q').value=''; load(); }
+  if(e.target.dataset?.act === 'retry') load();
+  if(e.target.dataset?.act === 'loadmore') load(true);
+};
+$('#catList').onclick = e => {
+  const action=e.target.closest('[data-act]'); if(!action) return;
+  if(action.dataset.act==='retry') loadCatalog();
+  if(action.dataset.act==='clearCatalog'){ catalogQuery=''; catalogCat='all'; $('#q').value=''; $('#cats').querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-pressed',String(i===0))); loadCatalog(); }
+  if(action.dataset.act==='preview') togglePreview(action.dataset.channel);
+  if(action.dataset.act==='preview-retry'){ previewCache.delete(action.dataset.channel); loadCatalog(); }
+  if(action.dataset.act==='subscribe') {
+    const channel=action.dataset.channel, active=action.getAttribute('aria-pressed')==='true';
+    setSubscription(channel,!active); loadCatalog(); load();
+  }
+};
+
+
+let profileReturnFocus=null, profileInertState=[];
+function openProfile(){
+  profileReturnFocus=document.activeElement;
+  const background=[$('header'),$('#viewFeed'),$('#viewCat')];
+  profileInertState=background.map(el=>[el,el.inert]); background.forEach(el=>{el.inert=true;});
+  $('#meOvl').classList.add('open'); $('#meOvl').setAttribute('aria-hidden','false');
+  requestAnimationFrame(()=>$('#meClose').focus({preventScroll:true}));
+}
+function closeProfile(){
+  $('#meOvl').classList.remove('open'); $('#meOvl').setAttribute('aria-hidden','true');
+  profileInertState.forEach(([el,was])=>{el.inert=was;}); profileReturnFocus?.focus();
+}
+$('#meBtn').onclick=openProfile; $('#meClose').onclick=closeProfile;
+$('#meOvl').onclick=e=>{if(e.target===e.currentTarget)closeProfile();};
+$('#emailForm').onsubmit=async e=>{
+  e.preventDefault(); const button=$('#emailSubmit'); button.disabled=true; setFormMessage('emailMessage','');
+  try{
+    const r=await fetch('/api/auth/email',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:$('#profileEmail').value.trim(),password:$('#profilePassword').value})});
+    const data=await r.json().catch(()=>({})); if(!r.ok)throw new Error(data.error||'Не удалось сохранить почту');
+    $('#profilePassword').value=''; setFormMessage('emailMessage',data.message||'Перейди по ссылке в письме, чтобы подтвердить почту.',true);
+  }catch(err){setFormMessage('emailMessage',err.message||'Не удалось отправить письмо.');}
+  finally{button.disabled=false;}
+};
+document.addEventListener('keydown',e=>{
+  if(!$('#meOvl').classList.contains('open'))return;
+  if(e.key==='Escape'){e.preventDefault();closeProfile();return;}
+  if(e.key!=='Tab')return;
+  const items=[...$('#meOvl').querySelectorAll('button:not(:disabled)')]; if(!items.length)return;
+  if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
+  else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
+},true);
+$('#logoutBtn').onclick=async()=>{
+  $('#logoutBtn').disabled=true; await stateQueue.catch(()=>{});
+  try{await fetch('/api/auth/logout',{method:'POST'});}catch(e){}
+  ['sub','read','pending'].forEach(k=>localStorage.removeItem(LS[k]));
+  localStorage.setItem(LS.migrated,'1'); closeProfile(); showAuth('Ты вышел из профиля.'); $('#logoutBtn').disabled=false;
+};
+let authMode='login', authToken='';
+function setAuthMode(mode){
+  authMode=mode;
+  const register=mode==='register', login=mode==='login', forgot=mode==='forgot';
+  const reset=mode==='reset', verify=mode==='verify';
+  const sentVerify=mode==='sent_verify', sentReset=mode==='sent_reset';
+  const simpleView=reset||verify||sentVerify||sentReset;
+  const showEmail=register||forgot;
+  const showUsername=login||register;
+  const showPassword=login||register||reset;
+  const showConfirm=register||reset;
+  $('#authLoginMode').setAttribute('aria-pressed',String(!register)); $('#authRegisterMode').setAttribute('aria-pressed',String(register));
+  $('#authModes').hidden=!login&&!register;
+  $('#authEmailLabel').hidden=!showEmail; $('#authEmail').hidden=!showEmail; $('#authEmail').required=showEmail;
+  $('#authUsernameLabel').hidden=!showUsername; $('#authUsername').hidden=!showUsername; $('#authUsername').required=showUsername;
+  $('#authPasswordLabel').hidden=!showPassword; $('#authPassword').hidden=!showPassword; $('#authPassword').required=showPassword;
+  $('#authConfirm').hidden=!showConfirm; $('#authConfirmLabel').hidden=!showConfirm; $('#authConfirm').required=showConfirm;
+  $('#authPasswordLabel').textContent=reset?'Новый пароль':'Пароль';
+  $('#authPassword').autocomplete=register||reset?'new-password':'current-password';
+  $('#authSubmit').hidden=verify||sentVerify||sentReset;
+  $('#authSubmit').textContent=register?'Создать профиль':forgot?'Отправить ссылку':reset?'Сохранить пароль':verify?'Подтвердить почту':'Войти';
+  $('#authSubmit').type=verify?'button':'submit';
+  $('#authForgot').hidden=!login; $('#authResend').hidden=!sentVerify;
+  $('#authBack').hidden=login||register;
+  $('#authHelp').textContent=register?'Укажи почту для подтверждения и восстановления пароля. Имя — 3–32 латинских знака. Пароль — от 8 символов.'
+    :forgot?'Введи подтверждённую почту профиля. Если адрес найден, мы отправим ссылку для сброса пароля.'
+    :reset?'Придумай пароль длиной от 8 символов.'
+    :verify?'Нажми кнопку, чтобы подтвердить адрес почты и войти в профиль.'
+    :sentVerify?'Мы отправили письмо со ссылкой для подтверждения почты.'
+    :sentReset?'Если почта подтверждена, письмо со ссылкой уже отправлено.'
+    :login?'Введи имя и пароль своего профиля.':'Введи данные профиля.';
+  if(simpleView) setFormMessage('authMessage','');
+  setFormMessage('authMessage','');
+}
+$('#authLoginMode').onclick=()=>setAuthMode('login'); $('#authRegisterMode').onclick=()=>setAuthMode('register');
+$('#authForgot').onclick=()=>{setAuthMode('forgot');$('#authEmail').focus();};
+$('#authBack').onclick=()=>{authToken='';setAuthMode('login');setFormMessage('authMessage','');};
+$('#authResend').onclick=async()=>{
+  const email=$('#authEmail').value.trim(); $('#authResend').disabled=true;
+  try{await fetch('/api/auth/resend-verification',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    setFormMessage('authMessage','Если для этой почты ждёт подтверждения профиль, мы отправили письмо.',true);
+  }catch(e){setFormMessage('authMessage','Не удалось отправить письмо. Попробуй ещё раз позже.');}
+  finally{setTimeout(()=>$('#authResend').disabled=false,60000);}
+};
+async function verifyAuthEmail(){
+  const button=$('#authSubmit'); button.disabled=true; $('#authMessage').textContent='';
+  try{
+    const legacy={subs:subs(),reads:[...seen()]};
+    const r=await fetch('/api/auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+    const data=await r.json().catch(()=>({})); if(!r.ok)throw new Error(data.error||'Не удалось подтвердить почту');
+    authToken='';
+    if(data.account){
+      localStorage.setItem(LS.pending,'[]');
+      try{await loadAccountState({migrate:true,legacy});}
+      catch(error){await loadAccountState();localStorage.setItem(LS.migrated,'1');}
+      showApp(data.account); return;
+    }
+    const me=await fetch('/api/auth/me').then(r=>r.json()).catch(()=>({}));
+    if(me.account){showApp(me.account);return;}
+    setAuthMode('login'); setFormMessage('authMessage','Почта подтверждена. Теперь войди в профиль.',true);
+  }catch(err){setFormMessage('authMessage',err.message||'Ссылка недействительна или устарела.');}
+  finally{button.disabled=false;}
+}
+$('#authSubmit').addEventListener('click',e=>{if(authMode==='verify'){e.preventDefault();verifyAuthEmail();}});
+$('#authForm').onsubmit=async e=>{
+  e.preventDefault(); const username=$('#authUsername').value.trim(), password=$('#authPassword').value;
+  const button=$('#authSubmit'); button.disabled=true; setFormMessage('authMessage','');
+  if((authMode==='register'||authMode==='reset') && $('#authPassword').value!==$('#authConfirm').value){ setFormMessage('authMessage','Пароли не совпадают.'); button.disabled=false; $('#authConfirm').focus(); return; }
+  if(authMode==='forgot'){
+    try{
+      const r=await fetch('/api/auth/forgot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('#authEmail').value.trim()})});
+      const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||'Не удалось отправить ссылку');
+      setAuthMode('sent_reset'); setFormMessage('authMessage',data.message||'Если почта подтверждена, мы отправили ссылку.',true);
+    }catch(err){setFormMessage('authMessage',err.message||'Не удалось отправить ссылку.');}
+    finally{button.disabled=false;} return;
+  }
+  if(authMode==='reset'){
+    try{
+      const r=await fetch('/api/auth/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,password})});
+      const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||'Не удалось изменить пароль');
+      authToken='';$('#authPassword').value='';$('#authConfirm').value='';setAuthMode('login');setFormMessage('authMessage',data.message||'Пароль изменён. Теперь войди в профиль.',true);
+    }catch(err){setFormMessage('authMessage',err.message||'Ссылка недействительна или устарела.');}
+    finally{button.disabled=false;} return;
+  }
+  const legacy={subs:subs(),reads:[...seen()]};
+  try{
+    const path=authMode==='register'?'/api/auth/register':'/api/auth/login';
+    const body={username,password}; if(authMode==='register')body.email=$('#authEmail').value.trim();
+    const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await r.json().catch(()=>({})); if(!r.ok)throw new Error(data.error||'Не удалось войти');
+    if(authMode==='register'&&data.verification_required){
+      $('#authPassword').value='';$('#authConfirm').value='';setAuthMode('sent_verify');setFormMessage('authMessage',data.message,true);return;
+    }
+    let migrationWarning='';
+    if(authMode==='register'){
+      localStorage.setItem(LS.pending,'[]');
+      try{ await loadAccountState({migrate:true,legacy}); }
+      catch(error){ migrationWarning='Профиль создан, но прежнюю ленту перенести не удалось.'; await loadAccountState(); localStorage.setItem(LS.migrated,'1'); }
+    }else{
+      localStorage.removeItem(LS.sub); localStorage.removeItem(LS.read); localStorage.setItem(LS.pending,'[]');
+      localStorage.setItem(LS.migrated,'1');
+      await loadAccountState();
+    }
+    $('#authPassword').value=''; $('#authConfirm').value=''; showApp(data.account); if(migrationWarning) setSyncStatus(migrationWarning);
+  }catch(err){ setFormMessage('authMessage',err.message||'Не удалось войти. Проверь соединение.'); }
+  finally{button.disabled=false;}
+};
+async function startApp(){
+  if(location.protocol==='file:'){
+    document.body.innerHTML='<main style="max-width:560px;margin:12vh auto;padding:32px;color:#eef2f8;background:#141821;border:1px solid #242b38;border-radius:18px;font:16px/1.6 system-ui,sans-serif">'+
+      '<h1 style="margin-top:0">Открой ленту</h1><p>Чтобы посмотреть публикации, открой ленту по ссылке.</p>'+ 
+      '<a style="display:inline-block;padding:10px 16px;border-radius:10px;background:#5aa2ff;color:#0b1220;text-decoration:none;font-weight:700" href="http://127.0.0.1:8090/">Открыть ленту</a></main>';
+    return;
+  }
+  const params=new URLSearchParams(location.search), verification=params.get('token');
+  if(location.pathname==='/verify'&&verification){
+    authToken=verification;history.replaceState(null,'',location.pathname);setAuthMode('verify');showAuth();return;
+  }
+  if(location.pathname==='/reset'&&verification){
+    authToken=verification;history.replaceState(null,'',location.pathname);setAuthMode('reset');showAuth();return;
+  }
+  try{
+    const r=await fetch('/api/auth/me'); const data=await r.json();
+    if(data.account){ localStorage.setItem(LS.migrated,'1'); await loadAccountState(); showApp(data.account); }
+    else showAuth();
+  }catch(e){ showAuth('Не удалось подключиться. Проверь соединение и попробуй ещё раз.'); }
+}
+startApp();
+</script>
+</body>
+</html>
