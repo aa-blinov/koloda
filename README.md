@@ -4,7 +4,7 @@
 У каждого профиля отдельные подписки и отметки прочитанного. Для ленты не нужен аккаунт Telegram.
 
 ```bash
-cd ~/Документы/Проекты/pet/telegram-lenta
+git clone https://github.com/aa-blinov/koloda.git && cd koloda
 cp .env.example .env   # укажи данные SMTP-почты в .env
 docker compose up -d
 ```
