@@ -96,6 +96,14 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 
 .post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:10px;margin:4px 0 11px;
   background:var(--media-bg);border:1px solid var(--line)}
+/* Альбом: свайп по горизонтали, счётчик кадров поверх последнего */
+.galw{position:relative;margin:4px 0 11px}
+.gal{display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
+.gal>img,.gal>video{flex:0 0 auto;width:auto;max-width:82%;margin:0;scroll-snap-align:center}
+.gal>video{max-width:100%}
+.gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:999px;
+  background:rgba(0,0,0,.62);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;
+  pointer-events:none}
 .txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68}
 .post.read .txt{color:var(--dim)}
 .txt a{color:var(--acc);text-underline-offset:2px;text-decoration-thickness:1px}
@@ -625,10 +633,15 @@ function extras(p){
          '<span class="who">'+esc(p.quote.author||'')+'</span>'+
          (p.quote.text?'<div class="line">'+esc(p.quote.text)+'</div>':'')+'</a>';
 
-  if(p.image && !p.video)
-    h += '<img loading="lazy" src="'+esc(p.image)+'" alt="Изображение из публикации">';
-  if(p.video)
-    h += '<video controls preload="none" playsinline src="'+esc(p.video)+'"></video>';
+  if(p.media && p.media.length){
+    const items = p.media.map(m => m.k === 'v'
+      ? '<video controls preload="none" playsinline src="'+esc(m.u)+'"></video>'
+      : '<img loading="lazy" src="'+esc(m.u)+'" alt="Изображение из публикации">').join('');
+    h += (p.media.length === 1
+      ? items
+      : '<div class="galw"><div class="gal">'+items+'</div>'+
+        '<span class="gal-n">'+p.media.length+'</span></div>');
+  }
   if(p.sticker)
     h += '<img class="sticker" loading="lazy" src="'+esc(p.sticker)+'" alt="Стикер из публикации">';
 

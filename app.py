@@ -43,8 +43,7 @@ CREATE TABLE IF NOT EXISTS posts (
     msg_id     INTEGER NOT NULL,
     url        TEXT    NOT NULL,
     text       TEXT,
-    image      TEXT,
-    video      TEXT,
+    media      TEXT,
     views      TEXT,
     ts         INTEGER NOT NULL,
     reactions  TEXT,
@@ -125,6 +124,11 @@ def connect():
         db.execute("ALTER TABLE accounts ADD COLUMN email TEXT")
     if "email_verified" not in account_columns:
         db.execute("ALTER TABLE accounts ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+    post_columns = {row[1] for row in db.execute("PRAGMA table_info(posts)")}
+    if "media" not in post_columns:
+        # image и video схлопывались в один кадр, из-за чего альбомы теряли всё,
+        # кроме первого медиа. Старые колонки остаются в таблице пустыми.
+        db.execute("ALTER TABLE posts ADD COLUMN media TEXT")
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS accounts_email ON accounts(email COLLATE NOCASE) "
                "WHERE email IS NOT NULL")
     db.commit()
@@ -330,13 +334,18 @@ def fetch_channel(channel):
         if not msg_id.isdigit():
             continue
         txt = re.search(r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', chunk, re.S)
-        # Фото берём из контейнера фото: первый background-image в посте — это обычно
-        # кастомный эмодзи из текста, и он перебивал настоящий снимок.
-        img = _bg(chunk, "tgme_widget_message_photo_wrap") or \
-            _bg(chunk, "tgme_widget_message_video_wrap")
+        # Медиа берём из контейнеров: первый background-image в посте — это обычно
+        # кастомный эмодзи из текста, и он перебивал настоящие снимки.
+        photos = [unescape(u.strip("'\"")) for u in re.findall(
+            r'tgme_widget_message_photo_wrap[^"]*"[^>]*background-image:url\(([^)]+)\)', chunk)]
         # Видео лежит в <video src> — прямая ссылка с токеном, отдаётся как mp4.
-        vid = re.search(r'<video[^>]+src="([^"]+)"', chunk) or \
-            re.search(r'<video[^>]+src=\'([^\']+)\'', chunk)
+        videos = [unescape(u) for u in re.findall(r'<video[^>]+src="([^"]+)"', chunk)]
+        videos += [unescape(u) for u in re.findall(r'<video[^>]+src=\'([^\']+)\'', chunk)]
+        media = [{"k": "i", "u": u} for u in photos] + [{"k": "v", "u": u} for u in videos]
+        # Видео без src (круглое, с превью) отдаём обложкой.
+        thumb = _bg(chunk, "tgme_widget_message_video_wrap")
+        if not media and thumb:
+            media = [{"k": "i", "u": thumb}]
         views = re.search(r'tgme_widget_message_views">([^<]+)<', chunk)
         dt = re.search(r'<time datetime="([^"]+)"', chunk)
 
@@ -353,9 +362,8 @@ def fetch_channel(channel):
             "msg_id": int(msg_id),
             "url": f"https://t.me/{owner}/{msg_id}",
             "text": rich_text(txt.group(1)) if txt else "",
-            # Обложку видео отдаёт сам <video>, отдельной картинкой она не нужна.
-            "image": None if vid else img,
-            "video": unescape(vid.group(1)) if vid else None,
+            # Список медиа одним JSON: альбомы хранятся целиком.
+            "media": J(media),
             "views": views.group(1).strip() if views else None,
             "ts": ts,
             "reactions": J(parse_reactions(chunk)),
@@ -375,6 +383,13 @@ def fetch_channel(channel):
 
 J = lambda v: json.dumps(v, ensure_ascii=False) if v else None
 
+# Колонки постов в одном месте: копия этого списка в выборке или INSERT
+# разъезжается с таблицей после миграции.
+POST_FIELDS = ("channel", "msg_id", "url", "text", "media", "views", "ts",
+               "reactions", "preview", "doc", "fwd", "quote", "sticker")
+POST_INSERT = (f"INSERT OR REPLACE INTO posts ({','.join(POST_FIELDS)}) VALUES "
+               f"({','.join(':' + f for f in POST_FIELDS)})")
+
 
 def refresh(db, channel, force=False):
     row = db.execute("SELECT fetched FROM cache WHERE channel=?", (channel,)).fetchone()
@@ -382,9 +397,7 @@ def refresh(db, channel, force=False):
         return row and True
     title, posts = fetch_channel(channel)
     db.executemany(
-        "INSERT OR REPLACE INTO posts VALUES "
-        "(:channel,:msg_id,:url,:text,:image,:video,:views,:ts,"
-        ":reactions,:preview,:doc,:fwd,:quote,:sticker)",
+        POST_INSERT,
         posts,
     )
     db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (channel, title, int(time.time())))
@@ -394,8 +407,7 @@ def refresh(db, channel, force=False):
 
 def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
     """Простой LIKE поверх SQLite — FTS5 тут оверинжиниринг."""
-    sql = ("SELECT channel,msg_id,url,text,image,video,views,ts,"
-           "reactions,preview,doc,fwd,quote,sticker FROM posts WHERE 1=1")
+    sql = "SELECT " + ",".join(POST_FIELDS) + " FROM posts WHERE 1=1"
     args = []
     if channels:
         sql += " AND channel IN (%s)" % ",".join("?" * len(channels))
@@ -450,9 +462,7 @@ def refresh_channels(db, channels, force=False, workers=8):
 
 def store_channel_cache(db, channel, title, posts):
     db.executemany(
-        "INSERT OR REPLACE INTO posts VALUES "
-        "(:channel,:msg_id,:url,:text,:image,:video,:views,:ts,"
-        ":reactions,:preview,:doc,:fwd,:quote,:sticker)",
+        POST_INSERT,
         posts,
     )
     db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)",
@@ -1081,17 +1091,16 @@ class Handler(BaseHTTPRequestHandler):
                                     limit=FEED_PAGE_SIZE + 1, before=before)
                 has_more = len(rows) > FEED_PAGE_SIZE
                 rows = rows[:FEED_PAGE_SIZE]
+                posts = [dict(zip(POST_FIELDS, r)) for r in rows]
                 next_cursor = None
-                if has_more and rows:
-                    last = rows[-1]
-                    next_cursor = {"ts": last[7], "channel": last[0], "msg_id": last[1]}
-                posts = [dict(zip(("channel", "msg_id", "url", "text", "image",
-                                   "video", "views", "ts", "reactions",
-                                   "preview", "doc", "fwd", "quote", "sticker"), r))
-                         for r in rows]
+                if has_more and posts:
+                    # курсор по именам: позиция ts в выборке менялась вместе с колонками
+                    last = posts[-1]
+                    next_cursor = {"ts": last["ts"], "channel": last["channel"],
+                                   "msg_id": last["msg_id"]}
                 # Колонки JSON: на выходе отдаём объектами, а не строками.
                 for p in posts:
-                    for k in ("reactions", "preview", "doc", "fwd", "quote"):
+                    for k in ("media", "reactions", "preview", "doc", "fwd", "quote"):
                         if p.get(k):
                             try: p[k] = json.loads(p[k])
                             except ValueError: p[k] = None
@@ -1205,7 +1214,7 @@ class Handler(BaseHTTPRequestHandler):
                                       "application/json; charset=utf-8")
                 errors = refresh_channels(db, [channel])
                 rows = db.execute(
-                    "SELECT channel,msg_id,url,text,image,video,views,ts,reactions,"
+                    "SELECT channel,msg_id,url,text,media,views,ts,reactions,"
                     "preview,doc,fwd,quote,sticker FROM posts WHERE channel=? "
                     "ORDER BY ts DESC,msg_id DESC LIMIT 6", (channel,)
                 ).fetchall()
@@ -1214,11 +1223,9 @@ class Handler(BaseHTTPRequestHandler):
                     message = "Не удалось загрузить публикации канала" if errors else "Канал не найден"
                     return self._send(status, json.dumps({"error": message}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                fields = ("channel", "msg_id", "url", "text", "image", "video", "views", "ts",
-                          "reactions", "preview", "doc", "fwd", "quote", "sticker")
-                posts = [dict(zip(fields, row)) for row in rows]
+                posts = [dict(zip(POST_FIELDS, row)) for row in rows]
                 for post in posts:
-                    for key in ("reactions", "preview", "doc", "fwd", "quote"):
+                    for key in ("media", "reactions", "preview", "doc", "fwd", "quote"):
                         if post.get(key):
                             try:
                                 post[key] = json.loads(post[key])

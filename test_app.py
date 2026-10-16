@@ -44,10 +44,10 @@ class FeedAPITest(unittest.TestCase):
             msg_id = i + 1
             ts = 1_800_000_000 + i // 2
             channels[channel].append((channel, msg_id, "https://t.me/%s/%d" % (channel, msg_id),
-                                      "post %d" % msg_id, None, None, None, ts,
+                                      "post %d" % msg_id, None, None, ts,
                                       None, None, None, None, None, None))
         rows = channels["alpha"] + channels["beta"]
-        self.db.executemany("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+        self.db.executemany("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
         self.db.executemany("INSERT INTO cache VALUES (?,?,?)",
                             [(channel, channel.title(), now) for channel in channels])
         self.db.commit()
@@ -95,8 +95,8 @@ class FeedAPITest(unittest.TestCase):
     def test_feed_accepts_more_than_twenty_channels(self):
         now = int(time.time())
         names = ["ch%03d" % i for i in range(21)]
-        self.db.executemany("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                            [(name, 1, "https://t.me/%s/1" % name, name, None, None, None,
+        self.db.executemany("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            [(name, 1, "https://t.me/%s/1" % name, name, None, None,
                               1_800_000_100, None, None, None, None, None, None)
                              for name in names])
         self.db.executemany("INSERT INTO cache VALUES (?,?,?)",
@@ -226,8 +226,8 @@ class MediaParseTest(unittest.TestCase):
             'style="background-image:url(\'//telegram.org/img/emoji/40/F09F8E81.png\')">✨</span>'
             ' привет</div>%s</div>')
 
-    def parse(self, media):
-        html = self.HTML % media
+    def parse(self, fragment):
+        html = self.HTML % fragment
         with patch.object(app.urllib.request, "urlopen") as net:
             net.return_value.read.return_value = (
                 '<meta property="og:title" content="Канал"/>' + html).encode()
@@ -235,23 +235,43 @@ class MediaParseTest(unittest.TestCase):
         self.assertEqual(title, "Канал")
         return posts[0]
 
+    @staticmethod
+    def media(post):
+        return json.loads(post["media"] or "[]")
+
     def test_emoji_in_text_is_not_taken_for_a_photo(self):
         post = self.parse("")
-        self.assertIsNone(post["image"])
+        self.assertEqual(self.media(post), [])
         self.assertIn("привет", post["text"])
 
     def test_photo_wins_over_emoji_and_keeps_extra_classes(self):
-        post = self.parse('<div class="tgme_widget_message_photo_wrap 5215576584121683352 '
-                          '1214346053_460000664" style="width:800px;'
-                          'background-image:url(\'https://cdn4.telesco.pe/file/REAL.jpg\')">')
-        self.assertEqual(post["image"], "https://cdn4.telesco.pe/file/REAL.jpg")
+        media = self.media(self.parse('<div class="tgme_widget_message_photo_wrap 5215576584121683352 '
+                           '1214346053_460000664" style="width:800px;'
+                           'background-image:url(\'https://cdn4.telesco.pe/file/REAL.jpg\')">'))
+        self.assertEqual(media, [{"k": "i", "u": "https://cdn4.telesco.pe/file/REAL.jpg"}])
 
-    def test_video_post_gets_no_separate_cover(self):
-        post = self.parse('<div class="tgme_widget_message_video_wrap" '
-                          'style="background-image:url(\'https://cdn4.telesco.pe/file/THUMB.jpg\')">'
-                          '<video src="https://cdn4.telesco.pe/file/REAL.mp4"></video>')
-        self.assertIsNone(post["image"])
-        self.assertEqual(post["video"], "https://cdn4.telesco.pe/file/REAL.mp4")
+    def test_video_without_src_falls_back_to_its_cover(self):
+        media = self.media(self.parse('<div class="tgme_widget_message_video_wrap" '
+                           'style="background-image:url(\'https://cdn4.telesco.pe/file/THUMB.jpg\')">'
+                           '<div class="video_play"></div>'))
+        self.assertEqual(media, [{"k": "i", "u": "https://cdn4.telesco.pe/file/THUMB.jpg"}])
+
+    def test_album_keeps_every_item_in_order(self):
+        media = self.media(self.parse(
+            ''.join(f'<div class="tgme_widget_message_photo_wrap 111 222" '
+                    f'style="background-image:url(\'https://cdn4.telesco.pe/file/{n}.jpg\')">'
+                    for n in ("one", "two", "three"))))
+        self.assertEqual([m["u"] for m in media], [
+            "https://cdn4.telesco.pe/file/one.jpg",
+            "https://cdn4.telesco.pe/file/two.jpg",
+            "https://cdn4.telesco.pe/file/three.jpg"])
+
+    def test_video_album_keeps_every_clip(self):
+        media = self.media(self.parse(''.join(f'<div class="tgme_widget_message_video_wrap">'
+                                   f'<video src="https://cdn4.telesco.pe/file/{n}.mp4"></video>'
+                                   for n in ("a", "b", "c"))))
+        self.assertEqual([m["k"] for m in media], ["v", "v", "v"])
+        self.assertEqual(media[2]["u"], "https://cdn4.telesco.pe/file/c.mp4")
 
 
 if __name__ == "__main__":
