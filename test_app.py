@@ -436,12 +436,13 @@ class CatalogSearchTest(unittest.TestCase):
         self.assertEqual(channels[0]["last_ts"], 0)
 
     def test_last_post_times_reads_the_newest_post_per_channel(self):
-        db = app.connect()
-        with db:
-            rows = [("fresh", 1, "https://t.me/fresh/1", "старый", 1700000000),
-                    ("fresh", 2, "https://t.me/fresh/2", "свежий", 1700009999)]
-            db.executemany("INSERT INTO posts (channel,msg_id,url,text,ts) VALUES (?,?,?,?,?)", rows)
-        self.assertEqual(app.last_post_times(db).get("fresh"), 1700009999)
+        # База в памяти: app.connect() берёт путь из настроек, а в CI папки data нет.
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE posts (channel TEXT, msg_id INTEGER, ts INTEGER)")
+        rows = [("fresh", 1, 1700000000), ("fresh", 2, 1700009999),
+                ("other", 1, 1700005555)]
+        db.executemany("INSERT INTO posts (channel,msg_id,ts) VALUES (?,?,?)", rows)
+        self.assertEqual(app.last_post_times(db), {"fresh": 1700009999, "other": 1700005555})
 
 
 class MediaParseTest(unittest.TestCase):
