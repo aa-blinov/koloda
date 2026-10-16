@@ -93,7 +93,9 @@ header{position:sticky;top:0;z-index:20;
   background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 11px}
 .search:focus-within{border-color:var(--acc)}
 .search svg.i{color:var(--faint)}
-.search input{flex:1;min-width:0;background:none;border:0;color:var(--fg);font:inherit;font-size:16px;
+/* min-height ровно 44, как у всех прочих кнопок: клик по полю не должен
+   промахиваться мимо input, а нажатие на поля рамки его не ловит */
+.search input{flex:1;min-width:0;min-height:44px;background:none;border:0;color:var(--fg);font:inherit;font-size:16px;
   padding:9px 0;outline:none}
 .search input::placeholder{color:var(--faint)}
 
@@ -456,6 +458,9 @@ body:has(.ov.open){overflow:hidden}
 <!-- Панель раздела без tabindex: иначе в табуляции оказываются два больших
      пустых контейнера, а роль панели достаётся вложенной ленте каналов -->
 <section class="view" id="viewFeed" role="tabpanel" aria-labelledby="tabFeed">
+  <!-- Заголовок невидим глазом, но нужен экранному диктору: без него внутри
+     приложения нечему сказать, где человек находится -->
+  <h1 class="sr-only">Лента</h1>
   <div class="tabs-wrap">
   <button id="tabsToggle" class="tabs-toggle" type="button" aria-expanded="false" aria-controls="tabs">
     <svg class="i"><use href="#i-grid"/></svg>
@@ -470,6 +475,7 @@ body:has(.ov.open){overflow:hidden}
 <section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
   <main class="catalog-main">
     <div class="catalog-head">
+      <h1 class="sr-only">Каталог каналов</h1>
       <h2>Собери свою ленту</h2>
       <p>Открой канал, посмотри последние публикации и добавь только то, что хочется читать.</p>
     </div>
@@ -1030,7 +1036,13 @@ document.addEventListener('click', e => {
   if(e.target.closest('.tabs-wrap')) return;
   setTabsOpen(false);
 });
-addEventListener('keydown', e => { if(e.key === 'Escape') setTabsOpen(false); });
+addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  // фокус возвращаем на кнопку: порядок табуляции и так сохраняется, но
+  // экранный диктор без этого молчит, и непонятно, где человек
+  if($('#tabs').classList.contains('open')) $('#tabsToggle').focus();
+  setTabsOpen(false);
+});
 
 /* ---------- Каталог ---------- */
 /* Порядок задаём сами: TGMania отдаёт каналы как попало, sortBy у неё не работает. */
