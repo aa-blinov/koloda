@@ -1207,8 +1207,16 @@ class Handler(BaseHTTPRequestHandler):
                         if p.get(k):
                             try: p[k] = json.loads(p[k])
                             except ValueError: p[k] = None
+                unread_profile = client_id(self, db)
+                # заголовки нужны и запрошенным каналам, и всем подпискам профиля:
+                # по ним подписаны вкладки в шапке, а при выборе одного канала
+                # остальные остались бы без названия
+                wanted = set(chans)
+                if unread_profile:
+                    wanted |= {r[0] for r in db.execute(
+                        "SELECT channel FROM user_subs WHERE profile=?", (unread_profile,))}
                 titles = dict(db.execute("SELECT channel,title FROM cache WHERE channel IN (%s)"
-                                          % ",".join("?" * len(chans)), chans))
+                                          % ",".join("?" * len(wanted)), list(wanted)))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "has_more": has_more,
                                                    "unread": count_unread(db, chans, unread_profile),
