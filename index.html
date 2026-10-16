@@ -154,7 +154,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .lb-img{max-width:94vw;max-height:86vh;object-fit:contain;border-radius:var(--r-md);display:block}
 .lb-img[hidden]{display:none}
 /* Подложка плотнее общей: под кадром не должно быть видно страницу */
-#lightbox{background:rgba(0,0,0,.94)}
+#lightbox{background:rgba(0,0,0,.975)}
 .lb-n{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
   padding:3px 11px;border-radius:var(--r-pill);background:rgba(0,0,0,.62);color:#fff;
   font-size:12.5px;font-variant-numeric:tabular-nums;pointer-events:none}
@@ -246,7 +246,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:11px}
-.channel-action{flex:0 0 auto;min-width:108px;min-height:42px;padding:8px 12px;border-radius:var(--r-sm);
+.channel-action{flex:0 0 auto;min-width:108px;min-height:44px;padding:8px 12px;border-radius:var(--r-sm);
   background:transparent;border:1px solid var(--line);color:var(--dim);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .channel-action:hover{border-color:var(--acc);color:var(--acc)}
 .channel-action.is-on{background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:color-mix(in srgb,var(--acc) 32%,var(--line));color:var(--acc)}
@@ -415,12 +415,14 @@ body:has(.ov.open){overflow:hidden}
   <p class="sync-status" id="syncStatus" role="status" aria-live="polite" hidden></p>
 </header>
 
-<section class="view" id="viewFeed" role="tabpanel" aria-labelledby="tabFeed" tabindex="0">
+<!-- Панель раздела без tabindex: иначе в табуляции оказываются два больших
+     пустых контейнера, а роль панели достаётся вложенной ленте каналов -->
+<section class="view" id="viewFeed" role="tabpanel" aria-labelledby="tabFeed">
   <nav id="tabs" role="tablist" aria-label="Каналы"></nav>
     <main id="feed" role="tabpanel" aria-label="Публикации канала" tabindex="0"></main>
 </section>
 
-<section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" tabindex="0" hidden>
+<section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
   <main class="catalog-main">
     <div class="catalog-head">
       <h2>Собери свою ленту</h2>

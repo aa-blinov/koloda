@@ -72,6 +72,19 @@ class FeedAPITest(unittest.TestCase):
         except HTTPError as exc:
             return exc.code, json.loads(exc.read())
 
+    def request_raw(self, path, method="GET", data=None):
+        """Как request, но с заголовками ответа: их проверяют отдельные тесты."""
+        payload = json.dumps(data).encode() if data is not None else None
+        headers = {"Content-Type": "application/json"} if data is not None else {}
+        if self.cookie:
+            headers["Cookie"] = self.cookie
+        req = Request(self.base + path, data=payload, headers=headers, method=method)
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status, response.headers, response.read()
+        except HTTPError as exc:
+            return exc.code, exc.headers, exc.read()
+
     def test_feed_paginates_without_duplicates_in_stable_time_order(self):
         query = urlencode({"channels": "alpha,beta"})
         status, first = self.request("/api/feed?" + query)
@@ -306,6 +319,40 @@ class FeedAPITest(unittest.TestCase):
         status, payload = self.request("/api/settings", method="PUT", data={"theme": "dark"})
         self.assertEqual(status, 200)
         self.assertEqual(payload["settings"], {"theme": "dark", "font": "mono"})
+
+    def test_empty_feed_does_not_leak_the_whole_cache(self):
+        # без подписок лента пустая: пустой список каналов не должен отдавать
+        # весь кэш, где лежат посты чужих подписок
+        status, payload = self.request("/api/feed?" + urlencode({"channels": ""}))
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["posts"], [])
+        self.assertEqual(payload["titles"], {})
+        self.assertEqual(payload["unread"], 0)
+
+    def test_feed_titles_cover_only_requested_channels(self):
+        self.db.execute("INSERT INTO cache VALUES ('gamma','Gamma',1)")
+        self.db.commit()
+        status, payload = self.request("/api/feed?" + urlencode({"channels": "alpha"}))
+        self.assertEqual(set(payload["titles"]), {"alpha"})
+
+    def test_response_headers_do_not_advertise_the_runtime(self):
+        status, headers, _ = self.request_raw("/api/feed?" + urlencode({"channels": "alpha"}))
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertNotIn("Python", headers.get("Server", ""))
+
+    def test_unsupported_methods_answer_json_not_html(self):
+        for method in ("DELETE", "PATCH", "OPTIONS"):
+            status, headers, body = self.request_raw("/api/state", method=method)
+            self.assertNotEqual(status, 501, method)   # раньше приходил HTML-501
+            self.assertIn("application/json", headers["Content-Type"], method)
+            self.assertNotIn(b"<html", body.lower(), method)
+        # с сессией и не-GET методом на маршрут без такого метода — 405, а не 501
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "methods", "password": "long-password"})
+        status, headers, _ = self.request_raw("/api/feed?channels=alpha", method="DELETE")
+        self.assertEqual(status, 405)
+        self.assertIn("application/json", headers["Content-Type"])
 
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
