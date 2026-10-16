@@ -231,6 +231,25 @@ class FeedAPITest(unittest.TestCase):
         status, state = self.request("/api/state")
         self.assertEqual(len(state["subs"]), 200)
 
+    def test_feed_reports_how_much_is_left_unread(self):
+        # без числа фильтр «Непрочитанные» включают вслепую
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "unread_count", "password": "long-password"})
+        query = urlencode({"channels": "alpha"})
+        status, payload = self.request("/api/feed?" + query)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["unread"], 43)
+        self.request("/api/state/read", method="POST",
+                     data={"posts": ["alpha/%d" % i for i in range(1, 20, 2)]})
+        status, payload = self.request("/api/feed?" + query)
+        self.assertEqual(payload["unread"], 33)
+        # отметка чужого канала не уменьшает счётчик своей ленты
+        self.request("/api/state/read", method="POST", data={"posts": ["beta/1", "beta/2"]})
+        self.assertEqual(self.request("/api/feed?" + query)[1]["unread"], 33)
+        # без сессии счётчик не считается
+        self.cookie = ""
+        self.assertEqual(self.request("/api/feed?" + query)[1]["unread"], 0)
+
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
                                        data={"username": "profile_one", "password": "long-password"})

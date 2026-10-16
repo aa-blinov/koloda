@@ -134,9 +134,15 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .galw{position:relative;margin:4px 0 11px}
 .gal{display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
 .gal>img,.gal>video{flex:0 0 auto;width:auto;max-width:82%;margin:0;scroll-snap-align:center}
+/* один кадр не обрезаем: подложка остаётся, но видно всё фото */
+.gal.one>img,.gal.one>video{max-width:100%;max-height:520px;object-fit:contain}
 /* Пока кадр не подгружен, у него нет размера: без заполнителя все десять
    влезают в ленту, наблюдатель видит их все и тянет всё разом. */
-.gal>img[data-src]{min-width:200px}
+.gal>img:not(.got){min-width:200px}
+/* Тот же довод для высоты: без заглушки лента прыгала на 460px, когда
+   фотография доезжала. .got снимает и квадрат, и подложку. */
+.post img:not(.sticker):not(.got){aspect-ratio:1;background:var(--raise)}
+.post img.got{aspect-ratio:auto;background:var(--media-bg)}
 .gal>video{max-width:100%}
 .gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:var(--r-pill);
   background:rgba(0,0,0,.62);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;
@@ -308,10 +314,10 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .ov .dlg h2{font-size:17px;margin-bottom:4px;letter-spacing:-.01em}
 .ov .dlg p{color:var(--dim);font-size:13px;margin-bottom:14px;line-height:1.55}
 .ov .dlg .empty{padding:20px}
-.ov .dlgbtns{display:flex;gap:8px;margin-top:16px}
-.ov .dlgbtns button{flex:1}
-.ov .dlgbtns .btn{flex:1}
-.ov .dlgbtns .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);
+.ov .account-actions{display:flex;gap:8px;margin-top:16px}
+.ov .account-actions button{flex:1}
+.ov .account-actions .btn{flex:1}
+.ov .account-actions .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);
   cursor:pointer;background:var(--raise);border:1px solid var(--line);color:var(--fg)}
 .ov .dlg input{min-height:44px}
   /* Настройки оформления в оверлее профиля */
@@ -652,11 +658,17 @@ let tab = '', onlyUnread = localStorage.getItem(LS.only) === '1', titles = {};
 let catalogCat = 'all', timer, catTimer, feedQuery='', catalogQuery='', expandedChannel='', previewCache=new Map(), catalogItems=new Map();
 let feedCursor=null, feedHasMore=false, feedErrors=[], feedRequestId=0, feedController=null, feedLoading=false;
 let feedPageFailed=false;
+let unreadTotal=0;
+
+const paintUnread = () => {
+  $('#unreadBtn').textContent = unreadTotal ? 'Непрочитанные · '+unreadTotal : 'Непрочитанные';
+};
 
 const markRead = p => {
   const post=key(p), s=seen();
   if(s.has(post)) return;
   s.add(post); saveRead(s); queueStateOp({type:'read',post});
+  unreadTotal=Math.max(0, unreadTotal-1); paintUnread();
 };
 
 function when(ts){
@@ -715,6 +727,7 @@ async function load(append=false){
     if(requestId!==feedRequestId) return;
     titles = d.titles || {};
     feedCursor=d.next || null; feedHasMore=Boolean(d.has_more); feedErrors=d.errors || [];
+      unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
   }catch(e){
@@ -752,10 +765,9 @@ function extras(p){
     const items = p.media.map((m, i) => m.k === 'v'
       ? '<video controls preload="none" playsinline src="'+esc(m.u)+'"></video>'
       : '<img loading="lazy" '+(i ? 'data-src' : 'src')+'="'+esc(m.u)+'" alt="Изображение из публикации">').join('');
-    h += (p.media.length === 1
-      ? items
-      : '<div class="galw"><div class="gal">'+items+'</div>'+
-        '<span class="gal-n">'+p.media.length+'</span></div>');
+    // одиночное тоже в ленте: иначе его не открыть целиком и не доехать стрелкой
+    h += '<div class="galw"><div class="gal'+(p.media.length===1?' one':'')+'">'+items+'</div>'+
+      (p.media.length===1?'':'<span class="gal-n">'+p.media.length+'</span>')+'</div>';
   }
   if(p.sticker)
     h += '<img class="sticker" loading="lazy" src="'+esc(p.sticker)+'" alt="Стикер из публикации">';
@@ -1173,6 +1185,12 @@ document.addEventListener('click', e => {
   e.preventDefault();
   openLightbox(media.closest('.gal'), media);
 });
+// load не всплывает, поэтому слушаем на документе в фазе захвата: снятие
+// заглушки после загрузки убирает сдвиг вёрстки
+document.addEventListener('load', e => {
+  const t = e.target;
+  if(t.tagName === 'IMG') t.classList.add('got');
+}, true);
 $('#lbPrev').onclick = () => stepLightbox(-1);
 $('#lbNext').onclick = () => stepLightbox(1);
 $('#lbClose').onclick = closeLightbox;
@@ -1210,7 +1228,9 @@ document.addEventListener('keydown',e=>{
   if(!$('#meOvl').classList.contains('open'))return;
   if(e.key==='Escape'){e.preventDefault();closeProfile();return;}
   if(e.key!=='Tab')return;
-  const items=[...$('#meOvl').querySelectorAll('button:not(:disabled)')]; if(!items.length)return;
+  // ловушка берёт все фокусируемые, а не только кнопки: иначе поля пароля
+  // в оверлее профиля с клавиатуры не достать
+  const items=[...$('#meOvl').querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')]; if(!items.length)return;
   if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
   else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
 },true);
@@ -1329,9 +1349,11 @@ $('#authForm').onsubmit=async e=>{
 };
 async function startApp(){
   if(location.protocol==='file:'){
-    document.body.innerHTML='<main style="max-width:560px;margin:12vh auto;padding:32px;color:#eef2f8;background:#141821;border:1px solid #242b38;border-radius:var(--r-lg);font:16px/1.6 system-ui,sans-serif">'+
-      '<h1 style="margin-top:0">Открой ленту</h1><p>Чтобы посмотреть публикации, открой ленту по ссылке.</p>'+ 
-      '<a style="display:inline-block;padding:10px 16px;border-radius:var(--r-sm);background:#5aa2ff;color:#0b1220;text-decoration:none;font-weight:700" href="http://127.0.0.1:8090/">Открыть ленту</a></main>';
+    // адрес не угадать: сервис может стоять на любом порту, поэтому говорим
+    // прямо и ведём на инструкцию, а не на зашитый 127.0.0.1
+    document.body.innerHTML='<main style="max-width:560px;margin:12vh auto;padding:32px;color:var(--fg);background:var(--surf);border:1px solid var(--line);border-radius:var(--r-lg);font:16px/1.6 var(--font-ui)">'+
+      '<h1 style="margin-top:0">Открой ленту</h1><p>Это файл на диске, а лента живёт на сервере. Запусти docker compose и зайди на http://localhost:8090</p>'+
+      '<a style="display:inline-block;padding:10px 16px;border-radius:var(--r-sm);background:var(--acc);color:var(--acc-ink);text-decoration:none;font-weight:700" href="http://localhost:8090/">Открыть ленту</a></main>';
     return;
   }
   const params=new URLSearchParams(location.search), verification=params.get('token');

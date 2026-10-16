@@ -395,6 +395,16 @@ POST_INSERT = (f"INSERT OR REPLACE INTO posts ({','.join(POST_FIELDS)}) VALUES "
                f"({','.join(':' + f for f in POST_FIELDS)})")
 
 
+def count_unread(db, channels, profile):
+    """Сколько постов подписок ещё не прочитано: без числа фильтр включают вслепую."""
+    if not channels or not profile:
+        return 0
+    sql = ("SELECT COUNT(*) FROM posts WHERE channel IN (%s) AND NOT EXISTS "
+           "(SELECT 1 FROM user_reads r WHERE r.profile=? "
+           "AND r.post=posts.channel || '/' || posts.msg_id)") % ",".join("?" * len(channels))
+    return db.execute(sql, list(channels) + [profile]).fetchone()[0]
+
+
 def refresh(db, channel, force=False):
     row = db.execute("SELECT fetched FROM cache WHERE channel=?", (channel,)).fetchone()
     if row and not force and time.time() - row[0] < TTL:
@@ -1131,8 +1141,9 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send(400, json.dumps({"error": "неверная позиция ленты"}),
                                           "application/json")
 
-                unread_profile = client_id(self, db) if self._query("unread") == "1" else None
-                rows = search_posts(db, q, chans, only_unread=unread_profile,
+                unread_profile = client_id(self, db)
+                only_unread = unread_profile if self._query("unread") == "1" else None
+                rows = search_posts(db, q, chans, only_unread=only_unread,
                                     limit=FEED_PAGE_SIZE + 1, before=before)
                 has_more = len(rows) > FEED_PAGE_SIZE
                 rows = rows[:FEED_PAGE_SIZE]
@@ -1152,6 +1163,7 @@ class Handler(BaseHTTPRequestHandler):
                 titles = dict(db.execute("SELECT channel,title FROM cache"))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "has_more": has_more,
+                                                   "unread": count_unread(db, chans, unread_profile),
                                                    "next": next_cursor}),
                                   "application/json; charset=utf-8")
 
