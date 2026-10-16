@@ -329,8 +329,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
 .read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
   margin:-10px 0 -10px -10px;border-radius:var(--r-sm)}
-.read-toggle{border:0;background:none;color:var(--acc);cursor:pointer}
-.read-toggle:hover{background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.read-toggle{color:var(--acc)}
 .read-toggle .dot{width:8px;height:8px}
 .read-status{color:var(--dim)}
 
@@ -664,6 +663,17 @@ const paintUnread = () => {
   $('#unreadBtn').textContent = unreadTotal ? 'Непрочитанные · '+unreadTotal : 'Непрочитанные';
 };
 
+// Пост прочитан, когда видно 60% карточки. Ниже порога пост просто мелькнул
+// внизу экрана, и засчитывать его рано.
+const markFn = new WeakMap();
+const postSeen = new IntersectionObserver((entries, obs) => {
+  entries.forEach(e => {
+    if (e.intersectionRatio < 0.6) return;
+    obs.unobserve(e.target);
+    markFn.get(e.target)?.();
+  });
+}, {threshold:[0.6]});
+
 const markRead = p => {
   const post=key(p), s=seen();
   if(s.has(post)) return;
@@ -841,6 +851,8 @@ function render(posts,append=false){
   const box = $('#feed'), s = seen();
   const list = onlyUnread ? posts.filter(p => !s.has(key(p))) : posts;
   if(!append){
+    // старая разметка уходит вместе с целями наблюдателя: иначе он держит их
+    postSeen.disconnect();
     if(!list.length && feedErrors.length){
       const message='Не удалось обновить каналы: '+feedErrors.map(e=>e.channel).filter(Boolean).join(', ')+'. Проверь соединение и попробуй ещё раз.';
       box.innerHTML=emptyState('alert',message,['retry','Попробовать снова']);
@@ -868,7 +880,7 @@ function render(posts,append=false){
     el.innerHTML =
       '<div class="meta">'+
         (read ? '<span class="read-status">'+icon('check')+'<span class="sr-only">Прочитано</span></span>' :
-          '<button type="button" class="read-toggle" aria-label="Отметить пост прочитанным" aria-pressed="false"><span class="dot" aria-hidden="true"></span></button>')+
+          '<span class="read-toggle" title="Новое"><span class="dot" aria-hidden="true"></span></span>')+
         '<span class="who">'+esc(titles[p.channel] || p.channel)+'</span>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>· '+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(p.views)+'</span>' : '')+
@@ -877,20 +889,13 @@ function render(posts,append=false){
       if(seen().has(key(p))) return;
       markRead(p);
       el.classList.add('read');
-      const control = el.querySelector('.read-toggle');
-      if(control){
-        const status = document.createElement('span');
-        status.className = 'read-status';
-        status.innerHTML = icon('check')+'<span class="sr-only">Прочитано</span>';
-        control.replaceWith(status);
-      }
-      if(onlyUnread) load();
+      const dot = el.querySelector('.read-toggle');
+      if(dot) dot.outerHTML = '<span class="read-status">'+icon('check')+'<span class="sr-only">Прочитано</span></span>';
     };
-    el.addEventListener('click', ev => {
-      if(ev.target.closest('video,img,a,button')) return;
-      setRead();
-    });
-    el.querySelector('.read-toggle')?.addEventListener('click', setRead);
+    // Пост засчитывается прочитанным, когда его видно целиком. Клик для этого
+    // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
+    markFn.set(el, setRead);
+    postSeen.observe(el);
     postList.appendChild(el);
   }
   watchGalleries(postList);
