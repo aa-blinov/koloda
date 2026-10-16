@@ -7,7 +7,7 @@ import time
 import unittest
 from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
@@ -184,6 +184,52 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(payload["settings"], {"theme": "light", "font": "serif"})
         self.cookie = ""
         self.assertEqual(self.request("/api/settings")[0], 401)
+
+    def test_channel_name_is_checked_before_it_reaches_the_address(self):
+        # имя канала подставляется в https://t.me/s/<имя>, кривое значение ушло бы
+        # на произвольный адрес, поэтому проверка стоит на входе, а не при запросе
+        for bad in ("../../etc/passwd", "t.me/durov", "дуров", "a", "durov/1"):
+            status, payload = self.request("/api/feed?" + urlencode({"channels": bad}))
+            self.assertEqual(status, 400, bad)
+            status, payload = self.request("/api/check?c=" + quote(bad))
+            self.assertEqual(status, 400, bad)
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "channel_guard", "password": "long-password"})
+        status, payload = self.request("/api/state/subscription", method="POST",
+                                       data={"channel": "../../etc/passwd", "subscribed": True})
+        self.assertEqual(status, 400)
+
+    def test_feed_returns_media_as_a_list_not_a_json_string(self):
+        self.db.execute("UPDATE posts SET media=? WHERE channel='alpha' AND msg_id=1",
+                        (json.dumps([{"k": "i", "u": "https://cdn/1.jpg"},
+                                     {"k": "v", "u": "https://cdn/2.mp4"}]),))
+        self.db.commit()
+        status, payload = self.request("/api/feed?" + urlencode({"channels": "alpha"}))
+        post = next(p for p in payload["posts"] if p["msg_id"] == 1)
+        self.assertEqual(post["media"], [{"k": "i", "u": "https://cdn/1.jpg"},
+                                         {"k": "v", "u": "https://cdn/2.mp4"}])
+
+    def test_two_profiles_without_email_do_not_collide(self):
+        # accounts_email уникален для непустых значений, поэтому почта пишется как NULL
+        for name in ("no_email_one", "no_email_two"):
+            status, _ = self.request("/api/auth/register", method="POST",
+                                     data={"username": name, "password": "long-password"})
+            self.assertEqual(status, 201, name)
+        self.assertEqual(self.db.execute(
+            "SELECT COUNT(*) FROM accounts WHERE email IS NULL").fetchone()[0], 2)
+
+    def test_feed_stops_at_two_hundred_channels(self):
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "cap_profile", "password": "long-password"})
+        for i in range(200):
+            status, state = self.request("/api/state/subscription", method="POST",
+                                         data={"channel": "cap%03d" % i, "subscribed": True})
+            self.assertEqual(status, 200, i)
+        status, payload = self.request("/api/state/subscription", method="POST",
+                                       data={"channel": "cap200", "subscribed": True})
+        self.assertEqual(status, 409)
+        status, state = self.request("/api/state")
+        self.assertEqual(len(state["subs"]), 200)
 
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
