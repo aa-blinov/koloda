@@ -98,37 +98,27 @@ header{position:sticky;top:0;z-index:20;
 .search input::placeholder{color:var(--faint)}
 
 /* ---------- Лента ---------- */
-.tabs-wrap{position:relative}
-.tabs-toggle{display:none}
-/* Ряд каналов на телефоне листается вслепую, поэтому там он становится меню:
-   сверху кнопка с текущим выбором, под ней список вниз. */
-@media (max-width:640px){
-  /* отступы как у ряда: 16 по бокам, 12 сверху, 8 снизу, иначе кнопка упирается в края */
-  .tabs-wrap{padding:12px 16px 8px}
-  .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;max-width:780px;margin:0;
-    min-height:44px;padding:10px 14px;font:inherit;font-size:14px;text-align:left;cursor:pointer;
-    background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--fg)}
-  .tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
-  .tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
-  .tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
-  /* список висит на нижней грани обёртки, а та самая уже съела 8px снизу */
-  #tabs{position:absolute;z-index:60;top:calc(100% - 2px);left:16px;right:16px;margin:0;
-    flex-direction:column;align-items:stretch;gap:2px;max-height:min(60vh,420px);overflow-y:auto;
-    padding:6px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);
-    box-shadow:var(--sh-2);display:none}
-  #tabs.open{display:flex}
-  /* кнопка сама центрирует текст, а в меню пункт должен читаться слева направо */
-  #tabs button{width:100%;min-height:42px;justify-content:flex-start;text-align:left;border-radius:var(--r-xs)}
-  #tabs.has-more{mask-image:none}
-}
-nav{max-width:780px;margin:0 auto;display:flex;gap:7px;padding:12px 16px 8px;overflow-x:auto;
-  scrollbar-width:none}
-nav::-webkit-scrollbar{display:none}
-/* Ряд уезжает за край, а полосы прокрутки нет: без затемнения канал с краю
-   выглядит срезанным по слову, и непонятно, что список продолжается */
-nav.has-more{mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent)}
-nav button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
-  cursor:pointer;white-space:nowrap}
+/* Ряд каналов листался вслепую и на телефоне, и на мониторе, поэтому он везде
+   меню: кнопка с текущим выбором, под ней список вниз. Отступы 12/16/8 — как
+   был ряд, иначе кнопка упирается в края окна. */
+/* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
+.tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
+.tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
+  min-height:44px;padding:10px 14px;font:inherit;font-size:14px;text-align:left;cursor:pointer;
+  background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--fg)}
+.tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
+.tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
+.tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
+/* список висит на нижней грани обёртки, а та самая уже съела 8px снизу */
+#tabs{position:absolute;z-index:60;top:calc(100% - 2px);left:20px;right:20px;margin:0;
+  display:none;flex-direction:column;align-items:stretch;gap:2px;
+  max-height:min(60vh,420px);overflow-y:auto;padding:6px;background:var(--surf);
+  border:1px solid var(--line);border-radius:var(--r-sm);box-shadow:var(--sh-2)}
+#tabs.open{display:flex}
+/* кнопка сама центрирует текст, а в меню пункт должен читаться слева направо */
+#tabs button{width:100%;min-height:42px;padding:9px 12px;justify-content:flex-start;text-align:left;
+  border-radius:var(--r-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav button{flex:0 0 auto;font:inherit;font-size:13px;cursor:pointer}
 main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 #feed{max-width:748px;margin-inline:auto}
 .catalog-main{padding-top:28px}
@@ -398,7 +388,9 @@ body:has(.ov.open){overflow:hidden}
   #sortTabs{overflow-x:auto;max-width:100%;scrollbar-width:none}
   .search{grid-area:search;width:100%}
   .seg button{padding:8px 10px;font-size:13px}
-  main,nav{padding-left:14px;padding-right:14px}
+  main{padding-left:14px;padding-right:14px}
+  .tabs-wrap{padding:12px 14px 8px}
+  #tabs{left:14px;right:14px}
   .catalog-main{padding-top:22px}
   .catalog-head{margin-bottom:18px}
   .catalog-head h2{font-size:21px}
@@ -1008,16 +1000,9 @@ function renderTabs(){
   if(list.length > 1) mk('Все', '');
   list.forEach(c => mk(titles[c] || c, c));
   const activeTab = [...nav.querySelectorAll('[role="tab"]')].find(b => b.getAttribute('aria-selected') === 'true');
-  // выбранный канал мог остаться за краем: показываем его целиком
-  activeTab?.scrollIntoView({inline:'nearest', block:'nearest'});
   $('#tabsToggleLabel').textContent = activeTab ? activeTab.textContent : 'Все каналы';
-  tabFade();
   if(activeTab){ $('#feed').setAttribute('aria-labelledby', activeTab.id); $('#feed').removeAttribute('aria-label'); }
   else { $('#feed').removeAttribute('aria-labelledby'); $('#feed').setAttribute('aria-label','Публикации'); }
-}
-function tabFade(){
-  const nav = $('#tabs');
-  nav.classList.toggle('has-more', nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 2);
 }
 function setTabsOpen(open){
   const nav = $('#tabs');
@@ -1030,8 +1015,6 @@ document.addEventListener('click', e => {
   setTabsOpen(false);
 });
 addEventListener('keydown', e => { if(e.key === 'Escape') setTabsOpen(false); });
-$('#tabs').addEventListener('scroll', tabFade, {passive:true});
-addEventListener('resize', tabFade);
 
 /* ---------- Каталог ---------- */
 /* Порядок задаём сами: TGMania отдаёт каналы как попало, sortBy у неё не работает. */
