@@ -25,32 +25,39 @@ def media(raw):
         return []
 
 
+def ident(items):
+    # у видео Telegram каждые несколько часов меняет token после вопросительного
+    # знака, а путь с именем файла остаётся прежним. По полному адресу сравнивать
+    # бессмысленно: аудит светился на каждом ролике, у которого переехал токен
+    return [(m.get("k"), (m.get("u") or "").split("?")[0]) for m in items]
+
+
 def main(path):
     db = sqlite3.connect(path)
     channels = [r[0] for r in db.execute("SELECT DISTINCT channel FROM posts")]
-    posts = db.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+    total = db.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     if not channels:
         # sqlite3 создаёт пустой файл молча: без этой проверки аудит рапортовал
         # «0 расхождений» о базе, в которой нет ни одного поста
         print(f"{path}: в базе нет постов, проверять нечего")
         return 2
-    print(f"{path}: постов {posts}, каналов {len(channels)}")
+    print(f"{path}: постов {total}, каналов {len(channels)}")
     wrong = []
     for channel in channels:
         try:
-            _, posts = app.fetch_channel(channel)
+            _, fetched = app.fetch_channel(channel)
         except Exception as exc:  # канал мог закрыться или отдать не то
             print(f"  {channel}: не проверен ({exc})")
             continue
         stored = {msg: media(med) for msg, med in db.execute(
             "SELECT msg_id,media FROM posts WHERE channel=?", (channel,))}
-        fresh = {post["msg_id"]: media(post["media"]) for post in posts}
+        fresh = {post["msg_id"]: media(post["media"]) for post in fetched}
         for msg_id, items in fresh.items():
-            if stored.get(msg_id) == items:
-                continue
             old = stored.get(msg_id)
             if old is None:
                 continue  # поста ещё нет в базе, это не расхождение
+            if ident(old) == ident(items):
+                continue
             if [m for m in old if "emoji" in m["u"]] and items:
                 what = "эмодзи вместо медиа"
             elif items and not old:
@@ -60,7 +67,7 @@ def main(path):
             else:
                 what = "адрес или состав устарели"
             wrong.append((channel, msg_id, what))
-    print(f"расхождений: {len(wrong)} из {posts}")
+    print(f"расхождений: {len(wrong)} из {total}")
     for channel, msg_id, what in wrong[:40]:
         print(f"  {channel}/{msg_id}: {what}")
     return 1 if wrong else 0

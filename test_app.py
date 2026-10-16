@@ -272,6 +272,41 @@ class FeedAPITest(unittest.TestCase):
                                      data={"posts": ["alpha/3"]})
         self.assertIn("alpha/3", state["reads"])
 
+    def test_login_lockout_does_not_follow_the_username_alone(self):
+        # иначе любой, кто знает имя, закрывает чужой вход на 15 минут
+        app.LOGIN_FAILURES.clear()
+        for _ in range(8):
+            app.record_login_failure("victim", "10.0.0.1")
+        self.assertFalse(app.login_allowed("victim", "10.0.0.1"))
+        self.assertTrue(app.login_allowed("victim", "10.0.0.2"))
+        app.LOGIN_FAILURES.clear()
+
+    def test_wrong_types_in_body_do_not_break_the_server(self):
+        # из браузера приходит всё, включая списки вместо строк: сервер должен
+        # отвечать кодом, а не рвать соединение
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "types", "password": "long-password"})
+        for payload in ({"channel": ["durov"], "subscribed": True},
+                        {"channel": 5, "subscribed": True},
+                        {"channel": {"a": 1}, "subscribed": "yes"}):
+            status, _ = self.request("/api/state/subscription", method="POST", data=payload)
+            self.assertEqual(status, 400, payload)
+        for payload in ({"subs": 5}, {"reads": 5}, {"subs": [5], "reads": [7]}):
+            status, _ = self.request("/api/state/merge", method="POST", data=payload)
+            self.assertEqual(status, 200, payload)
+        status, _ = self.request("/api/state/read", method="POST", data={"posts": [5]})
+        self.assertEqual(status, 200)
+        status, _ = self.request("/api/settings", method="PUT", data={"theme": ["light"]})
+        self.assertEqual(status, 400)
+
+    def test_partial_settings_update_keeps_the_other_field(self):
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "settings_partial", "password": "long-password"})
+        self.request("/api/settings", method="PUT", data={"theme": "light", "font": "mono"})
+        status, payload = self.request("/api/settings", method="PUT", data={"theme": "dark"})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["settings"], {"theme": "dark", "font": "mono"})
+
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
                                        data={"username": "profile_one", "password": "long-password"})
