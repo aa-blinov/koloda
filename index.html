@@ -950,7 +950,7 @@ function render(posts,append=false){
       '<div class="meta">'+
         (read ? READ_MARK : NEW_MARK)+
         '<span class="who">'+esc(titles[p.channel] || p.channel)+'</span>'+
-        '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>· '+when(p.ts)+'</time>'+
+        '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(p.views)+'</span>' : '')+
       '</div>'+ extras(p);
     const setRead = () => {
@@ -1036,7 +1036,7 @@ async function loadCatalog(){
       open.dataset.act='preview'; open.dataset.channel=c.username; open.setAttribute('aria-expanded',String(expandedChannel===c.username));
       open.innerHTML='<span class="channel-mark" aria-hidden="true">'+esc((c.name[0]||'@').toUpperCase())+'</span>'+ 
         '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+ 
-        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' · '+esc(c.cat):'')+'</span>'+ 
+        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(c.cat)+')':'')+'</span>'+ 
         (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+ 
         (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">'+(expandedChannel===c.username?'Скрыть':'Посмотреть')+'</span>';
       const action=document.createElement('button'); action.type='button'; action.className='channel-action'+(have.has(c.username)?' is-on':'');
