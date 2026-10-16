@@ -25,6 +25,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from html import escape, unescape
 from urllib.parse import parse_qs, urlparse
 
+import tg  # слой Telegram. Без входа профиля он ничего не делает и не ходит в сеть.
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 # База в подкаталоге: volume монтируется на /data, чтобы не перекрывать код.
 DATA = os.environ.get("DATA_DIR", os.path.join(BASE, "data"))
@@ -103,11 +105,44 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions (expires);
+CREATE TABLE IF NOT EXISTS tg_accounts (
+    profile    TEXT PRIMARY KEY,
+    phone      TEXT,
+    title      TEXT,
+    linked     INTEGER
+);
+CREATE TABLE IF NOT EXISTS tg_channels (
+    profile    TEXT NOT NULL,
+    channel    TEXT NOT NULL,
+    entity_id  INTEGER,
+    title      TEXT,
+    updated    INTEGER,
+    PRIMARY KEY (profile, channel)
+);
+-- Приватные посты лежат отдельно от публичных и привязаны к профилю, который
+-- принёс их своим входом в Telegram. Класть их в posts нельзя: регистрация на
+-- сайте открыта, и общая корзина отдала бы чужую приватную ленту всем.
+CREATE TABLE IF NOT EXISTS private_posts (
+    profile    TEXT NOT NULL,
+    channel    TEXT NOT NULL,
+    msg_id     INTEGER NOT NULL,
+    url        TEXT NOT NULL,
+    text       TEXT,
+    media      TEXT,
+    views      TEXT,
+    ts         INTEGER NOT NULL,
+    PRIMARY KEY (profile, channel, msg_id)
+);
+CREATE INDEX IF NOT EXISTS private_posts_ts ON private_posts (profile, ts DESC);
 """
 
 # Имя канала попадает в URL t.me, поэтому проверяем форму: без этого
 # в локальной сети можно было бы заставить сервис ходить по произвольным адресам.
 CHANNEL_RE = re.compile(r"^[A-Za-z0-9_]{3,32}$")
+# Приватный канал адреса в t.me не имеет, поэтому в ленте он зовется ключом
+# private:-100… В URL такие имена не попадают — по ним никто не ходит, — так что
+# строгая проверка обычного имени тут неприменима.
+PRIVATE_RE = re.compile(r"^private:-100\d{6,20}$")
 
 # Короткий TTL: t.me отдаёт превью без ограничений, но и обновляется не мгновенно.
 TTL = 300
@@ -317,6 +352,15 @@ def valid_channel(name):
     return isinstance(name, str) and bool(CHANNEL_RE.match(name))
 
 
+def private_channel(name):
+    return isinstance(name, str) and bool(PRIVATE_RE.match(name))
+
+
+def valid_feed_channel(name):
+    """Имя канала в запросе ленты: обычное имя или ключ приватного канала."""
+    return valid_channel(name) or private_channel(name)
+
+
 def fetch_channel(channel):
     """Один канал -> (title, [posts]). Бросает ValueError если канала нет."""
     url = f"https://t.me/s/{channel}"
@@ -395,6 +439,54 @@ POST_FIELDS = ("channel", "msg_id", "url", "text", "media", "views", "ts",
                "reactions", "preview", "doc", "fwd", "quote", "sticker")
 POST_INSERT = (f"INSERT OR REPLACE INTO posts ({','.join(POST_FIELDS)}) VALUES "
                f"({','.join(':' + f for f in POST_FIELDS)})")
+
+
+PRIVATE_FIELDS = ("channel", "msg_id", "url", "text", "media", "views", "ts",
+                  "reactions", "preview", "doc", "fwd", "quote", "sticker")
+
+
+def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, before=None):
+    """То же, что search_posts, но из приватной корзины и только своего профиля.
+
+    Отдельная таблица и обязательный profile: общий запрос по постам отдавал бы
+    чужую приватную ленту всем, кто умеет назвать её ключ.
+    """
+    sql = ("SELECT channel,msg_id,url,text,media,views,ts,"
+           " NULL,NULL,NULL,NULL,NULL,NULL FROM private_posts"
+           " WHERE profile=? AND 1=1")
+    args = [profile]
+    if channels:
+        sql += " AND channel IN (%s)" % ",".join("?" * len(channels))
+        args += channels
+    if q:
+        sql += " AND text LIKE ?"
+        args.append(f"%{q}%")
+    if only_unread:
+        sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
+                " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
+        args.append(only_unread)
+    if before:
+        ts, channel, msg_id = before
+        sql += (" AND (ts < ? OR (ts = ? AND (channel > ? OR"
+                " (channel = ? AND msg_id < ?))))")
+        args.extend((ts, ts, channel, channel, msg_id))
+    sql += " ORDER BY ts DESC, channel ASC, msg_id DESC LIMIT ?"
+    args.append(limit)
+    return db.execute(sql, args).fetchall()
+
+
+def public_channels(channels):
+    return [c for c in channels if valid_channel(c)]
+
+
+def count_unread_private(db, channels, profile):
+    """Непрочитанные в приватной корзине — по той же формуле, что и у публичных."""
+    if not channels or not profile:
+        return 0
+    sql = ("SELECT COUNT(*) FROM private_posts WHERE channel IN (%s) AND NOT EXISTS "
+           "(SELECT 1 FROM user_reads r WHERE r.profile=? "
+           "AND r.post=private_posts.channel || '/' || private_posts.msg_id)") % ",".join("?" * len(channels))
+    return db.execute(sql, list(channels) + [profile]).fetchone()[0]
 
 
 def count_unread(db, channels, profile):
@@ -788,7 +880,9 @@ def valid_post_key(value):
     if not isinstance(value, str):
         return False
     channel, sep, msg_id = value.partition("/")
-    return bool(sep and valid_channel(channel) and msg_id.isdigit() and len(msg_id) <= 20)
+    # Приватные посты отмечаются прочитанными по тому же ключу, поэтому валидатор
+    # обязан их пропускать: иначе отметка молча не сохранится.
+    return bool(sep and valid_feed_channel(channel) and msg_id.isdigit() and len(msg_id) <= 20)
 
 
 def update_subscription(db, cid, channel, subscribed):
@@ -1154,7 +1248,7 @@ class Handler(BaseHTTPRequestHandler):
                 chans = list(dict.fromkeys(
                     c for c in self._query("channels", "").split(",") if c
                 ))[:200]
-                bad = [c for c in chans if not valid_channel(c)]
+                bad = [c for c in chans if not valid_feed_channel(c)]
                 if bad:
                     return self._send(400, json.dumps({"error": "неверное имя канала"}),
                                       "application/json")
@@ -1164,7 +1258,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, json.dumps(
                         {"posts": [], "titles": {}, "errors": [], "has_more": False,
                          "unread": 0, "next": None}), "application/json; charset=utf-8")
-                errors = refresh_channels(db, chans)
+                errors = refresh_channels(db, public_channels(chans))
 
                 before = None
                 cursor_values = (self._query("before_ts"), self._query("before_channel"),
@@ -1175,14 +1269,31 @@ class Handler(BaseHTTPRequestHandler):
                     except (TypeError, ValueError):
                         return self._send(400, json.dumps({"error": "неверная позиция ленты"}),
                                           "application/json")
-                    if not valid_channel(before[1]) or before[2] < 1:
+                    if not valid_feed_channel(before[1]) or before[2] < 1:
                         return self._send(400, json.dumps({"error": "неверная позиция ленты"}),
                                           "application/json")
 
                 unread_profile = client_id(self, db)
                 only_unread = unread_profile if self._query("unread") == "1" else None
-                rows = search_posts(db, q, chans, only_unread=only_unread,
-                                    limit=FEED_PAGE_SIZE + 1, before=before)
+                # Публичные каналы идут как раньше. Приватные — из своей таблицы и
+                # только когда запрос пришёл от профиля со своим входом в Telegram;
+                # иначе ключ private:-100… в подписках просто ничего не вернёт.
+                want_private = [c for c in chans if private_channel(c)]
+                public = public_channels(chans)
+                # search_posts на пустом списке каналов отдаёт весь кэш — так он
+                # был написан для выгрузки. В ленте это значило бы, что подписчик
+                # одних лишь приватных каналов увидит все публичные подряд.
+                rows = search_posts(db, q, public, only_unread=only_unread,
+                                    limit=FEED_PAGE_SIZE + 1, before=before) if public else []
+                if unread_profile and want_private:
+                    rows += search_private_posts(db, q, want_private, unread_profile,
+                                                only_unread=only_unread,
+                                                limit=FEED_PAGE_SIZE + 1, before=before)
+                    # Порядок ленты общий для обеих корзин, иначе посты одного
+                    # времени шли бы двумя кусками: сначала публичные, потом приватные.
+                    rows.sort(key=lambda r: (-r[POST_FIELDS.index("ts")],
+                                             r[POST_FIELDS.index("channel")],
+                                             -r[POST_FIELDS.index("msg_id")]))
                 has_more = len(rows) > FEED_PAGE_SIZE
                 rows = rows[:FEED_PAGE_SIZE]
                 posts = [dict(zip(POST_FIELDS, r)) for r in rows]
@@ -1208,10 +1319,201 @@ class Handler(BaseHTTPRequestHandler):
                         "SELECT channel FROM user_subs WHERE profile=?", (unread_profile,))}
                 titles = dict(db.execute("SELECT channel,title FROM cache WHERE channel IN (%s)"
                                           % ",".join("?" * len(wanted)), list(wanted)))
+                # у приватных каналов названия нет в общем кэше: они лежат у профиля
+                if unread_profile and want_private:
+                    titles.update(dict(db.execute(
+                        "SELECT channel,title FROM tg_channels WHERE profile=? AND channel IN (%s)"
+                        % ",".join("?" * len(want_private)), [unread_profile] + want_private)))
+                unread_count = (count_unread(db, public_channels(chans), unread_profile)
+                                + count_unread_private(db, want_private, unread_profile))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "has_more": has_more,
-                                                   "unread": count_unread(db, chans, unread_profile),
+                                                   "unread": unread_count,
                                                    "next": next_cursor}),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/status":
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                account = db.execute("SELECT phone,title,linked FROM tg_accounts WHERE profile=?",
+                                     (cid,)).fetchone()
+                return self._send(200, json.dumps({
+                    "installed": tg.installed(),
+                    "linked": bool(account and account[2]),
+                    "phone": account[0] if account else "",
+                    "title": account[1] if account else "",
+                }, ensure_ascii=False), "application/json; charset=utf-8")
+
+            if path == "/api/tg/link/start":
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                try:
+                    state = tg.start_link(cid)
+                except tg.TelegramMissing as exc:
+                    return self._send(503, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                                      "application/json")
+                except Exception as exc:
+                    return self._send(502, json.dumps({"error": ("не удалось начать вход: " + str(exc))[:180]}),
+                                      "application/json")
+                if state.get("state") == "done":
+                    db.execute("INSERT OR REPLACE INTO tg_accounts VALUES (?,?,?,1)",
+                               (cid, state["account"]["phone"], state["account"]["title"]))
+                    db.commit()
+                    return self._send(200, json.dumps({"linked": True}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                return self._send(200, json.dumps({"state": "waiting", "token": state["token"],
+                                                   "url": state["url"]}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/link/poll":
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                token = str(self._read_json().get("token", ""))
+                try:
+                    result = tg.poll_link(token)
+                except Exception as exc:
+                    return self._send(502, json.dumps({"error": ("вход не удался: " + str(exc))[:180]},
+                                                      ensure_ascii=False),
+                                      "application/json")
+                if result.get("state") == "done":
+                    db.execute("INSERT OR REPLACE INTO tg_accounts VALUES (?,?,?,1)",
+                               (cid, result["account"]["phone"], result["account"]["title"]))
+                    db.commit()
+                return self._send(200, json.dumps(result, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/link/cancel":
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                token = str(self._read_json().get("token", ""))
+                return self._send(200, json.dumps(tg.cancel_link(token)),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/unlink":
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                tg.drop_session(cid)
+                db.execute("DELETE FROM tg_accounts WHERE profile=?", (cid,))
+                db.execute("DELETE FROM tg_channels WHERE profile=?", (cid,))
+                db.execute("DELETE FROM private_posts WHERE profile=?", (cid,))
+                db.commit()
+                return self._send(200, json.dumps({"ok": True}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/channels":
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                rows = db.execute(
+                    "SELECT channel,title,entity_id,updated FROM tg_channels WHERE profile=?"
+                    " ORDER BY title COLLATE NOCASE", (cid,)).fetchall()
+                subs = {r[0] for r in db.execute("SELECT channel FROM user_subs WHERE profile=?", (cid,))}
+                counts = dict(db.execute(
+                    "SELECT channel,COUNT(*) FROM private_posts WHERE profile=? GROUP BY channel", (cid,)))
+                return self._send(200, json.dumps({"channels": [
+                    {"channel": r[0], "title": r[1] or r[0], "entity_id": r[2], "updated": r[3],
+                     "subscribed": r[0] in subs, "posts": counts.get(r[0], 0)} for r in rows]}),
+                    "application/json; charset=utf-8")
+
+            if path == "/api/tg/discover":
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                try:
+                    found = tg.discover(cid)
+                except tg.TelegramMissing as exc:
+                    return self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                                      "application/json")
+                except Exception as exc:
+                    return self._send(502, json.dumps({"error": ("Telegram не ответил: " + str(exc))[:180]},
+                                                      ensure_ascii=False),
+                                      "application/json")
+                # уже известные каналы не теряем: перезаписываем те же строки
+                db.executemany("INSERT OR REPLACE INTO tg_channels VALUES (?,?,?,?,?)",
+                               [(cid, c["channel"], c["entity_id"], c["title"], int(time.time()))
+                                for c in found])
+                db.commit()
+                return self._send(200, json.dumps({"found": len(found)}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/sync":
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                wanted = [r[0] for r in db.execute(
+                    "SELECT channel FROM tg_channels WHERE profile=?", (cid,))]
+                errors, total = [], 0
+                for channel in wanted:
+                    try:
+                        rows = tg.fetch(cid, channel)
+                    except Exception as exc:
+                        errors.append({"channel": channel, "message": str(exc)[:180]})
+                        continue
+                    db.executemany(
+                        "INSERT OR REPLACE INTO private_posts "
+                        "(profile,channel,msg_id,url,text,media,views,ts) VALUES (?,?,?,?,?,?,?,?)",
+                        [(cid, r["channel"], r["msg_id"], r["url"], r["text"], r["media"],
+                          r["views"], r["ts"]) for r in rows])
+                    db.execute("UPDATE tg_channels SET updated=? WHERE profile=? AND channel=?",
+                               (int(time.time()), cid, channel))
+                    total += len(rows)
+                db.commit()
+                return self._send(200, json.dumps({"saved": total, "errors": errors}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/tg/subscribe":
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json")
+                data = self._read_json()
+                channel = str(data.get("channel", "")) if isinstance(data, dict) else ""
+                subscribed = data.get("subscribed") if isinstance(data, dict) else None
+                if not private_channel(channel) or not isinstance(subscribed, bool):
+                    return self._send(400, json.dumps({"error": "неверный канал"}, ensure_ascii=False),
+                                      "application/json")
+                known = db.execute("SELECT 1 FROM tg_channels WHERE profile=? AND channel=?",
+                                   (cid, channel)).fetchone()
+                if not known:
+                    return self._send(404, json.dumps({"error": "канал не найден среди твоих"}),
+                                      "application/json")
+                try:
+                    update_subscription(db, cid, channel, subscribed)
+                except ValueError as exc:
+                    return self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                                      "application/json")
+                return self._send(200, json.dumps({"ok": True}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/settings":

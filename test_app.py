@@ -537,5 +537,182 @@ class MediaParseTest(unittest.TestCase):
         self.assertEqual(media[2]["u"], "https://cdn4.telesco.pe/file/c.mp4")
 
 
+class PrivateChannelsTest(unittest.TestCase):
+    """Приватные каналы приходят через вход в Telegram. Проверяем то, ради чего
+    всё затевалось: пост одного профиля не должен попасть в ленту другого."""
+
+    KEY = "private:-1001234567890"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="telegram-lenta-private-")
+        self.previous_db = app.DB
+        app.DB = self.temp.name + "/feed.db"
+        self.db = app.connect()
+        now = int(time.time())
+        self.db.executemany("INSERT INTO cache VALUES (?,?,?)", [("alpha", "Alpha", now)])
+        self.db.executemany("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+            ("alpha", 1, "https://t.me/alpha/1", "публичный пост", None, None,
+             1_800_000_050, None, None, None, None, None, None)])
+        self.db.commit()
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        self.db.close()
+        app.DB = self.previous_db
+        self.temp.cleanup()
+
+    def call(self, path, method="GET", data=None, cookie=""):
+        headers = {}
+        payload = None
+        if data is not None:
+            payload = json.dumps(data).encode()
+            headers["Content-Type"] = "application/json"
+        if cookie:
+            headers["Cookie"] = cookie
+        req = Request(self.base + path, data=payload, headers=headers, method=method)
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    def sign_in(self, username):
+        status, _ = self.call("/api/auth/register", method="POST",
+                              data={"username": username, "password": "long-password"})
+        self.assertEqual(status, 201)
+        status, _ = self.call("/api/auth/login", method="POST",
+                              data={"username": username, "password": "long-password"})
+        self.assertEqual(status, 200)
+
+    def session_cookie(self, username):
+        """Входит и отдаёт куку. Код профиля сервер выдаёт сам, поэтому он
+        спрашивается из базы: заранее его не угадать, а приватные посты
+        привязаны именно к нему."""
+        self.sign_in(username)
+        req = Request(self.base + "/api/auth/login", method="POST",
+                      headers={"Content-Type": "application/json"},
+                      data=json.dumps({"username": username,
+                                       "password": "long-password"}).encode())
+        with urlopen(req, timeout=5) as response:
+            cookie = response.headers.get("Set-Cookie").split(";", 1)[0]
+        profile = self.db.execute("SELECT profile FROM accounts WHERE username=?",
+                                  (username,)).fetchone()[0]
+        return cookie, profile
+
+    def seed_private(self, profile):
+        """Кладёт приватный канал и его пост от имени профиля."""
+        now = int(time.time())
+        self.db.execute("INSERT INTO private_posts VALUES (?,?,?,?,?,?,?,?)",
+                        (profile, self.KEY, 7, "https://t.me/c/1234567890/7",
+                         "секретный пост", None, None, 1_800_000_090))
+        self.db.execute("INSERT OR REPLACE INTO tg_channels VALUES (?,?,?,?,?)",
+                        (profile, self.KEY, -1001234567890, "Секретный канал", now))
+        self.db.commit()
+
+    def test_private_post_visible_only_to_the_profile_that_brought_it(self):
+        cookie, profile = self.session_cookie("profil_a")
+        self.seed_private(profile)
+        status, payload = self.call("/api/feed?" + urlencode({"channels": self.KEY}),
+                                    cookie=cookie)
+        self.assertEqual(status, 200)
+        texts = [p["text"] for p in payload["posts"]]
+        self.assertIn("секретный пост", texts)
+
+        other, _ = self.session_cookie("profil_b")
+        status, payload = self.call("/api/feed?" + urlencode({"channels": self.KEY}),
+                                    cookie=other)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["posts"], [])
+
+    def test_public_and_private_posts_share_one_order(self):
+        cookie, profile = self.session_cookie("profil_a")
+        self.seed_private(profile)
+        status, payload = self.call("/api/feed?" + urlencode({"channels": "alpha," + self.KEY}),
+                                    cookie=cookie)
+        self.assertEqual(status, 200)
+        texts = [p["text"] for p in payload["posts"]]
+        self.assertEqual(texts, ["секретный пост", "публичный пост"])
+        # заголовок приватного канала приезжает из подписки профиля, не из кэша
+        self.assertEqual(payload["titles"].get(self.KEY), "Секретный канал")
+
+    def test_feed_rejects_broken_private_key(self):
+        cookie, _ = self.session_cookie("profil_a")
+        status, _ = self.call("/api/feed?" + urlencode({"channels": "private:-100abc"}),
+                              cookie=cookie)
+        self.assertEqual(status, 400)
+
+    def test_profile_with_only_private_channels_does_not_see_public_cache(self):
+        """Пустой список публичных каналов в ленте означает «ничего», а не
+        «весь кэш»: так отдаёт выгрузка, и в ленте это стало бы утечкой."""
+        cookie, profile = self.session_cookie("profil_a")
+        self.seed_private(profile)
+        status, payload = self.call("/api/feed?" + urlencode({"channels": self.KEY}),
+                                    cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual([p["text"] for p in payload["posts"]], ["секретный пост"])
+
+    def test_read_mark_of_private_post_is_accepted(self):
+        self.assertTrue(app.valid_post_key(self.KEY + "/7"))
+        self.assertFalse(app.valid_post_key("private:-100abc/7"))
+
+    def test_public_subscription_rejects_private_key(self):
+        cookie, _ = self.session_cookie("profil_a")
+        status, _ = self.call("/api/state/subscription", method="POST",
+                              data={"channel": self.KEY, "subscribed": True}, cookie=cookie)
+        self.assertEqual(status, 400)
+
+    def test_tg_endpoints_need_profile(self):
+        for path in ("/api/tg/status", "/api/tg/channels"):
+            status, _ = self.call(path)
+            self.assertEqual(status, 401, path)
+
+    def test_link_start_reports_missing_telethon_instead_of_falling_back(self):
+        cookie, _ = self.session_cookie("profil_a")
+        with patch.object(app.tg, "installed", return_value=False):
+            status, payload = self.call("/api/tg/link/start", method="POST", data={},
+                                        cookie=cookie)
+        self.assertEqual(status, 503)
+        self.assertIn("Telethon", payload["error"])
+
+    def test_status_reflects_linked_account(self):
+        cookie, profile = self.session_cookie("profil_a")
+        status, payload = self.call("/api/tg/status", cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["linked"])
+        self.db.execute("INSERT OR REPLACE INTO tg_accounts VALUES (?,?,?,1)",
+                        (profile, "+79990000000", "Я"))
+        self.db.commit()
+        status, payload = self.call("/api/tg/status", cookie=cookie)
+        self.assertTrue(payload["linked"])
+        self.assertEqual(payload["phone"], "+79990000000")
+
+    def test_unlink_wipes_profile_private_data(self):
+        cookie, profile = self.session_cookie("profil_a")
+        self.seed_private(profile)
+        with patch.object(app.tg, "drop_session", return_value=True):
+            status, _ = self.call("/api/tg/unlink", method="POST", data={}, cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM private_posts").fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM tg_channels").fetchone()[0], 0)
+
+    def test_channels_list_only_for_own_profile(self):
+        cookie, profile = self.session_cookie("profil_a")
+        self.seed_private(profile)
+        status, payload = self.call("/api/tg/channels", cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertEqual([c["channel"] for c in payload["channels"]], [self.KEY])
+
+        other, _ = self.session_cookie("profil_b")
+        status, payload = self.call("/api/tg/channels", cookie=other)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["channels"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
