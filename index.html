@@ -703,7 +703,7 @@ let feedPageFailed=false;
 let unreadTotal=0;
 
 const paintUnread = () => {
-  $('#unreadBtn').textContent = unreadTotal ? 'Непрочитанные · '+unreadTotal : 'Непрочитанные';
+  $('#unreadBtn').textContent = unreadTotal ? 'Непрочитанные ('+unreadTotal+')' : 'Непрочитанные';
 };
 
 // Пост прочитан, когда видно 60% карточки. Ниже порога пост просто мелькнул
