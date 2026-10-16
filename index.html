@@ -355,11 +355,11 @@ body:has(.ov.open){overflow:hidden}
   .dlg .settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
   .dlg .settings h3{font-size:14px;margin:0 0 4px}
   .dlg .settings-hint{font-size:12.5px;color:var(--faint);margin:0 0 12px}
-  .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap;justify-content:center}
-  /* кнопки по ширине текста и по центру: иначе одинокая кнопка в конце ряда
-     растягивается на всю ширину и ряд выглядит разъезженным */
-  .dlg .settings .seg button{flex:0 1 auto}
-  .dlg .seg-label{font-size:12.5px;color:var(--dim);margin:14px 0 6px;text-align:center}
+  .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap}
+  /* кнопка занимает всю свободную ширину ряда, а текст внутри по центру:
+     иначе одинокая кнопка в конце ряда выглядит пустой и перекошенной */
+  .dlg .settings .seg button{flex:1 1 auto;justify-content:center}
+  .dlg .seg-label{font-size:12.5px;color:var(--dim);margin:14px 0 6px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
 .read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
   margin:-10px 0 -10px -10px;border-radius:var(--r-sm)}
