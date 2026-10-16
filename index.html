@@ -100,10 +100,28 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .galw{position:relative;margin:4px 0 11px}
 .gal{display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
 .gal>img,.gal>video{flex:0 0 auto;width:auto;max-width:82%;margin:0;scroll-snap-align:center}
+/* Пока кадр не подгружен, у него нет размера: без заполнителя все десять
+   влезают в ленту, наблюдатель видит их все и тянет всё разом. */
+.gal>img[data-src]{min-width:200px}
 .gal>video{max-width:100%}
 .gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:999px;
   background:rgba(0,0,0,.62);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;
   pointer-events:none}
+/* Кадр открывается целиком: лента показывает только обрезок */
+.gal>img{cursor:zoom-in}
+.lb-img{max-width:94vw;max-height:86vh;object-fit:contain;border-radius:10px;display:block}
+.lb-img[hidden]{display:none}
+/* Подложка плотнее общей: под кадром не должно быть видно страницу */
+#lightbox{background:rgba(0,0,0,.94)}
+.lb-n{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+  padding:3px 11px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;
+  font-size:12.5px;font-variant-numeric:tabular-nums;pointer-events:none}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
+  border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:0;font-size:20px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+.lb-nav:hover{background:rgba(0,0,0,.75)}
+.lb-prev{left:14px}.lb-next{right:14px}
+.lb-nav[hidden]{display:none}
 .txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68}
 .post.read .txt{color:var(--dim)}
 .txt a{color:var(--acc);text-underline-offset:2px;text-decoration-thickness:1px}
@@ -365,6 +383,14 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
     <div id="catList"></div>
   </main>
 </section>
+
+<div class="ov" id="lightbox" role="dialog" aria-modal="true" aria-label="Просмотр изображения" aria-hidden="true">
+  <img class="lb-img" id="lbImg" alt="Изображение из публикации">
+  <video class="lb-img" id="lbVid" controls preload="metadata" playsinline hidden></video>
+  <button class="lb-nav lb-prev" id="lbPrev" type="button" aria-label="Предыдущий кадр">‹</button>
+  <button class="lb-nav lb-next" id="lbNext" type="button" aria-label="Следующий кадр">›</button>
+  <span class="lb-n" id="lbN" aria-live="polite"></span>
+</div>
 
 <div class="ov" id="meOvl" role="dialog" aria-modal="true" aria-labelledby="meTitle" aria-describedby="meDescription" aria-hidden="true" tabindex="-1">
   <div class="dlg" style="max-width:420px">
@@ -634,9 +660,9 @@ function extras(p){
          (p.quote.text?'<div class="line">'+esc(p.quote.text)+'</div>':'')+'</a>';
 
   if(p.media && p.media.length){
-    const items = p.media.map(m => m.k === 'v'
+    const items = p.media.map((m, i) => m.k === 'v'
       ? '<video controls preload="none" playsinline src="'+esc(m.u)+'"></video>'
-      : '<img loading="lazy" src="'+esc(m.u)+'" alt="Изображение из публикации">').join('');
+      : '<img loading="lazy" '+(i ? 'data-src' : 'src')+'="'+esc(m.u)+'" alt="Изображение из публикации">').join('');
     h += (p.media.length === 1
       ? items
       : '<div class="galw"><div class="gal">'+items+'</div>'+
@@ -684,6 +710,30 @@ function showFeedWarning(){
   warning.textContent=channels.length
     ? 'Не удалось обновить '+channels.length+' '+(channels.length===1?'канал':'канала')+': '+channels.join(', ')+'. Показаны доступные посты.'
     : 'Не удалось загрузить следующую часть ленты. Попробуй ещё раз.';
+}
+
+// Кадры альбома подгружаются по мере свайпа. Через IntersectionObserver и по
+// getBoundingClientRect не вышло: у ещё не загруженной картинки нет размера,
+// и все кадры выглядят стоящими в одной точке. Поэтому считаем по прокрутке:
+// каждый кадр шириной не меньше GAL_MIN, значит индекс ≈ scrollLeft / GAL_MIN.
+const GAL_MIN = 200, GAL_AHEAD = 3;
+function watchGalleries(root){
+  for(const gal of root.querySelectorAll('.gal')){
+    let next = gal.querySelectorAll('img[data-src]').length ? 1 : 0;
+    const grant = () => {
+      let img;
+      while(next < GAL_AHEAD + Math.ceil(gal.scrollLeft / GAL_MIN) &&
+            (img = gal.querySelector('img[data-src]'))){
+        img.src = img.dataset.src;
+        delete img.dataset.src;
+        next++;
+      }
+      if(!gal.querySelector('img[data-src]')) gal.removeEventListener('scroll', grant);
+    };
+    if(!next) continue;
+    gal.addEventListener('scroll', grant, {passive:true});
+    requestAnimationFrame(grant);
+  }
 }
 
 function render(posts,append=false){
@@ -742,6 +792,7 @@ function render(posts,append=false){
     el.querySelector('.read-toggle')?.addEventListener('click', setRead);
     postList.appendChild(el);
   }
+  watchGalleries(postList);
   showFeedWarning();
   const more=$('#loadMore');
   if(more){ more.hidden=!feedHasMore; more.textContent='Загрузить ещё'; }
@@ -818,6 +869,7 @@ function renderPreview(panel,channel){
     item.innerHTML='<time>'+esc(when(post.ts))+'</time>'+extras(post);
     panel.append(item);
   }
+  watchGalleries(panel);
 }
 async function fetchPreview(panel,channel){
   try{
@@ -995,6 +1047,47 @@ function closeProfile(){
   $('#meOvl').classList.remove('open'); $('#meOvl').setAttribute('aria-hidden','true');
   profileInertState.forEach(([el,was])=>{el.inert=was;}); profileReturnFocus?.focus();
 }
+// Просмотр кадра целиком: список собираем из самой ленты, отдельного состояния нет
+let lbItems=[], lbIndex=0, lbFocus=null, lbInert=[];
+function paintLightbox(){
+  const m = lbItems[lbIndex], img=$('#lbImg'), vid=$('#lbVid');
+  if(m.k==='v'){ vid.src=m.u; vid.hidden=false; img.hidden=true; img.removeAttribute('src'); }
+  else { img.src=m.u; img.hidden=false; vid.hidden=true; vid.removeAttribute('src'); }
+  $('#lbN').textContent = lbItems.length > 1 ? (lbIndex+1)+' из '+lbItems.length : '';
+  const many = lbItems.length > 1;
+  $('#lbPrev').hidden = !many; $('#lbNext').hidden = !many;
+}
+function openLightbox(gal, start){
+  lbItems = [...gal.children].map(n => ({ k: n.tagName==='VIDEO' ? 'v' : 'i',
+                                          u: n.getAttribute('src') || n.dataset.src || '' }));
+  lbIndex = Math.max(0, lbItems.findIndex(m => m.u === (start.dataset.src || start.getAttribute('src'))));
+  lbFocus = document.activeElement;
+  const bg=[$('header'),$('#viewFeed'),$('#viewCat')];
+  lbInert = bg.map(el => [el, el.inert]); bg.forEach(el => { el.inert = true; });
+  paintLightbox();
+  $('#lightbox').classList.add('open'); $('#lightbox').setAttribute('aria-hidden','false');
+  requestAnimationFrame(() => $('#lbNext').focus({preventScroll:true}));
+}
+function closeLightbox(){
+  const lb = $('#lightbox');
+  lb.classList.remove('open'); lb.setAttribute('aria-hidden','true');
+  $('#lbVid').pause?.(); $('#lbVid').removeAttribute('src'); $('#lbImg').removeAttribute('src');
+  lbInert.forEach(([el,was]) => { el.inert = was; }); lbFocus?.focus();
+}
+function stepLightbox(delta){
+  lbIndex = (lbIndex + delta + lbItems.length) % lbItems.length;
+  paintLightbox();
+}
+document.addEventListener('click', e => {
+  const media = e.target.closest('.gal img, .gal video');
+  if(!media) return;
+  e.preventDefault();
+  openLightbox(media.closest('.gal'), media);
+});
+$('#lbPrev').onclick = () => stepLightbox(-1);
+$('#lbNext').onclick = () => stepLightbox(1);
+$('#lightbox').onclick = closeLightbox;
+
 $('#meBtn').onclick=openProfile; $('#meClose').onclick=closeProfile;
 $('#meOvl').onclick=e=>{if(e.target===e.currentTarget)closeProfile();};
 $('#emailForm').onsubmit=async e=>{
@@ -1008,6 +1101,17 @@ $('#emailForm').onsubmit=async e=>{
   finally{button.disabled=false;}
 };
 document.addEventListener('keydown',e=>{
+  const lb=$('#lightbox');
+  if(lb.classList.contains('open')){
+    if(e.key==='Escape'){e.preventDefault();closeLightbox();return;}
+    if(e.key==='ArrowLeft'){e.preventDefault();stepLightbox(-1);return;}
+    if(e.key==='ArrowRight'){e.preventDefault();stepLightbox(1);return;}
+    if(e.key!=='Tab')return;
+    const nav=[...lb.querySelectorAll('button:not(:disabled)')]; if(!nav.length)return;
+    if(e.shiftKey&&document.activeElement===nav[0]){e.preventDefault();nav.at(-1).focus();}
+    else if(!e.shiftKey&&document.activeElement===nav.at(-1)){e.preventDefault();nav[0].focus();}
+    return;
+  }
   if(!$('#meOvl').classList.contains('open'))return;
   if(e.key==='Escape'){e.preventDefault();closeProfile();return;}
   if(e.key!=='Tab')return;
