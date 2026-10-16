@@ -312,7 +312,9 @@ def parse_quote(chunk):
 
 
 def valid_channel(name):
-    return bool(CHANNEL_RE.match(name or ""))
+    # isinstance, а не `name or ""`: из браузера прилетает всё, включая список,
+    # на котором match() падал с TypeError и рвал соединение без ответа
+    return isinstance(name, str) and bool(CHANNEL_RE.match(name))
 
 
 def fetch_channel(channel):
@@ -629,16 +631,23 @@ def mail_request_allowed(key, cooldown=60):
     return True
 
 
-def login_allowed(username):
+def login_key(username, client=""):
+    # ключ по адресу и имени: при ключе только по имени любой, кто знает имя,
+    # мог закрыть чужой вход на четверть часа
+    return f"{client}|{username.lower()}"
+
+
+def login_allowed(username, client=""):
+    key = login_key(username, client)
     now = time.time()
-    recent = [stamp for stamp in LOGIN_FAILURES.get(username.lower(), [])
+    recent = [stamp for stamp in LOGIN_FAILURES.get(key, [])
               if now - stamp < 900]
-    LOGIN_FAILURES[username.lower()] = recent
+    LOGIN_FAILURES[key] = recent
     return len(recent) < 8
 
 
-def record_login_failure(username):
-    LOGIN_FAILURES.setdefault(username.lower(), []).append(time.time())
+def record_login_failure(username, client=""):
+    LOGIN_FAILURES.setdefault(login_key(username, client), []).append(time.time())
 
 
 def create_session(db, profile):
@@ -709,9 +718,13 @@ def load_settings(db, cid):
 
 
 def save_settings(db, cid, data):
-    clean = {}
+    # неуказанное поле сохраняем как было, а не сбрасываем в умолчание:
+    # частичный PUT из чужого клиента иначе молча ломает вторую настройку
+    clean = load_settings(db, cid)
     for key, allowed in SETTINGS_ALLOWED.items():
-        value = data.get(key, DEFAULT_SETTINGS[key])
+        if key not in data:
+            continue
+        value = data[key]
         if value not in allowed:
             raise ValueError(f"неизвестное значение {key}={value!r}")
         clean[key] = value
@@ -741,9 +754,16 @@ def load_state(db, cid):
             "settings": load_settings(db, cid)}
 
 
+def string_list(data, key):
+    """Список строк из тела запроса. Значение не того типа отбрасывается,
+    а не роняет сервер: перебор целого числа даёт TypeError и рвёт соединение."""
+    value = data.get(key, [])
+    return value if isinstance(value, list) else []
+
+
 def save_state(db, cid, data):
-    subs = [c for c in data.get("subs", []) if valid_channel(c)][:200]
-    reads = [r for r in data.get("reads", []) if valid_post_key(r)][:20000]
+    subs = [c for c in string_list(data, "subs") if valid_channel(c)][:200]
+    reads = [r for r in string_list(data, "reads") if valid_post_key(r)][:20000]
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
     db.execute("DELETE FROM user_subs WHERE profile=?", (cid,))
@@ -756,8 +776,8 @@ def save_state(db, cid, data):
 
 def merge_state(db, cid, data):
     """Однократно соединяет локальное состояние с уже существующим профилем."""
-    incoming_subs = [c for c in data.get("subs", []) if valid_channel(c)]
-    reads = list(dict.fromkeys(r for r in data.get("reads", [])
+    incoming_subs = [c for c in string_list(data, "subs") if valid_channel(c)]
+    reads = list(dict.fromkeys(r for r in string_list(data, "reads")
                                if valid_post_key(r)))[:20000]
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
@@ -1083,7 +1103,8 @@ class Handler(BaseHTTPRequestHandler):
                                       "application/json; charset=utf-8")
                 username = str(data.get("username", "")).strip()
                 password = data.get("password", "")
-                if not isinstance(password, str) or not login_allowed(username):
+                client = self.client_address[0]
+                if not isinstance(password, str) or not login_allowed(username, client):
                     return self._send(429, json.dumps({"error": "Слишком много попыток. Попробуй позже."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 row = db.execute("SELECT username,profile,salt,digest,email,email_verified FROM accounts "
@@ -1092,13 +1113,13 @@ class Handler(BaseHTTPRequestHandler):
                 candidate = password_digest(password, salt)
                 valid = row is not None and secrets.compare_digest(candidate, row[3])
                 if not valid:
-                    record_login_failure(username)
+                    record_login_failure(username, client)
                     return self._send(401, json.dumps({"error": "Имя или пароль не подошли"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 if row[4] and not row[5]:
                     return self._send(403, json.dumps({"error": "Сначала подтверди почту по ссылке из письма."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                LOGIN_FAILURES.pop(username.lower(), None)
+                LOGIN_FAILURES.pop(login_key(username, client), None)
                 cookie = create_session(db, row[1])
                 return self._send(200, json.dumps({"account": {"username": row[0], "email": row[4],
                                   "email_verified": True}}, ensure_ascii=False),

@@ -86,7 +86,7 @@ header{position:sticky;top:0;z-index:20;
 .seg{display:flex;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
 .seg button{border:0;background:none;color:var(--dim);min-height:44px;padding:8px 13px;border-radius:var(--r-sm);
   font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
-.seg button[aria-selected=true]{background:var(--raise);color:var(--fg);box-shadow:var(--sh-1)}
+.seg button[aria-selected=true],.seg button[aria-pressed=true]{background:var(--raise);color:var(--fg);box-shadow:var(--sh-1)}
 .toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;border-radius:var(--r-sm);cursor:pointer;
   background:var(--surf);border:1px solid var(--line);color:var(--dim);white-space:nowrap;
   transition:color .16s,border-color .16s,background .16s}
@@ -122,7 +122,9 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .post.read{background:color-mix(in srgb,var(--surf) 78%,var(--bg))}
 
 .meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:var(--dim)}
-.meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em}
+.meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
   box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
@@ -305,6 +307,9 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .ov{position:fixed;inset:0;z-index:100;background:var(--overlay);
   display:none;align-items:center;justify-content:center;padding:16px}
 .ov.open{display:flex}
+/* страница под оверлеем не крутится: иначе свайп по кадру уводит ленту вниз,
+   а её текст просвечивает сквозь подложку */
+body:has(.ov.open){overflow:hidden}
 /* Панель внутри оверлея обязана иметь свой непрозрачный фон: иначе сквозь неё
    видно страницу под ней. Форму даёт тень, а не волосяная рамка: та и другая
    вместе — безвкусная связка, которую ловит детектор. */
@@ -563,7 +568,7 @@ function replayPending(){
   const nextSubs = new Set(subs()), nextReads = seen();
   pendingOps().forEach(op => {
     if(op.type === 'subscription') op.subscribed ? nextSubs.add(op.channel) : nextSubs.delete(op.channel);
-    if(op.type === 'read') nextReads.add(op.post);
+    if(op.type === 'read') op.unread ? nextReads.delete(op.post) : nextReads.add(op.post);
   });
   saveSubs([...nextSubs]); saveRead(nextReads);
 }
@@ -601,7 +606,8 @@ function drainStateOps(){
 }
 async function loadAccountState({migrate=false, legacy=null}={}){
   stateReady=false;
-  localStorage.setItem(LS.pending,'[]');
+  // очередь не трогаем: накопленное офлайн должно доиграть после перезагрузки,
+  // а не исчезнуть вместе со страницей
   if(migrate && localStorage.getItem(LS.migrated)!=='1'){
     const r=await fetch('/api/state/merge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(legacy || {subs:[],reads:[]})});
     if(!r.ok) throw new Error('Не удалось перенести прежнюю ленту');
@@ -870,7 +876,9 @@ function render(posts,append=false){
     if(!list.length && !feedHasMore){
       box.innerHTML = emptyState(onlyUnread?'rss':(posts.length?'rss':'search'),
         onlyUnread ? 'Непрочитанных постов пока нет.'
-          : posts.length ? 'Всё прочитано. Новые посты появятся здесь.' : 'Ничего не нашлось. Попробуй другой запрос.',
+          : posts.length ? 'Всё прочитано. Новые посты появятся здесь.'
+          : feedQuery ? 'Ничего не нашлось. Попробуй другой запрос.'
+          : 'Подписок пока нет. Загляни в каталог и добавь нужные каналы.',
         (!onlyUnread && feedQuery ? ['clearFeed','Сбросить поиск'] : null));
       return;
     }
@@ -890,7 +898,10 @@ function render(posts,append=false){
     const btn = e.target.closest('.read-status');
     if(!btn) return;
     const post = btn.closest('.post');
-    if(!post || !markUnread(post.dataset.post)) return;
+    // сняли галочку — наблюдатель больше не вернёт отметку сам на этой же
+    // странице, иначе пост уходил бы обратно в прочитанные при первом же свипе
+    postSeen.unobserve(post);
+    if(!markUnread(post.dataset.post)) return;
     post.classList.remove('read');
     btn.outerHTML = NEW_MARK;
   });
@@ -1193,7 +1204,7 @@ function openLightbox(gal, start){
   lbInert = bg.map(el => [el, el.inert]); bg.forEach(el => { el.inert = true; });
   paintLightbox();
   $('#lightbox').classList.add('open'); $('#lightbox').setAttribute('aria-hidden','false');
-  requestAnimationFrame(() => $('#lbNext').focus({preventScroll:true}));
+  requestAnimationFrame(() => (lbItems.length > 1 ? $('#lbNext') : $('#lbClose')).focus({preventScroll:true}));
 }
 function closeLightbox(){
   const lb = $('#lightbox');
@@ -1208,6 +1219,9 @@ function stepLightbox(delta){
 document.addEventListener('click', e => {
   const media = e.target.closest('.gal img, .gal video');
   if(!media) return;
+  // видео играет на месте: клик уходил в просмотр и перехватывал штатную
+  // кнопку play, а разворот у плеера уже есть свой
+  if(media.tagName==='VIDEO'){ media.play().catch(()=>{}); return; }
   e.preventDefault();
   openLightbox(media.closest('.gal'), media);
 });
