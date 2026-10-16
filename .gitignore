@@ -6,3 +6,4 @@ lenta.db
 feed.db
 config.json
 .env
+docker-compose.override.yml

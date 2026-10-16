@@ -100,9 +100,10 @@ header{position:sticky;top:0;z-index:20;
 .search input::placeholder{color:var(--faint)}
 
 /* ---------- Лента ---------- */
-/* Ряд каналов листался вслепую и на телефоне, и на мониторе, поэтому он везде
-   меню: кнопка с текущим выбором, под ней список вниз. Отступы 12/16/8 — как
-   был ряд, иначе кнопка упирается в края окна. */
+/* Каналы открываются отдельным экраном, а не выпадашкой: список под кнопкой
+   перекрывал пол-экрана на телефоне и закрывал первые посты. Кнопка в ленте
+   остаётся: на ней видно, какой канал открыт. Отступы 12/16/8 — как был ряд,
+   иначе кнопка упирается в края окна. */
 /* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
@@ -111,15 +112,15 @@ header{position:sticky;top:0;z-index:20;
 .tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
 .tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
 .tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
-/* список висит на нижней грани обёртки, а та самая уже съела 8px снизу */
-#tabs{position:absolute;z-index:60;top:calc(100% - 2px);left:20px;right:20px;margin:0;
-  display:none;flex-direction:column;align-items:stretch;gap:2px;
-  max-height:min(60vh,420px);overflow-y:auto;padding:6px;background:var(--surf);
-  border:1px solid var(--line);border-radius:var(--r-sm);box-shadow:var(--sh-2)}
-#tabs.open{display:flex}
-/* кнопка сама центрирует текст, а в меню пункт должен читаться слева направо */
-#tabs button{width:100%;min-height:42px;padding:9px 12px;justify-content:flex-start;text-align:left;
-  border-radius:var(--r-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* список каналов на своём экране: колонка, а не меню, поэтому высоты не ограничиваем
+   всем окном — на телефоне он должен листаться вместе с шапкой экрана */
+.chan-list{display:flex;flex-direction:column;gap:2px;margin:0 -6px;overflow-y:auto;
+  max-height:min(56vh,400px);overscroll-behavior:contain}
+.chan-item{justify-content:flex-start;text-align:left;min-height:44px;padding:10px 12px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chan-item[aria-current=true]{background:color-mix(in srgb,var(--acc) 12%,var(--surf));
+  border-color:var(--acc);color:var(--acc);font-weight:600}
+.chan-hint{padding:10px 12px;margin:0}
 nav button{flex:0 0 auto;font:inherit;font-size:13px;cursor:pointer}
 main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 #feed{max-width:748px;margin-inline:auto}
@@ -318,11 +319,11 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
    обводка помечает главное действие и выбранный вариант — заливки нет нигде,
    поэтому Добавить, Убрать и Посмотреть читаются одинаково на любом фоне. */
 .btn,.toggle,.seg button,.auth-modes button,nav button,.filters button,.channel-action,
-.channel-preview-label,.tabs-toggle,.quiet-btn{
+.channel-preview-label,.tabs-toggle,.chan-item,.quiet-btn{
   background:var(--surf);border:1px solid var(--line);color:var(--fg);
   transition:border-color .16s,color .16s,background .16s}
 .btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,nav button:hover,
-.filters button:hover,.channel-action:hover,.channel-preview-label:hover{
+.filters button:hover,.channel-action:hover,.channel-preview-label:hover,.chan-item:hover{
   border-color:var(--acc);color:var(--acc)}
 .seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
 .toggle[aria-pressed=true],.filters button[aria-pressed=true],nav button[aria-selected=true],.channel-action.is-on{
@@ -363,10 +364,23 @@ body:has(.ov.open){overflow:hidden}
 .ov .account-actions .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;
   border-radius:var(--r-sm);cursor:pointer;font-weight:600}
 .ov .dlg input{min-height:44px}
+/* Экран каналов: панель выше профиля и без своих отступов по краю окна — на
+   телефоне она занимает весь экран, иначе список снова оказывается тесным. */
+.ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 18px 18px}
+.ov .dlg-channels h2{padding-top:18px;margin-bottom:10px}
+.ov .dlg-channels .chan-list{flex:0 1 auto;min-height:0}
+.ov .dlg-channels .account-actions{margin-top:12px}
   /* Настройки оформления в оверлее профиля */
   .dlg .settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
   .dlg .settings h3{font-size:14px;margin:0 0 4px}
   .dlg .settings-hint{font-size:12.5px;color:var(--faint);margin:0 0 12px}
+.chan-action{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  width:100%;min-height:44px;padding:9px 11px;margin-bottom:6px;font:inherit;font-size:13.5px;
+  text-align:left;cursor:pointer;background:var(--surf);border:1px solid var(--line);
+  border-radius:var(--r-sm);color:var(--fg)}
+.chan-action[aria-pressed=true]{background:color-mix(in srgb,var(--acc) 12%,var(--surf));
+  border-color:var(--acc);color:var(--acc);font-weight:600}
+.chan-action .chan-count{color:var(--dim);font-size:12px;white-space:nowrap}
   .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap}
   /* кнопка занимает всю свободную ширину ряда, а текст внутри по центру:
      иначе одинокая кнопка в конце ряда выглядит пустой и перекошенной */
@@ -405,7 +419,11 @@ body:has(.ov.open){overflow:hidden}
   .seg button{padding:8px 10px;font-size:13px}
   main{padding-left:14px;padding-right:14px}
   .tabs-wrap{padding:12px 14px 8px}
-  #tabs{left:14px;right:14px}
+  .chan-list{max-height:none}
+  .ov:has(.dlg-channels){padding:0}
+  .ov .dlg-channels{width:100%;height:100%;max-height:none;border-radius:0;padding:0 14px calc(14px + env(safe-area-inset-bottom))}
+  .ov .dlg-channels h2{padding-top:calc(20px + env(safe-area-inset-top))}
+  .ov .dlg-channels .chan-list{flex:1 1 auto}
   .catalog-main{padding-top:22px}
   .catalog-head{margin-bottom:18px}
   .catalog-head h2{font-size:21px}
@@ -472,12 +490,11 @@ body:has(.ov.open){overflow:hidden}
      приложения нечему сказать, где человек находится -->
   <h1 class="sr-only">Лента</h1>
   <div class="tabs-wrap">
-  <button id="tabsToggle" class="tabs-toggle" type="button" aria-expanded="false" aria-controls="tabs">
+  <button id="tabsToggle" class="tabs-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="channelsOvl">
     <svg class="i"><use href="#i-grid"/></svg>
     <span id="tabsToggleLabel">Все каналы</span>
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
-  <nav id="tabs" role="tablist" aria-label="Каналы"></nav>
 </div>
     <main id="feed" role="tabpanel" aria-label="Публикации канала" tabindex="0"></main>
 </section>
@@ -529,6 +546,33 @@ body:has(.ov.open){overflow:hidden}
       <button id="meClose" class="btn">Готово</button>
     </div>
     <div class="settings">
+      <h3>Приватные каналы</h3>
+      <p class="settings-hint" id="tgHint">Видны только те, где ты состоишь участником.
+        Читаются через твой вход в Telegram; публичные каналы работают и без него.</p>
+      <p class="auth-message" id="tgState" role="status" aria-live="polite"></p>
+      <div id="tgLink" hidden>
+        <div class="account-actions">
+          <a class="btn" id="tgOpen" href="#" target="_blank" rel="noreferrer">Открыть Telegram</a>
+        </div>
+        <div class="account-actions">
+          <button class="quiet-btn" id="tgCancel" type="button">Отмена</button>
+          <button class="btn" id="tgConfirm" type="button">Я подтвердил вход</button>
+        </div>
+      </div>
+      <div id="tgLinked" hidden>
+        <div class="account-name" id="tgAccount"></div>
+        <div id="tgChannels"></div>
+        <div class="account-actions">
+          <button class="quiet-btn" id="tgDiscover" type="button">Обновить список каналов</button>
+          <button class="quiet-btn" id="tgSync" type="button">Обновить посты</button>
+        </div>
+        <div class="account-actions">
+          <button class="quiet-btn" id="tgUnlink" type="button">Отключить Telegram</button>
+        </div>
+      </div>
+      <button class="btn" id="tgStart" type="button">Подключить Telegram</button>
+    </div>
+    <div class="settings">
       <h3>Оформление</h3>
       <p class="settings-hint">Выбор сохраняется в профиле и переезжает на другое устройство.</p>
       <p class="seg-label">Цвета</p>
@@ -559,6 +603,17 @@ body:has(.ov.open){overflow:hidden}
     </div>
   </div>
 </div>
+</div>
+
+<div class="ov" id="channelsOvl" role="dialog" aria-modal="true" aria-labelledby="channelsTitle" aria-hidden="true">
+  <div class="dlg dlg-channels">
+    <h2 id="channelsTitle">Каналы</h2>
+    <div class="chan-list" id="chanList"></div>
+    <div class="account-actions">
+      <button class="quiet-btn" id="chanCatalog" type="button">Каталог</button>
+      <button class="btn" id="chanClose" type="button">Готово</button>
+    </div>
+  </div>
 </div>
 
 <main class="auth-screen" id="authScreen">
@@ -1015,43 +1070,64 @@ function render(posts,append=false){
   if(more){ more.hidden=!feedHasMore; more.textContent='Загрузить ещё'; }
 }
 
+/* Каналы живут на отдельном экране: кнопка в ленте его открывает, а выбранный
+   канал остаётся подписью на кнопке — как было подписью в меню. */
 function renderTabs(){
-  const nav = $('#tabs'), list = subs();
-  nav.innerHTML = '';
-  if(!list.length) return;
+  const list = subs(), box = $('#chanList');
   const selected = list.length === 1 ? list[0] : tab;
-  const mk = (label, val) => {
-    const b = document.createElement('button');
-    b.setAttribute('role','tab'); b.setAttribute('aria-controls','feed');
-    b.id = val === '' ? 'channelTabAll' : 'channelTab'+list.indexOf(val);
-    b.setAttribute('aria-selected', String(val === selected)); b.tabIndex = val === selected ? 0 : -1;
-    b.textContent = label;
-    b.onclick = () => { tab = val; setTabsOpen(false); load(); };
-    nav.appendChild(b);
-  };
-  if(list.length > 1) mk('Все', '');
-  list.forEach(c => mk(titles[c] || c, c));
-  const activeTab = [...nav.querySelectorAll('[role="tab"]')].find(b => b.getAttribute('aria-selected') === 'true');
-  $('#tabsToggleLabel').textContent = activeTab ? activeTab.textContent : 'Все каналы';
-  if(activeTab){ $('#feed').setAttribute('aria-labelledby', activeTab.id); $('#feed').removeAttribute('aria-label'); }
-  else { $('#feed').removeAttribute('aria-labelledby'); $('#feed').setAttribute('aria-label','Публикации'); }
+  box.innerHTML = '';
+  if(!list.length){
+    const hint = document.createElement('p');
+    hint.className = 'chan-hint';
+    hint.textContent = 'Подписок пока нет. Открой каталог и выбери каналы — они появятся здесь.';
+    box.appendChild(hint);
+  } else {
+    const mk = (label, val) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chan-item';
+      if(val === selected) b.setAttribute('aria-current','true');
+      b.textContent = label;
+      b.onclick = () => { tab = val; closeChannels(); load(); };
+      box.appendChild(b);
+    };
+    if(list.length > 1) mk('Все каналы', '');
+    list.forEach(c => mk(titles[c] || c, c));
+  }
+  $('#tabsToggleLabel').textContent = selected ? (titles[selected] || selected) : 'Все каналы';
+  $('#feed').setAttribute('aria-label', selected ? 'Публикации канала ' + (titles[selected] || selected) : 'Публикации');
 }
-function setTabsOpen(open){
-  const nav = $('#tabs');
-  if(open) nav.classList.add('open'); else nav.classList.remove('open');
-  $('#tabsToggle').setAttribute('aria-expanded', String(open));
+
+/* Экран каналов: подложка, фокус и Escape — как у оверлея профиля. */
+let channelsFocus=null, channelsInert=[];
+function openChannels(){
+  channelsFocus=document.activeElement;
+  const background=[$('header'),$('#viewFeed'),$('#viewCat')];
+  channelsInert=background.map(el=>[el,el.inert]); background.forEach(el=>{el.inert=true;});
+  renderTabs();
+  const ovl=$('#channelsOvl');
+  ovl.classList.add('open'); ovl.setAttribute('aria-hidden','false');
+  $('#tabsToggle').setAttribute('aria-expanded','true');
+  const first=$('#chanList').querySelector('.chan-item');
+  requestAnimationFrame(()=> (first || $('#chanClose')).focus({preventScroll:true}));
 }
-$('#tabsToggle').onclick = () => setTabsOpen(!$('#tabs').classList.contains('open'));
-document.addEventListener('click', e => {
-  if(e.target.closest('.tabs-wrap')) return;
-  setTabsOpen(false);
-});
-addEventListener('keydown', e => {
-  if(e.key !== 'Escape') return;
-  // фокус возвращаем на кнопку: порядок табуляции и так сохраняется, но
-  // экранный диктор без этого молчит, и непонятно, где человек
-  if($('#tabs').classList.contains('open')) $('#tabsToggle').focus();
-  setTabsOpen(false);
+function closeChannels(){
+  const ovl=$('#channelsOvl');
+  ovl.classList.remove('open'); ovl.setAttribute('aria-hidden','true');
+  $('#tabsToggle').setAttribute('aria-expanded','false');
+  channelsInert.forEach(([el,was])=>{el.inert=was;});
+  channelsFocus?.focus?.();
+}
+$('#tabsToggle').onclick = openChannels;
+$('#chanClose').onclick = closeChannels;
+$('#channelsOvl').onclick = e => { if(e.target===e.currentTarget) closeChannels(); };
+$('#chanCatalog').onclick = () => { closeChannels(); show('cat'); };
+// стрелками по списку: на экране каналов это дешевле, чем тянуться к краю
+$('#chanList').addEventListener('keydown', e => {
+  if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
+  const items=[...$('#chanList').querySelectorAll('.chan-item')];
+  const at=items.indexOf(e.target); if(at<0 || !items.length) return;
+  e.preventDefault();
+  items[(at + (e.key==='ArrowDown'?1:items.length-1)) % items.length].focus();
 });
 
 /* ---------- Каталог ---------- */
@@ -1252,7 +1328,6 @@ function enableTabKeyboard(tablist){
   });
 }
 enableTabKeyboard($('#sectionTabs'));
-enableTabKeyboard($('#tabs'));
 
 $('#tabFeed').onclick = () => show('feed');
 $('#tabCat').onclick   = () => show('cat');
@@ -1294,6 +1369,7 @@ function openProfile(){
   profileInertState=background.map(el=>[el,el.inert]); background.forEach(el=>{el.inert=true;});
   $('#meOvl').classList.add('open'); $('#meOvl').setAttribute('aria-hidden','false');
   requestAnimationFrame(()=>$('#meClose').focus({preventScroll:true}));
+  loadTgStatus();
 }
 function closeProfile(){
   $('#meOvl').classList.remove('open'); $('#meOvl').setAttribute('aria-hidden','true');
@@ -1379,6 +1455,14 @@ document.addEventListener('keydown',e=>{
     else if(!e.shiftKey&&document.activeElement===nav.at(-1)){e.preventDefault();nav[0].focus();}
     return;
   }
+  if($('#channelsOvl').classList.contains('open')){
+    if(e.key==='Escape'){e.preventDefault();closeChannels();return;}
+    if(e.key!=='Tab')return;
+    const items=[...$('#channelsOvl').querySelectorAll('button:not(:disabled)')]; if(!items.length)return;
+    if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
+    else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
+    return;
+  }
   if(!$('#meOvl').classList.contains('open'))return;
   if(e.key==='Escape'){e.preventDefault();closeProfile();return;}
   if(e.key!=='Tab')return;
@@ -1388,6 +1472,115 @@ document.addEventListener('keydown',e=>{
   if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
   else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
 },true);
+/* ---------- Приватные каналы через вход в Telegram ---------- */
+const tgPost=async(path,body)=>{
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+                           body:JSON.stringify(body||{})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||'Telegram не ответил');
+  return data;
+};
+let tgToken='';
+function setTgState(text,bad){ setFormMessage('tgState',text||'',!bad); }
+
+async function loadTgStatus(){
+  const box=$('#tgChannels'); box.innerHTML='';
+  $('#tgLink').hidden=true; $('#tgLinked').hidden=true; $('#tgStart').hidden=false;
+  try{
+    const r=await fetch('/api/tg/status');
+    if(r.status===401){ $('#tgHint').textContent='Нужен вход в профиль.'; return; }
+    const d=await r.json();
+    if(!d.installed){
+      $('#tgHint').textContent='Telethon не установлен в образе: приватные каналы недоступны.';
+      $('#tgStart').hidden=true; return;
+    }
+    if(!d.linked){
+      $('#tgHint').textContent='Публичные каналы работают и без этого. Подключишь Telegram — '+
+        'появятся ещё и приватные, где ты состоишь участником.';
+      $('#tgStart').textContent='Подключить Telegram';
+      return;
+    }
+    $('#tgStart').hidden=true; $('#tgLinked').hidden=false;
+    $('#tgHint').textContent='Твой Telegram подключён: '+d.title+(d.phone?' ('+d.phone+')':'');
+    loadTgChannels();
+  }catch(e){ setTgState('Не удалось узнать состояние Telegram',true); }
+}
+async function loadTgChannels(){
+  const box=$('#tgChannels');
+  try{
+    const d=await fetch('/api/tg/channels').then(r=>r.json());
+    if(!d.channels || !d.channels.length){
+      box.innerHTML='<p class="settings-hint">Приватных каналов пока не видно. Нажми «Обновить список каналов».</p>';
+      return;
+    }
+    box.innerHTML='';
+    d.channels.forEach(c=>{
+      const b=document.createElement('button');
+      b.type='button'; b.className='chan-action';
+      b.setAttribute('aria-pressed', String(!!c.subscribed));
+      const name=document.createElement('span'); name.textContent=c.title;
+      const count=document.createElement('span'); count.className='chan-count';
+      count.textContent=c.subscribed?(c.posts+' в ленте'):'не в ленте';
+      b.append(name,count);
+      b.onclick=async()=>{
+        b.disabled=true;
+        try{
+          await tgPost('/api/tg/subscribe',{channel:c.channel,subscribed:!c.subscribed});
+          await loadTgChannels(); load();
+        }catch(e){ setTgState(e.message,true); b.disabled=false; }
+      };
+      box.appendChild(b);
+    });
+  }catch(e){ setTgState('Не удалось загрузить список каналов',true); }
+}
+$('#tgStart').onclick=async()=>{
+  const btn=$('#tgStart'); btn.disabled=true; setTgState('');
+  try{
+    const d=await tgPost('/api/tg/link/start');
+    if(d.linked){ setTgState('Telegram уже подключён'); await loadTgStatus(); return; }
+    tgToken=d.token||'';
+    $('#tgOpen').href=d.url;
+    $('#tgLink').hidden=false; btn.hidden=true;
+    setTgState('Открой ссылку в Telegram и подтверди вход, потом нажми «Я подтвердил вход»');
+  }catch(e){ setTgState(e.message,true); }
+  finally{ btn.disabled=false; }
+};
+$('#tgConfirm').onclick=async()=>{
+  const btn=$('#tgConfirm'); btn.disabled=true;
+  try{
+    const d=await tgPost('/api/tg/link/poll',{token:tgToken});
+    if(d.state==='done'){ setTgState('Готово, Telegram подключён'); tgToken=''; await loadTgStatus(); }
+    else if(d.state==='expired'){ setTgState('Ссылка протухла, начни заново',true); tgToken=''; await loadTgStatus(); }
+    else setTgState('Ещё не подтверждено: открой ссылку в Telegram');
+  }catch(e){ setTgState(e.message,true); }
+  finally{ btn.disabled=false; }
+};
+$('#tgCancel').onclick=async()=>{
+  try{ await tgPost('/api/tg/link/cancel',{token:tgToken}); }catch(e){}
+  tgToken=''; await loadTgStatus();
+};
+$('#tgDiscover').onclick=async()=>{
+  const btn=$('#tgDiscover'); btn.disabled=true; setTgState('Спрашиваю у Telegram…');
+  try{ const d=await tgPost('/api/tg/discover'); setTgState('Каналов найдено: '+d.found); await loadTgChannels(); }
+  catch(e){ setTgState(e.message,true); }
+  finally{ btn.disabled=false; }
+};
+$('#tgSync').onclick=async()=>{
+  const btn=$('#tgSync'); btn.disabled=true; setTgState('Забираю посты…');
+  try{
+    const d=await tgPost('/api/tg/sync');
+    setTgState('Сохранено постов: '+d.saved+(d.errors&&d.errors.length?', с ошибками: '+d.errors.length:''));
+    await loadTgChannels(); load();
+  }catch(e){ setTgState(e.message,true); }
+  finally{ btn.disabled=false; }
+};
+$('#tgUnlink').onclick=async()=>{
+  const btn=$('#tgUnlink'); btn.disabled=true;
+  try{ await tgPost('/api/tg/unlink'); setTgState('Telegram отключён'); tgToken=''; await loadTgStatus(); load(); }
+  catch(e){ setTgState(e.message,true); }
+  finally{ btn.disabled=false; }
+};
+
 $('#logoutBtn').onclick=async()=>{
   $('#logoutBtn').disabled=true; await stateQueue.catch(()=>{});
   try{await fetch('/api/auth/logout',{method:'POST'});}catch(e){}
@@ -1454,7 +1647,8 @@ function setAuthMode(mode){
   $('#authConfirm').hidden=!showConfirm; $('#authConfirmLabel').hidden=!showConfirm; $('#authConfirm').required=showConfirm;
   $('#authPasswordLabel').textContent=reset?'Новый пароль':'Пароль';
   $('#authPassword').autocomplete=register||reset?'new-password':'current-password';
-  $('#authSubmit').hidden=verify||sentVerify||sentReset;
+  // verify прятать нельзя: кнопка и есть подтверждение, а надпись подсказывает её нажать
+  $('#authSubmit').hidden=sentVerify||sentReset;
   $('#authSubmit').textContent=register?'Создать профиль':forgot?'Отправить ссылку':reset?'Сохранить пароль':verify?'Подтвердить почту':'Войти';
   $('#authSubmit').type=verify?'button':'submit';
   $('#authForgot').hidden=!login; $('#authResend').hidden=!sentVerify;
