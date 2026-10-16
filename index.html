@@ -331,6 +331,16 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* 12%, а не больше: в светлой теме акцент на тонированном фоне держится ровно
    в 4.5:1, и каждый процент сверху уводит его за порог. */
 .btn{border-color:var(--acc);color:var(--acc)}
+/* Нажатие: полупрозрачный слой поверх, как в Material. Живёт только пока палец
+   на кнопке, поэтому обводка вместо заливки как основной язык не ломается.
+   Без него интерфейс не отзывается на палец и кажется стеклянным. */
+.btn:active,.toggle:active,.seg button:active,.auth-modes button:active,nav button:active,
+.filters button:active,.channel-action:active,.channel-preview-label:active,
+.tabs-toggle:active,.quiet-btn:active,.read-toggle:active,.empty-action:active{
+  background:color-mix(in srgb,var(--fg) 10%,var(--surf))}
+/* Отключённая кнопка обязана отличаться: её гасят одиннадцать раз, и без этого
+   «Загружаю…» выглядит живой кнопкой, на которую смело жмут. */
+:disabled{cursor:default;opacity:.38}
 /* Оверлей профиля. position:fixed обязателен — иначе блок раздвигает страницу. */
 .ov{position:fixed;inset:0;z-index:100;background:var(--overlay);
   display:none;align-items:center;justify-content:center;padding:16px}
