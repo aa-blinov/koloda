@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>Лента</title>
+<title>Колода — своя лента каналов</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0d0f14; --surf:#141821; --raise:#1b2029; --line:#242b38;
   --fg:#e9ecf3; --dim:#98a1b5; --faint:#8690a3;
   --acc:#5aa2ff; --acc-ink:#0b1220;
-  --line-hover:#303a4c; --line-hover-strong:#3a4557;
+  --line-hover:#303a4c;;
   --scroll-thumb:#2a3242; --scroll-thumb-hover:#3a4557;
   --paid:#f0b429; --error:#f07c83; --media-bg:#000; --selection-fg:#fff;
   --overlay:rgba(0,0,0,.72);
@@ -25,8 +25,6 @@
   --font-ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
   --font-read:var(--font-ui);
   --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
-  --space-6:24px; --space-8:32px;
 }
 
 /* Светлая тема. Контраст посчитан: мелкий текст 4.99 и выше на всех трёх
@@ -35,7 +33,7 @@
   --bg:#f4f6f9; --surf:#ffffff; --raise:#eceff4; --line:#dde2ea;
   --fg:#151a21; --dim:#4d5766; --faint:#5d6773;
   --acc:#1a63d8; --acc-ink:#ffffff;
-  --line-hover:#c9d0db; --line-hover-strong:#b6bfcd;
+  --line-hover:#c9d0db;;
   --scroll-thumb:#c3cad6; --scroll-thumb-hover:#aab3c2;
   --paid:#8a5a00; --error:#c22b36; --media-bg:#e9ecf1; --selection-fg:#0b1220;
   --overlay:rgba(16,20,28,.55);
@@ -121,7 +119,6 @@ header{position:sticky;top:0;z-index:20;
 .chan-item[aria-current=true]{background:color-mix(in srgb,var(--acc) 12%,var(--surf));
   border-color:var(--acc);color:var(--acc);font-weight:600}
 .chan-hint{padding:10px 12px;margin:0}
-nav button{flex:0 0 auto;font:inherit;font-size:13px;cursor:pointer}
 main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 #feed{max-width:748px;margin-inline:auto}
 .catalog-main{padding-top:28px}
@@ -130,7 +127,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
 
 .post{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
-  padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);cursor:pointer;
+  padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);
   transition:box-shadow .18s, border-color .18s, transform .18s, opacity .18s}
 .post:hover{border-color:var(--line-hover);box-shadow:var(--sh-2);transform:translateY(-1px)}
 .post:active{transform:translateY(0)}
@@ -169,7 +166,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .lb-img{max-width:94vw;max-height:86vh;object-fit:contain;border-radius:var(--r-md);display:block}
 .lb-img[hidden]{display:none}
 /* Подложка плотнее общей: под кадром не должно быть видно страницу */
-#lightbox{background:rgba(0,0,0,.975)}
+#lightbox{background:var(--bg)}
 .lb-n{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
   padding:3px 11px;border-radius:var(--r-pill);background:rgba(0,0,0,.62);color:#fff;
   font-size:12.5px;font-variant-numeric:tabular-nums;pointer-events:none}
@@ -257,12 +254,19 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-name{font-size:15px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-preview-label{flex:0 0 auto;min-height:44px;display:flex;align-items:center;padding:8px 12px;
   border-radius:var(--r-sm);font-size:13px;font-weight:600}
+/* На телефоне подпись «Посмотреть» уступает шеврону: строка и так кнопка,
+   а текстовая подпись внутри кнопки читалась третьим элементом управления */
+.channel-chevron{display:none;flex:0 0 auto;color:var(--faint);transition:transform .16s}
+.channel-open[aria-expanded=true] .channel-chevron{transform:rotate(180deg)}
 .channel-meta{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:11px}
 .channel-action{flex:0 0 auto;min-width:108px;min-height:44px;padding:8px 12px;border-radius:var(--r-sm);
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
   font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+/* Знак появляется только там, где подпись не помещается, — на телефоне */
+.channel-action .i{display:none}
 .channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:var(--r-md);
   animation:preview-in .2s cubic-bezier(.2,.8,.2,1) both}
 .channel-preview[hidden]{display:none}
@@ -286,6 +290,11 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-state[data-error="true"]{color:var(--error)}
 .auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px}
 .auth-card{width:min(100%,440px);padding:30px;background:var(--surf);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+/* Название и знак: раньше продукт не называл себя нигде, и первые восемь
+   секунд экрана входа не говорили ни слова о том, что это за вещь */
+.auth-brand{display:flex;align-items:center;gap:8px;margin-bottom:14px;color:var(--dim);
+  font-size:12.5px;font-weight:650;letter-spacing:.02em}
+.brand-mark{width:17px;height:17px;color:var(--acc)}
 .auth-card h1{font-size:26px;line-height:1.2;letter-spacing:-.03em}
 .auth-card>p{margin-top:9px;color:var(--dim);font-size:14px;line-height:1.55}
 .auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:24px 0 18px;
@@ -318,15 +327,15 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* Единая кнопка: обводка вместо заливки, текст в основном цвете. Акцентная
    обводка помечает главное действие и выбранный вариант — заливки нет нигде,
    поэтому Добавить, Убрать и Посмотреть читаются одинаково на любом фоне. */
-.btn,.toggle,.seg button,.auth-modes button,nav button,.filters button,.channel-action,
+.btn,.toggle,.seg button,.auth-modes button,.filters button,.channel-action,
 .channel-preview-label,.tabs-toggle,.chan-item,.quiet-btn{
   background:var(--surf);border:1px solid var(--line);color:var(--fg);
   transition:border-color .16s,color .16s,background .16s}
-.btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,nav button:hover,
+.btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,,
 .filters button:hover,.channel-action:hover,.channel-preview-label:hover,.chan-item:hover{
   border-color:var(--acc);color:var(--acc)}
 .seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
-.toggle[aria-pressed=true],.filters button[aria-pressed=true],nav button[aria-selected=true],.channel-action.is-on{
+.toggle[aria-pressed=true],.filters button[aria-pressed=true][aria-selected=true],.channel-action.is-on{
   background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:var(--acc);
   color:var(--acc);font-weight:600}
 /* 12%, а не больше: в светлой теме акцент на тонированном фоне держится ровно
@@ -335,7 +344,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* Нажатие: полупрозрачный слой поверх, как в Material. Живёт только пока палец
    на кнопке, поэтому обводка вместо заливки как основной язык не ломается.
    Без него интерфейс не отзывается на палец и кажется стеклянным. */
-.btn:active,.toggle:active,.seg button:active,.auth-modes button:active,nav button:active,
+.btn:active,.toggle:active,.seg button:active,.auth-modes button:active:active,
 .filters button:active,.channel-action:active,.channel-preview-label:active,
 .tabs-toggle:active,.quiet-btn:active,.read-toggle:active,.empty-action:active{
   background:color-mix(in srgb,var(--fg) 10%,var(--surf))}
@@ -437,7 +446,20 @@ body:has(.ov.open){overflow:hidden}
   .channel-open{gap:10px;padding:7px 4px}
   .channel-mark{width:38px;height:38px;flex-basis:38px}
   .channel-count{display:none}
-  .channel-action{min-width:86px;min-height:40px;padding:7px 9px;font-size:12px}
+  /* На телефоне имя канала — единственное, что строка вообще сообщает.
+     Одной строкой с многоточием оно превращалось в «CATS Comm…», поэтому
+     переносим на две строки, а не обрезаем. */
+  .channel-copy{gap:2px}
+  .channel-name,.channel-meta{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.32}
+  .channel-preview-label{display:none}
+  .channel-chevron{display:block;width:18px;height:18px}
+  /* Одно действие справа квадратом: подписи «Посмотреть» и «Добавить» на
+     такой ширине вместе с именем оставляли ему меньше, чем треть строки. */
+  .channel-action{min-width:44px;width:44px;height:44px;padding:0;font-size:12px}
+  .channel-action .i{display:block}
+  /* Внутри кнопки живут и слово, и знак: на узком экране остаётся только
+     знак, иначе содержимое вылезало за 44px и тянуло страницу вбок */
+  .channel-action-text{display:none}
   .channel-desc{display:none}
   .channel-preview{margin:7px 0 8px;padding:13px}
 }
@@ -447,7 +469,6 @@ body:has(.ov.open){overflow:hidden}
 <div id="appShell" hidden>
 
 <svg style="display:none" aria-hidden="true">
-  <symbol id="i-rss" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.6" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -465,7 +486,7 @@ body:has(.ov.open){overflow:hidden}
 <header>
   <div class="bar">
     <div class="seg" role="tablist" aria-label="Разделы" id="sectionTabs">
-      <button role="tab" id="tabFeed" aria-controls="viewFeed" aria-selected="true" tabindex="0"><svg class="i"><use href="#i-rss"/></svg>Лента</button>
+      <button role="tab" id="tabFeed" aria-controls="viewFeed" aria-selected="true" tabindex="0"><svg class="i"><use href="#i-send"/></svg>Лента</button>
       <button role="tab" id="tabCat" aria-controls="viewCat" aria-selected="false" tabindex="-1"><svg class="i"><use href="#i-grid"/></svg>Каталог</button>
     </div>
     <label class="search">
@@ -496,7 +517,7 @@ body:has(.ov.open){overflow:hidden}
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
 </div>
-    <main id="feed" role="tabpanel" aria-label="Публикации канала" tabindex="0"></main>
+    <main id="feed" aria-label="Публикации канала" tabindex="0"></main>
 </section>
 
 <section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
@@ -618,6 +639,7 @@ body:has(.ov.open){overflow:hidden}
 
 <main class="auth-screen" id="authScreen">
   <section class="auth-card" aria-labelledby="authTitle">
+    <div class="auth-brand"><svg class="i brand-mark" aria-hidden="true"><use href="#i-send"/></svg><span>Колода</span></div>
     <h1 id="authTitle">Своя лента</h1>
     <p>Выбирай каналы и читай их публикации в одном месте. У каждого профиля своя подборка.</p>
     <div class="auth-modes" id="authModes" role="group" aria-label="Действие с профилем">
@@ -654,8 +676,44 @@ const pendingOps = () => { const v=readJSON(LS.pending,[]); return Array.isArray
 const key   = p => p.channel + '/' + p.msg_id;
 const esc   = s => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
 const icon  = n => '<svg class="i" aria-hidden="true" focusable="false"><use href="#i-'+n+'"/></svg>';
-const kfmt  = n => n >= 1e6 ? (n/1e6).toFixed(1).replace('.0','')+'M'
-                : n >= 1e3 ? Math.round(n/1e3)+'K' : String(n);
+// Числа везде по-русски и в одном формате. Раньше подписчики показывались как
+// «9.9M», а просмотры приходили из API готовой строкой «3.23K» — на одном
+// экране два разных счёта. Теперь оба проходят через одну функцию.
+const nfmt = n => {
+  const v = Number(n);
+  if(!isFinite(v) || v<=0) return '';
+  if(v>=1e6) return (v/1e6).toFixed(1).replace('.0','').replace('.',',')+' млн';
+  if(v>=1e3) return Math.round(v/1e3)+' тыс.';
+  return String(Math.round(v));
+};
+const viewsText = raw => {
+  const m = /^([\d.,]+)\s*([KkMm])?/.exec(String(raw||'').trim());
+  if(!m) return String(raw||'');
+  const base = Number(m[1].replace(',','.')) * ({K:1e3,k:1e3,M:1e6,m:1e6}[m[2]]||1);
+  return nfmt(base);
+};
+const kfmt  = n => nfmt(n);
+
+// Категории из открытого каталога TGMania приходят по-английски. Интерфейс
+// русский, поэтому переводим на лету; неизвестную категорию оставляем как есть,
+// чтобы не выдумывать смысл.
+const CAT_RU = {'News & Media':'Новости и медиа','Career & Jobs':'Работа и карьера',
+  'Education':'Образование','Tech & Science':'Технологии и наука','Finance':'Финансы',
+  'Business':'Бизнес','Sports & Fitness':'Спорт и тело','Health & Fitness':'Здоровье и тело',
+  'Travel':'Путешествия','Food & Drink':'Еда и напитки','Art & Design':'Искусство и дизайн',
+  'Music':'Музыка','Games':'Игры','Entertainment':'Развлечения','Celebrity':'Знаменитости',
+  'Religion':'Религия','Science':'Наука','Automotive':'Авто','Pets':'Животные','Humor':'Юмор',
+  'Books':'Книги','Politics':'Политика','Family & Relationships':'Семья и отношения',
+  'Crypto':'Крипто','Insurance':'Страхование','Military':'Военное','Adult':'Для взрослых',
+  'Lifestyle':'Образ жизни','Communities':'Сообщества','Other':'Прочее','Movies':'Кино',
+  'Comedy':'Юмор','Handmade':'Ручная работа','House & Home':'Дом и быт','Ecology':'Экология',
+  'Photography':'Фотография','Astronomy':'Астрономия','Biology':'Биология','Chemistry':'Химия',
+  'IT':'Айти','Programming':'Программирование','Startups':'Стартапы','E-commerce':'Интернет-магазины',
+  'Investing':'Инвестиции','Cryptocurrency':'Криптовалюта','Trading':'Трейдинг','Forex':'Форекс',
+  'Crypto & Finance':'Крипто и финансы','Technology':'Технологии','Tech':'Технологии',
+  'Science & Technology':'Наука и технологии','Health':'Здоровье','Wellness':'Здоровье и жизнь',
+  'Gaming':'Игры','Movies & TV':'Кино и сериалы','Fashion':'Мода','Beauty':'Красота'};
+const catRu = value => CAT_RU[String(value||'').trim()] || String(value||'').trim();
 
 /* --- Состояние профиля с проверкой пароля --- */
 let accountName = '', stateReady = false, stateQueue = Promise.resolve();
@@ -920,7 +978,11 @@ function extras(p){
   if(p.media && p.media.length){
     const items = p.media.map((m, i) => m.k === 'v'
       ? '<video controls preload="none" playsinline src="'+esc(m.u)+'"></video>'
-      : '<img loading="lazy" '+(i ? 'data-src' : 'src')+'="'+esc(m.u)+'" alt="Изображение из публикации">').join('');
+      // Кадр получает роль кнопки и tabindex: он открывает просмотрщик, и до
+      // этой правки до фотографий можно было дойти только мышью. Подпись
+      // нужна и экранному диктору: «открыть кадр 2 из 4», а не «изображение».
+      : '<img loading="lazy" role="button" tabindex="0" '+(i ? 'data-src' : 'src')+'="'+esc(m.u)+'"'
+        +' alt="Открыть кадр '+(i+1)+' из '+p.media.length+'">').join('');
     // одиночное тоже в ленте: иначе его не открыть целиком и не доехать стрелкой
     h += '<div class="galw"><div class="gal'+(p.media.length===1?' one':'')+'">'+items+'</div>'+
       (p.media.length===1?'':'<span class="gal-n">'+p.media.length+'</span>')+'</div>';
@@ -1037,7 +1099,11 @@ function render(posts,append=false){
     postSeen.unobserve(post);
     if(!markUnread(post.dataset.post)) return;
     post.classList.remove('read');
+    // Кнопка уходила в span, и фокус проваливался в body. Ставим его на
+    // замену: клавиатурный пользователь остаётся на том же посте.
     btn.outerHTML = NEW_MARK;
+    const fresh = post.querySelector('.read-toggle');
+    if(fresh) fresh.tabIndex = -1;
   });
   for(const p of list){
     const read = s.has(key(p));
@@ -1049,7 +1115,7 @@ function render(posts,append=false){
         (read ? READ_MARK : NEW_MARK)+
         '<span class="who">'+esc(titles[p.channel] || p.channel)+'</span>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
-        (p.views ? '<span class="stat">'+icon('eye')+esc(p.views)+'</span>' : '')+
+        (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
       '</div>'+ extras(p);
     const setRead = () => {
       if(seen().has(key(p))) return;
@@ -1168,13 +1234,18 @@ async function loadCatalog(){
       open.dataset.act='preview'; open.dataset.channel=c.username; open.setAttribute('aria-expanded',String(expandedChannel===c.username));
       open.innerHTML='<span class="channel-mark" aria-hidden="true">'+esc((c.name[0]||'@').toUpperCase())+'</span>'+ 
         '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+ 
-        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(c.cat)+')':'')+'</span>'+ 
+        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(catRu(c.cat))+')':'')+'</span>'+ 
         (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+ 
-        (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">'+(expandedChannel===c.username?'Скрыть':'Посмотреть')+'</span>';
+        (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">'+(expandedChannel===c.username?'Скрыть':'Посмотреть')+'</span>'+
+        '<svg class="i channel-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>';
       const action=document.createElement('button'); action.type='button'; action.className='channel-action'+(have.has(c.username)?' is-on':'');
       action.dataset.act='subscribe'; action.dataset.channel=c.username; action.setAttribute('aria-pressed',String(have.has(c.username)));
-      action.textContent=have.has(c.username)?'Убрать':'Добавить';
-      action.setAttribute('aria-label',have.has(c.username)?'Убрать '+c.name+' из ленты':'Добавить '+c.name+' в ленту');
+      const on=have.has(c.username);
+      // Подпись и знак рядом: на широком экране видно слово, на телефоне CSS
+      // убирает слово и оставляет знак, иначе кнопка превратилась бы в пустую.
+      action.innerHTML='<span class="channel-action-text">'+(on?'Убрать':'Добавить')+'</span>'+
+        '<svg class="i" aria-hidden="true"><use href="#'+(on?'i-check':'i-plus')+'"/></svg>';
+      action.setAttribute('aria-label',on?'Убрать '+c.name+' из ленты':'Добавить '+c.name+' в ленту');
       row.append(open,action);
       const panel=document.createElement('section'); panel.className='channel-preview'; panel.hidden=expandedChannel!==c.username;
       panel.id='preview-'+c.username; panel.setAttribute('aria-label','Предпросмотр канала '+c.name);
@@ -1278,7 +1349,7 @@ async function loadCategories(){
       row.appendChild(b);
     };
     mk('Все', 'all');
-    (d.categories || []).forEach(c => mk(c.name, c.slug));
+    (d.categories || []).forEach(c => mk(catRu(c.name), c.slug));
     requestAnimationFrame(updateFilterScroll);
   }catch(e){ /* категории необязательны: поиск работает и без них */ }
 }
@@ -1355,9 +1426,22 @@ $('#catList').onclick = e => {
   if(action.dataset.act==='clearCatalog'){ catalogQuery=''; catalogCat='all'; $('#q').value=''; $('#cats').querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-pressed',String(i===0))); loadCatalog(); }
   if(action.dataset.act==='preview') togglePreview(action.dataset.channel);
   if(action.dataset.act==='preview-retry'){ previewCache.delete(action.dataset.channel); loadCatalog(); }
-  if(action.dataset.act==='subscribe') {
+  if(action.dataset.act==='subscribe'){
     const channel=action.dataset.channel, active=action.getAttribute('aria-pressed')==='true';
     setSubscription(channel,!active); loadCatalog(); load();
+    if(active){
+      // Отписка — единственное разрушительное действие в интерфейсе, и
+      // раньше оно срабатывало одним тапом вслепую: без отмены промахнувшийся
+      // палец убирал канал, и вернуть его можно было только поиском в каталоге.
+      const name=(titles[channel]||channel), back=$('#syncStatus');
+      back.hidden=false; back.replaceChildren();
+      back.append(document.createTextNode('Канал «'+name+'» убран из ленты. '));
+      const undo=document.createElement('button');
+      undo.type='button'; undo.textContent='Вернуть';
+      undo.onclick=()=>{ setSubscription(channel,true); loadCatalog(); load(); setSyncStatus(''); };
+      back.append(undo);
+      undo.focus();
+    }
   }
 };
 
@@ -1400,12 +1484,27 @@ function closeLightbox(){
   const lb = $('#lightbox');
   lb.classList.remove('open'); lb.setAttribute('aria-hidden','true');
   $('#lbVid').pause?.(); $('#lbVid').removeAttribute('src'); $('#lbImg').removeAttribute('src');
-  lbInert.forEach(([el,was]) => { el.inert = was; }); lbFocus?.focus();
+  lbInert.forEach(([el,was]) => { el.inert = was; });
+  // Просмотрщик открывают в том числе кликом по картинке. Раньше активным
+  // элементом оказывался body, и focus() на него молча ничего не делал —
+  // клавиатура терялась. Если возвращать некуда, отдаём фокус ленте.
+  const back = lbFocus && lbFocus.isConnected && lbFocus !== document.body
+    && lbFocus.offsetParent !== null ? lbFocus : $('#feed');
+  back?.focus?.();
 }
 function stepLightbox(delta){
   lbIndex = (lbIndex + delta + lbItems.length) % lbItems.length;
   paintLightbox();
 }
+// Картинки открывают просмотрщик мышью и с клавиатуры: без tabindex и Enter
+// фотографии — половина содержимого каналов — были недостижимы с клавиатуры.
+document.addEventListener('keydown', e => {
+  if(e.key!=='Enter' && e.key!==' ') return;
+  const media = e.target.closest && e.target.closest('.gal img');
+  if(!media) return;
+  e.preventDefault();
+  openLightbox(media.closest('.gal'), media);
+});
 document.addEventListener('click', e => {
   const media = e.target.closest('.gal img, .gal video');
   if(!media) return;
@@ -1468,7 +1567,12 @@ document.addEventListener('keydown',e=>{
   if(e.key!=='Tab')return;
   // ловушка берёт все фокусируемые, а не только кнопки: иначе поля пароля
   // в оверлее профиля с клавиатуры не достать
-  const items=[...$('#meOvl').querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')]; if(!items.length)return;
+  // Ловушка берёт всё, что видимо и доступно. Простой :not(:disabled) тут
+  // не годился: скрытый #importFile попадал в список последним, и вперёд по
+  // кругу фокус не замыкался — Tab уходил на страницу под оверлеем.
+  const items=[...$('#meOvl').querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')]
+    .filter(el=>el.offsetParent!==null||el.getClientRects().length);
+  if(!items.length)return;
   if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
   else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
 },true);
