@@ -250,6 +250,28 @@ class FeedAPITest(unittest.TestCase):
         self.cookie = ""
         self.assertEqual(self.request("/api/feed?" + query)[1]["unread"], 0)
 
+    def test_read_mark_can_be_removed(self):
+        # человек перечитал пост: он снова должен попасть в «Непрочитанные»
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "unread_mark", "password": "long-password"})
+        status, state = self.request("/api/state/read", method="POST",
+                                     data={"posts": ["alpha/1", "alpha/3"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(set(state["reads"]), {"alpha/1", "alpha/3"})
+        status, state = self.request("/api/state/read", method="POST",
+                                     data={"posts": ["alpha/3"], "unread": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(state["reads"], ["alpha/1"])
+        # мусорный ключ не должен ни удаляться, ни падать
+        status, state = self.request("/api/state/read", method="POST",
+                                     data={"posts": ["../etc/passwd"], "unread": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(state["reads"], ["alpha/1"])
+        # без флага поведение прежнее: отметка ставится
+        status, state = self.request("/api/state/read", method="POST",
+                                     data={"posts": ["alpha/3"]})
+        self.assertIn("alpha/3", state["reads"])
+
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
                                        data={"username": "profile_one", "password": "long-password"})

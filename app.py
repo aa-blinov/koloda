@@ -796,12 +796,18 @@ def update_subscription(db, cid, channel, subscribed):
     return load_state(db, cid)
 
 
-def mark_posts_read(db, cid, post_keys):
+def mark_posts_read(db, cid, post_keys, unread=False):
+    """Отметки прочтения можно и снять: пост, который человек перечитал,
+    снова попадает в «Непрочитанные»."""
     valid = list(dict.fromkeys(key for key in post_keys if valid_post_key(key)))[:500]
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
-    db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)",
-                   [(cid, key) for key in valid])
+    if unread:
+        db.executemany("DELETE FROM user_reads WHERE profile=? AND post=?",
+                       [(cid, key) for key in valid])
+    else:
+        db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)",
+                       [(cid, key) for key in valid])
     db.execute("UPDATE profiles SET initialized=1 WHERE code=?", (cid,))
     db.commit()
     return load_state(db, cid)
@@ -1272,7 +1278,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(keys, list):
                     return self._send(400, json.dumps({"error": "неверный список постов"}),
                                       "application/json")
-                state = mark_posts_read(db, cid, keys)
+                state = mark_posts_read(db, cid, keys, unread=data.get("unread") is True)
                 return self._send(200, json.dumps(state, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 

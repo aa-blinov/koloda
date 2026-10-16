@@ -331,7 +331,8 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   margin:-10px 0 -10px -10px;border-radius:var(--r-sm)}
 .read-toggle{color:var(--acc)}
 .read-toggle .dot{width:8px;height:8px}
-.read-status{color:var(--dim)}
+.read-status{border:0;background:none;color:var(--dim);cursor:pointer}
+.read-status:hover{color:var(--acc)}
 
 .skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:15px 17px;margin-bottom:12px}
@@ -591,7 +592,7 @@ function drainStateOps(){
       const op=pendingOps()[0];
       const data=op.type==='subscription'
         ? await postState('/api/state/subscription',{channel:op.channel,subscribed:op.subscribed})
-        : await postState('/api/state/read',{posts:[op.post]});
+        : await postState('/api/state/read',{posts:[op.post], unread:op.unread===true});
       localStorage.setItem(LS.pending,JSON.stringify(pendingOps().slice(1)));
       applyState(data); replayPending(); setSyncStatus('');
     }
@@ -679,6 +680,14 @@ const markRead = p => {
   if(s.has(post)) return;
   s.add(post); saveRead(s); queueStateOp({type:'read',post});
   unreadTotal=Math.max(0, unreadTotal-1); paintUnread();
+};
+// обратное действие: человек перечитал пост, и он снова попадает в непрочитанные
+const markUnread = post => {
+  const s = seen();
+  if(!s.delete(post)) return false;
+  saveRead(s); queueStateOp({type:'read',post,unread:true});
+  unreadTotal++; paintUnread();
+  return true;
 };
 
 function when(ts){
@@ -873,14 +882,26 @@ function render(posts,append=false){
   if(!list.length && feedHasMore){
     const note=$('#feedPageNote'); note.hidden=false; note.textContent='В этой части нет непрочитанных постов.';
   }
+  const READ_MARK = '<button type="button" class="read-status" aria-label="Вернуть в непрочитанные" title="Вернуть в непрочитанные">'+icon('check')+'<span class="sr-only">Прочитано</span></button>';
+  const NEW_MARK  = '<span class="read-toggle" title="Новое"><span class="dot" aria-hidden="true"></span></span>';
+  // делегирование: авто-отметка подменяет точку на галочку через outerHTML,
+  // и слушатель на каждый элемент повесить нельзя — пропадёт при подмене
+  postList.addEventListener('click', e => {
+    const btn = e.target.closest('.read-status');
+    if(!btn) return;
+    const post = btn.closest('.post');
+    if(!post || !markUnread(post.dataset.post)) return;
+    post.classList.remove('read');
+    btn.outerHTML = NEW_MARK;
+  });
   for(const p of list){
     const read = s.has(key(p));
     const el = document.createElement('article');
     el.className = 'post' + (read ? ' read' : '');
+    el.dataset.post = key(p);
     el.innerHTML =
       '<div class="meta">'+
-        (read ? '<span class="read-status">'+icon('check')+'<span class="sr-only">Прочитано</span></span>' :
-          '<span class="read-toggle" title="Новое"><span class="dot" aria-hidden="true"></span></span>')+
+        (read ? READ_MARK : NEW_MARK)+
         '<span class="who">'+esc(titles[p.channel] || p.channel)+'</span>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>· '+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(p.views)+'</span>' : '')+
@@ -890,7 +911,7 @@ function render(posts,append=false){
       markRead(p);
       el.classList.add('read');
       const dot = el.querySelector('.read-toggle');
-      if(dot) dot.outerHTML = '<span class="read-status">'+icon('check')+'<span class="sr-only">Прочитано</span></span>';
+      if(dot) dot.outerHTML = READ_MARK;
     };
     // Пост засчитывается прочитанным, когда его видно целиком. Клик для этого
     // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
