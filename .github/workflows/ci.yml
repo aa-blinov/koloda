@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Тесты
+        run: python3 -m unittest -v
+
+      - name: Целостность разметки
+        run: python3 check_ui.py
+
+      # Сборка ловит главную поломку этого проекта: новый файл в репозитории
+      # не попадает в образ, потому что Dockerfile копирует поимённо.
+      - name: Образ собирается
+        run: docker build -t koloda:ci .
