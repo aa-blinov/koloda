@@ -418,6 +418,32 @@ class CatalogCategoryTest(unittest.TestCase):
             ])
 
 
+class CatalogSearchTest(unittest.TestCase):
+    """Сортировка «по постам» идёт по свежести из своей базы, значит она должна доезжать."""
+
+    def test_last_post_time_passes_through_to_the_client(self):
+        payload = json.dumps({"channels": [{"username": "durov", "name": "Pavel Durov"}]}).encode()
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = payload
+            channels = app.search_catalog(last_posts={"durov": 1700000000})
+        self.assertEqual(channels[0]["last_ts"], 1700000000)
+
+    def test_channel_without_posts_gets_zero(self):
+        payload = json.dumps({"channels": [{"username": "durov", "name": "Pavel Durov"}]}).encode()
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = payload
+            channels = app.search_catalog(last_posts={})
+        self.assertEqual(channels[0]["last_ts"], 0)
+
+    def test_last_post_times_reads_the_newest_post_per_channel(self):
+        db = app.connect()
+        with db:
+            rows = [("fresh", 1, "https://t.me/fresh/1", "старый", 1700000000),
+                    ("fresh", 2, "https://t.me/fresh/2", "свежий", 1700009999)]
+            db.executemany("INSERT INTO posts (channel,msg_id,url,text,ts) VALUES (?,?,?,?,?)", rows)
+        self.assertEqual(app.last_post_times(db).get("fresh"), 1700009999)
+
+
 class MediaParseTest(unittest.TestCase):
     """Пост без медиа не должен получать эмодзи из текста вместо картинки."""
 
