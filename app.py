@@ -490,8 +490,13 @@ def store_channel_cache(db, channel, title, posts):
 TGMANIA = "https://tgmania.com/api/channels"
 
 
-def search_catalog(q="", category="", limit=40):
-    """Каталог каналов из TGMania. Возвращает [{username,name,desc,subs,q,cat}]."""
+def last_post_times(db):
+    """Время последнего поста по каждому каналу: по нему каталог сортирует свежесть."""
+    return dict(db.execute("SELECT channel, MAX(ts) FROM posts GROUP BY channel"))
+
+
+def search_catalog(q="", category="", limit=40, last_posts=None):
+    """Каталог каналов из TGMania. Возвращает [{username,name,desc,subs,q,cat,last_ts}]."""
     params = {"limit": min(limit, 50), "type": "channel"}
     if q:
         params["q"] = q
@@ -518,12 +523,10 @@ def search_catalog(q="", category="", limit=40):
             # У категорий короткие служебные обозначения (например, `art`,
             # `tech`), которые не совпадают с транслитерацией названия.
             "cat_slug": c.get("category_slug") or "",
+            # Свежесть последнего поста считаем по своей базе: у TGMania её нет.
+            "last_ts": (last_posts or {}).get(u, 0),
         })
 
-    # Топ-каналы сортируем сами: sortBy у TGMania не работает.
-    # "all" — это тоже «без фильтра», иначе сортировка молча выключается.
-    if not q and category in ("", "all"):
-        out.sort(key=lambda x: x["subs"], reverse=True)
     return out
 
 
@@ -1337,7 +1340,8 @@ class Handler(BaseHTTPRequestHandler):
                     q = self._query("q")
                     cat = self._query("category", "all")
                     return self._send(200, json.dumps(
-                        {"channels": search_catalog(q, cat)}, ensure_ascii=False),
+                        {"channels": search_catalog(q, cat, last_posts=last_post_times(db))},
+                        ensure_ascii=False),
                         "application/json; charset=utf-8")
                 except Exception as e:
                     return self._send(502, json.dumps({"error": str(e)}),

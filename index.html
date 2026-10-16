@@ -81,17 +81,15 @@ header{position:sticky;top:0;z-index:20;
   padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top))}
 .bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
 .brand{flex:0 0 auto;font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--fg)}
-#sectionTabs{flex:0 0 auto}
+#sectionTabs,#sortTabs{flex:0 0 auto}
 #unreadBtn,#meBtn{flex:0 0 auto}
-.seg{display:flex;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
-.seg button{border:0;background:none;color:var(--dim);min-height:44px;padding:8px 13px;border-radius:var(--r-sm);
+/* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
+#sortTabs[hidden]{display:none}
+.seg{display:flex;gap:4px}
+.seg button{min-height:44px;padding:8px 13px;border-radius:var(--r-sm);
   font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
-.seg button[aria-selected=true],.seg button[aria-pressed=true]{background:var(--raise);color:var(--fg);box-shadow:var(--sh-1)}
-.toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;border-radius:var(--r-sm);cursor:pointer;
-  background:var(--surf);border:1px solid var(--line);color:var(--dim);white-space:nowrap;
-  transition:color .16s,border-color .16s,background .16s}
-.toggle[aria-pressed=true]{background:color-mix(in srgb, var(--acc) 16%, var(--surf));
-  border-color:color-mix(in srgb, var(--acc) 46%, var(--line));color:var(--acc);font-weight:600}
+.toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;
+  border-radius:var(--r-sm);cursor:pointer;white-space:nowrap}
 .search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:8px;
   background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 11px}
 .search:focus-within{border-color:var(--acc)}
@@ -131,8 +129,7 @@ nav::-webkit-scrollbar{display:none}
    выглядит срезанным по слову, и непонятно, что список продолжается */
 nav.has-more{mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent)}
 nav button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
-  background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
-nav button[aria-selected=true]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
+  cursor:pointer;white-space:nowrap}
 main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 #feed{max-width:748px;margin-inline:auto}
 .catalog-main{padding-top:28px}
@@ -253,8 +250,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
   pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
 .filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
-  background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
-.filters button[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
+  cursor:pointer;white-space:nowrap}
 
 .channel-list{display:grid;gap:2px}
 .channel-entry{padding:8px 0;border-bottom:1px solid var(--line)}
@@ -267,15 +263,14 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   background:var(--raise);color:var(--dim);font-size:15px;font-weight:650}
 .channel-copy{display:grid;gap:3px;min-width:0;flex:1}
 .channel-name{font-size:15px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.channel-preview-label{flex:0 0 auto;color:var(--acc);font-size:12px;font-weight:600}
+.channel-preview-label{flex:0 0 auto;min-height:44px;display:flex;align-items:center;padding:8px 12px;
+  border-radius:var(--r-sm);font-size:13px;font-weight:600}
 .channel-meta{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:11px}
 .channel-action{flex:0 0 auto;min-width:108px;min-height:44px;padding:8px 12px;border-radius:var(--r-sm);
-  background:transparent;border:1px solid var(--line);color:var(--dim);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
-.channel-action:hover{border-color:var(--acc);color:var(--acc)}
-.channel-action.is-on{background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:color-mix(in srgb,var(--acc) 32%,var(--line));color:var(--acc)}
+  font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:var(--r-md);
   animation:preview-in .2s cubic-bezier(.2,.8,.2,1) both}
 .channel-preview[hidden]{display:none}
@@ -303,8 +298,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .auth-card>p{margin-top:9px;color:var(--dim);font-size:14px;line-height:1.55}
 .auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:24px 0 18px;
   background:var(--bg);border-radius:var(--r-sm)}
-.auth-modes button{min-height:42px;border:0;border-radius:var(--r-sm);background:none;color:var(--dim);font:inherit;cursor:pointer}
-.auth-modes button[aria-pressed=true]{background:var(--raise);color:var(--fg);font-weight:650}
+.auth-modes button{min-height:42px;border-radius:var(--r-sm);font:inherit;cursor:pointer}
 .auth-form{display:grid;gap:8px}
 .auth-form label{margin-top:8px;font-size:13px;font-weight:600}
 .auth-form input{width:100%;min-height:46px;padding:10px 12px;border-radius:var(--r-sm);background:var(--bg);
@@ -327,8 +321,25 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .empty{color:var(--dim);text-align:center;padding:64px 24px;display:grid;gap:10px;justify-items:center}
 .empty svg.i{width:28px;height:28px;color:var(--faint)}
 .empty p{max-width:38ch;font-size:14px;line-height:1.6}
-.btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);cursor:pointer;
-  background:var(--acc);border:1px solid var(--acc);color:var(--acc-ink);font-weight:600}
+.btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);
+  cursor:pointer;font-weight:600}
+/* Единая кнопка: обводка вместо заливки, текст в основном цвете. Акцентная
+   обводка помечает главное действие и выбранный вариант — заливки нет нигде,
+   поэтому Добавить, Убрать и Посмотреть читаются одинаково на любом фоне. */
+.btn,.toggle,.seg button,.auth-modes button,nav button,.filters button,.channel-action,
+.read-status,.channel-preview-label,.tabs-toggle,.quiet-btn{
+  background:var(--surf);border:1px solid var(--line);color:var(--fg);
+  transition:border-color .16s,color .16s,background .16s}
+.btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,nav button:hover,
+.filters button:hover,.channel-action:hover,.read-status:hover,.channel-preview-label:hover{
+  border-color:var(--acc);color:var(--acc)}
+.seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
+.toggle[aria-pressed=true],.filters button[aria-pressed=true],nav button[aria-selected=true],.channel-action.is-on{
+  background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:var(--acc);
+  color:var(--acc);font-weight:600}
+/* 12%, а не больше: в светлой теме акцент на тонированном фоне держится ровно
+   в 4.5:1, и каждый процент сверху уводит его за порог. */
+.btn{border-color:var(--acc);color:var(--acc)}
 /* Оверлей профиля. position:fixed обязателен — иначе блок раздвигает страницу. */
 .ov{position:fixed;inset:0;z-index:100;background:var(--overlay);
   display:none;align-items:center;justify-content:center;padding:16px}
@@ -348,8 +359,8 @@ body:has(.ov.open){overflow:hidden}
 .ov .account-actions{display:flex;gap:8px;margin-top:16px}
 .ov .account-actions button{flex:1}
 .ov .account-actions .btn{flex:1}
-.ov .account-actions .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);
-  cursor:pointer;background:var(--raise);border:1px solid var(--line);color:var(--fg)}
+.ov .account-actions .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;
+  border-radius:var(--r-sm);cursor:pointer;font-weight:600}
 .ov .dlg input{min-height:44px}
   /* Настройки оформления в оверлее профиля */
   .dlg .settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
@@ -362,8 +373,6 @@ body:has(.ov.open){overflow:hidden}
   margin:-10px 0 -10px -10px;border-radius:var(--r-sm)}
 .read-toggle{color:var(--acc)}
 .read-toggle .dot{width:8px;height:8px}
-.read-status{border:0;background:none;color:var(--dim);cursor:pointer}
-.read-status:hover{color:var(--acc)}
 
 .skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:15px 17px;margin-bottom:12px}
@@ -379,11 +388,12 @@ body:has(.ov.open){overflow:hidden}
 
 @media(max-width:640px){
   header{padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top))}
-  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"sections profile" "search search" "unread unread";gap:8px}
+  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"sections profile" "search search" "extra extra";gap:8px}
   .brand{display:none}
   #sectionTabs{grid-area:sections;justify-self:start}
   #meBtn{grid-area:profile;justify-self:end}
-  #unreadBtn{grid-area:unread;justify-self:start}
+  #unreadBtn,#sortTabs{grid-area:extra;justify-self:start}
+  #sortTabs{overflow-x:auto;max-width:100%;scrollbar-width:none}
   .search{grid-area:search;width:100%}
   .seg button{padding:8px 10px;font-size:13px}
   main,nav{padding-left:14px;padding-right:14px}
@@ -436,6 +446,11 @@ body:has(.ov.open){overflow:hidden}
       <svg class="i"><use href="#i-search"/></svg>
       <input id="q" type="search" placeholder="Поиск по постам" autocomplete="off" aria-label="Поиск по постам">
     </label>
+    <div class="seg" id="sortTabs" role="group" aria-label="Сортировка каталога" hidden>
+      <button type="button" data-sort="subs" aria-pressed="true">По подписчикам</button>
+      <button type="button" data-sort="name" aria-pressed="false">По названию</button>
+      <button type="button" data-sort="fresh" aria-pressed="false">По постам</button>
+    </div>
     <button id="unreadBtn" class="toggle" aria-pressed="false">Непрочитанные</button>
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
@@ -1015,18 +1030,34 @@ $('#tabs').addEventListener('scroll', tabFade, {passive:true});
 addEventListener('resize', tabFade);
 
 /* ---------- Каталог ---------- */
+/* Порядок задаём сами: TGMania отдаёт каналы как попало, sortBy у неё не работает. */
+const CATALOG_SORTS = {
+  subs: (a,b) => b.subs - a.subs,
+  name: (a,b) => a.name.localeCompare(b.name,'ru'),
+  // Свежесть постов: TGMania её не отдаёт, поэтому сортируем по своей базе,
+  // а каналы без постов уходят в конец и там идут по подписчикам.
+  fresh: (a,b) => (b.last_ts - a.last_ts) || (b.subs - a.subs),
+};
+let catalogSort = 'subs';
+const sortButtons = [...document.querySelectorAll('#sortTabs button')];
+sortButtons.forEach(b => b.onclick = () => {
+  catalogSort = b.dataset.sort;
+  sortButtons.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  loadCatalog();
+});
 async function loadCatalog(){
   const box = $('#catList'), q = catalogQuery.trim();
   box.innerHTML = skeleton();
   try{
     const r=await fetch('/api/catalog?q='+encodeURIComponent(q)+'&category='+encodeURIComponent(catalogCat));
     if(!r.ok) throw new Error('catalog unavailable');
-    const {channels=[]}=await r.json();
-    catalogItems=new Map(channels.map(channel=>[channel.username,channel]));
-    if(!channels.length){
+    const {channels:found=[]}=await r.json();
+    catalogItems=new Map(found.map(channel=>[channel.username,channel]));
+    if(!found.length){
       box.innerHTML=emptyState('search','Ничего не нашлось. Измени запрос или выбери категорию.',['clearCatalog','Сбросить поиск']);
       return;
     }
+    const channels=[...found].sort(CATALOG_SORTS[catalogSort] || CATALOG_SORTS.subs);
     box.className='channel-list'; box.replaceChildren();
     const have=new Set(subs());
     for(const c of channels){
@@ -1168,6 +1199,7 @@ function show(which){
   $('#tabFeed').tabIndex = cat ? -1 : 0;
   $('#tabCat').tabIndex = cat ? 0 : -1;
   $('#unreadBtn').hidden = cat;
+  $('#sortTabs').hidden = !cat;
   // Поиск относится к тому виду, где он уместен
   $('#q').placeholder = cat ? 'Поиск по каталогу' : 'Поиск по постам';
   $('#q').setAttribute('aria-label', cat ? 'Поиск по каталогу' : 'Поиск по постам');
