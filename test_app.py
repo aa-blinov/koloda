@@ -167,6 +167,24 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(first_state["subs"], ["alpha"])
 
+    def test_settings_survive_reload_and_reject_values_from_browser(self):
+        status, _ = self.request("/api/auth/register", method="POST",
+                                 data={"username": "profile_settings", "password": "long-password"})
+        self.assertEqual(status, 201)
+        status, payload = self.request("/api/settings")
+        self.assertEqual(payload["settings"], {"theme": "dark", "font": "sans"})
+        status, _ = self.request("/api/settings", method="PUT",
+                                 data={"theme": "light", "font": "serif"})
+        self.assertEqual(status, 200)
+        status, state = self.request("/api/state")
+        self.assertEqual(state["settings"], {"theme": "light", "font": "serif"})
+        status, payload = self.request("/api/settings", method="PUT", data={"theme": "neon"})
+        self.assertEqual(status, 400)
+        status, payload = self.request("/api/settings")
+        self.assertEqual(payload["settings"], {"theme": "light", "font": "serif"})
+        self.cookie = ""
+        self.assertEqual(self.request("/api/settings")[0], 401)
+
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
                                        data={"username": "profile_one", "password": "long-password"})
