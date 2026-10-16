@@ -1259,6 +1259,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(405, json.dumps({"error": "метод не поддерживается"}),
                                   "application/json")
 
+            if path == "/api/state/export":
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                # отдаём состояние сервера, а не то, что лежит в браузере:
+                # файл берут как резервную копию, и он должен быть полным
+                state = load_state(db, cid)
+                lines = [json.dumps({"type": "channel", "channel": c}, ensure_ascii=False)
+                         for c in state["subs"]]
+                lines += [json.dumps({"type": "read", "post": r}, ensure_ascii=False)
+                          for r in state["reads"]]
+                return self._send(200, "\n".join(lines) + ("\n" if lines else ""),
+                                  "application/x-ndjson; charset=utf-8",
+                                  [("Content-Disposition",
+                                    'attachment; filename="koloda-lenta.jsonl"')])
+
             if path == "/api/state/merge":
                 cid = client_id(self, db)
                 if not cid:

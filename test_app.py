@@ -378,6 +378,31 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(status, 405)
         self.assertIn("application/json", headers["Content-Type"])
 
+    def test_export_gives_the_whole_feed_as_lines_one_record_each(self):
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "profile_one", "password": "long-password"})
+        self.request("/api/state/merge", method="POST",
+                     data={"subs": ["alpha", "beta"], "reads": ["alpha/1", "beta/2"]})
+        self.cookie = ""
+        self.assertEqual(self.request("/api/state/export")[0], 401)
+
+        self.request("/api/auth/login", method="POST",
+                     data={"username": "profile_one", "password": "long-password"})
+        status, headers, body = self.request_raw("/api/state/export")
+        self.assertEqual(status, 200)
+        self.assertIn("attachment", headers.get("Content-Disposition", ""))
+        records = [json.loads(line) for line in body.decode().splitlines() if line.strip()]
+        self.assertEqual({r["channel"] for r in records if r["type"] == "channel"}, {"alpha", "beta"})
+        self.assertEqual({r["post"] for r in records if r["type"] == "read"}, {"alpha/1", "beta/2"})
+
+        # файл из выгрузки возвращается тем же слиянием, поэтому лента восстанавливается
+        status, state = self.request("/api/state/merge", method="POST",
+                                     data={"subs": [r["channel"] for r in records if r["type"] == "channel"],
+                                           "reads": [r["post"] for r in records if r["type"] == "read"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(set(state["subs"]), {"alpha", "beta"})
+        self.assertEqual(set(state["reads"]), {"alpha/1", "beta/2"})
+
     def test_state_operations_merge_and_sync(self):
         status, account = self.request("/api/auth/register", method="POST",
                                        data={"username": "profile_one", "password": "long-password"})
