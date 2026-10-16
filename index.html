@@ -155,6 +155,8 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   display:flex;align-items:center;justify-content:center;cursor:pointer}
 .lb-nav:hover{background:rgba(0,0,0,.75)}
 .lb-prev{left:14px}.lb-next{right:14px}
+/* На телефоне Escape нет, а закрывать просмотр иначе нечем */
+.lb-close{top:12px;right:12px;transform:none;font-size:15px}
 .lb-nav[hidden]{display:none}
 .txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68;
   font-family:var(--font-read)}
@@ -430,6 +432,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   <video class="lb-img" id="lbVid" controls preload="metadata" playsinline hidden></video>
   <button class="lb-nav lb-prev" id="lbPrev" type="button" aria-label="Предыдущий кадр">‹</button>
   <button class="lb-nav lb-next" id="lbNext" type="button" aria-label="Следующий кадр">›</button>
+  <button class="lb-nav lb-close" id="lbClose" type="button" aria-label="Закрыть просмотр">✕</button>
   <span class="lb-n" id="lbN" aria-live="polite"></span>
 </div>
 
@@ -1172,7 +1175,9 @@ document.addEventListener('click', e => {
 });
 $('#lbPrev').onclick = () => stepLightbox(-1);
 $('#lbNext').onclick = () => stepLightbox(1);
-$('#lightbox').onclick = closeLightbox;
+$('#lbClose').onclick = closeLightbox;
+// закрываем только по самой подложке: иначе тап по стрелке листает и сразу закрывает
+$('#lightbox').onclick = e => { if(e.target===e.currentTarget) closeLightbox(); };
 
 $('#meBtn').onclick=openProfile; $('#meClose').onclick=closeProfile;
 document.addEventListener('click', e => {
