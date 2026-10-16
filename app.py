@@ -330,7 +330,10 @@ def fetch_channel(channel):
         if not msg_id.isdigit():
             continue
         txt = re.search(r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', chunk, re.S)
-        img = re.search(r"background-image:url\(([^)]+)\)", chunk)
+        # Фото берём из контейнера фото: первый background-image в посте — это обычно
+        # кастомный эмодзи из текста, и он перебивал настоящий снимок.
+        img = _bg(chunk, "tgme_widget_message_photo_wrap") or \
+            _bg(chunk, "tgme_widget_message_video_wrap")
         # Видео лежит в <video src> — прямая ссылка с токеном, отдаётся как mp4.
         vid = re.search(r'<video[^>]+src="([^"]+)"', chunk) or \
             re.search(r'<video[^>]+src=\'([^\']+)\'', chunk)
@@ -350,9 +353,8 @@ def fetch_channel(channel):
             "msg_id": int(msg_id),
             "url": f"https://t.me/{owner}/{msg_id}",
             "text": rich_text(txt.group(1)) if txt else "",
-            # Обложка видео идёт первым background-image, но если есть сам <video>,
-            # картинкой считаем его превью, а не случайную картинку из тела поста.
-            "image": (None if vid else (img.group(1).strip("'\"") if img else None)),
+            # Обложку видео отдаёт сам <video>, отдельной картинкой она не нужна.
+            "image": None if vid else img,
             "video": unescape(vid.group(1)) if vid else None,
             "views": views.group(1).strip() if views else None,
             "ts": ts,

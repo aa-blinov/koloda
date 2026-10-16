@@ -218,5 +218,41 @@ class CatalogCategoryTest(unittest.TestCase):
             ])
 
 
+class MediaParseTest(unittest.TestCase):
+    """Пост без медиа не должен получать эмодзи из текста вместо картинки."""
+
+    HTML = ('<div class="tgme_widget_message" data-post="durov/1">'
+            '<div class="tgme_widget_message_text" dir="auto"><span class="emoji" '
+            'style="background-image:url(\'//telegram.org/img/emoji/40/F09F8E81.png\')">✨</span>'
+            ' привет</div>%s</div>')
+
+    def parse(self, media):
+        html = self.HTML % media
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = (
+                '<meta property="og:title" content="Канал"/>' + html).encode()
+            title, posts = app.fetch_channel("durov")
+        self.assertEqual(title, "Канал")
+        return posts[0]
+
+    def test_emoji_in_text_is_not_taken_for_a_photo(self):
+        post = self.parse("")
+        self.assertIsNone(post["image"])
+        self.assertIn("привет", post["text"])
+
+    def test_photo_wins_over_emoji_and_keeps_extra_classes(self):
+        post = self.parse('<div class="tgme_widget_message_photo_wrap 5215576584121683352 '
+                          '1214346053_460000664" style="width:800px;'
+                          'background-image:url(\'https://cdn4.telesco.pe/file/REAL.jpg\')">')
+        self.assertEqual(post["image"], "https://cdn4.telesco.pe/file/REAL.jpg")
+
+    def test_video_post_gets_no_separate_cover(self):
+        post = self.parse('<div class="tgme_widget_message_video_wrap" '
+                          'style="background-image:url(\'https://cdn4.telesco.pe/file/THUMB.jpg\')">'
+                          '<video src="https://cdn4.telesco.pe/file/REAL.mp4"></video>')
+        self.assertIsNone(post["image"])
+        self.assertEqual(post["video"], "https://cdn4.telesco.pe/file/REAL.mp4")
+
+
 if __name__ == "__main__":
     unittest.main()
