@@ -209,8 +209,8 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .rx span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 9px;
   border-radius:var(--r-pill);background:var(--raise);border:1px solid var(--line);color:var(--dim);
   font-variant-numeric:tabular-nums}
-/* Кастомные эмодзи приходят без символа — показываем точку, а не выдуманный смайлик */
-.rx span.custom .mark{width:6px;height:6px;border-radius:var(--r-round);background:var(--faint)}
+/* Реакция без значка: только счётчик, никакого овала вместо эмодзи */
+.rx span.bare{color:var(--dim)}
 .rx span.paid{color:var(--paid);border-color:color-mix(in srgb,var(--paid) 32%,var(--line))}
 
 /* --- Пересылка и цитата --- */
@@ -249,7 +249,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .filter-scroll{position:relative}
 .filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
   pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
-.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
+.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-sm);
   cursor:pointer;white-space:nowrap}
 
 .channel-list{display:grid;gap:2px}
@@ -327,11 +327,11 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
    обводка помечает главное действие и выбранный вариант — заливки нет нигде,
    поэтому Добавить, Убрать и Посмотреть читаются одинаково на любом фоне. */
 .btn,.toggle,.seg button,.auth-modes button,nav button,.filters button,.channel-action,
-.read-status,.channel-preview-label,.tabs-toggle,.quiet-btn{
+.channel-preview-label,.tabs-toggle,.quiet-btn{
   background:var(--surf);border:1px solid var(--line);color:var(--fg);
   transition:border-color .16s,color .16s,background .16s}
 .btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,nav button:hover,
-.filters button:hover,.channel-action:hover,.read-status:hover,.channel-preview-label:hover{
+.filters button:hover,.channel-action:hover,.channel-preview-label:hover{
   border-color:var(--acc);color:var(--acc)}
 .seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
 .toggle[aria-pressed=true],.filters button[aria-pressed=true],nav button[aria-selected=true],.channel-action.is-on{
@@ -373,6 +373,10 @@ body:has(.ov.open){overflow:hidden}
   margin:-10px 0 -10px -10px;border-radius:var(--r-sm)}
 .read-toggle{color:var(--acc)}
 .read-toggle .dot{width:8px;height:8px}
+/* Галка отметки — знак состояния, а не кнопка: рамка у неё делала вид,
+   будто в шапке каждого поста стоит лишний блок. Клик остался. */
+.read-status{border:0;background:none;color:var(--dim);cursor:pointer}
+.read-status:hover{color:var(--acc)}
 
 .skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:15px 17px;margin-bottom:12px}
@@ -869,9 +873,12 @@ function extras(p){
   if(p.reactions && p.reactions.length){
     h += '<div class="rx">';
     for(const r of p.reactions){
-      const cls = r.paid ? 'paid' : (r.emoji ? '' : 'custom');
-      const mark = r.emoji ? esc(r.emoji) : '<span class="mark"></span>';
-      h += '<span class="'+cls+'">'+mark+esc(r.count)+'</span>';
+      // Кастомные реакции Telegram приходят без символа, только с emoji-id, и
+      // картинки по нему в разметке тоже нет. Выдумывать смайлик нельзя, серый
+      // овал ни о чём не говорит, поэтому такая реакция остаётся счётчиком.
+      const cls = r.paid ? 'paid' : (r.emoji ? '' : 'bare');
+      const tip = r.emoji ? '' : ' title="Реакция без значка"';
+      h += '<span class="'+cls+'"'+tip+'>'+esc(r.emoji)+esc(r.count)+'</span>';
     }
     h += '</div>';
   }
