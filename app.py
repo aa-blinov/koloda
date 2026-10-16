@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS cache (
 CREATE TABLE IF NOT EXISTS profiles (
     code    TEXT PRIMARY KEY,
     created INTEGER,
+    settings TEXT,
     initialized INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS user_subs (
@@ -129,6 +130,9 @@ def connect():
         # image и video схлопывались в один кадр, из-за чего альбомы теряли всё,
         # кроме первого медиа. Старые колонки остаются в таблице пустыми.
         db.execute("ALTER TABLE posts ADD COLUMN media TEXT")
+    profile_columns = {row[1] for row in db.execute("PRAGMA table_info(profiles)")}
+    if "settings" not in profile_columns:
+        db.execute("ALTER TABLE profiles ADD COLUMN settings TEXT")
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS accounts_email ON accounts(email COLLATE NOCASE) "
                "WHERE email IS NOT NULL")
     db.commit()
@@ -669,6 +673,46 @@ def client_id(handler, db):
     return account["profile"] if account else ""
 
 
+SETTINGS_ALLOWED = {"theme": ("dark", "light", "auto"),
+                    "font": ("sans", "serif", "mono", "grotesk")}
+DEFAULT_SETTINGS = {"theme": "dark", "font": "sans"}
+
+
+def load_settings(db, cid):
+    row = db.execute("SELECT settings FROM profiles WHERE code=?", (cid,)).fetchone()
+    saved = {}
+    if row and row[0]:
+        try:
+            saved = json.loads(row[0])
+        except ValueError:
+            saved = {}
+    if not isinstance(saved, dict):
+        saved = {}
+    # значения приходят из браузера, поэтому сверяем со списком: в разметку
+    # попадают как есть, а мусорный класс или шрифт ломает весь интерфейс
+    out = dict(DEFAULT_SETTINGS)
+    for key, allowed in SETTINGS_ALLOWED.items():
+        value = saved.get(key)
+        if value in allowed:
+            out[key] = value
+    return out
+
+
+def save_settings(db, cid, data):
+    clean = {}
+    for key, allowed in SETTINGS_ALLOWED.items():
+        value = data.get(key, DEFAULT_SETTINGS[key])
+        if value not in allowed:
+            raise ValueError(f"неизвестное значение {key}={value!r}")
+        clean[key] = value
+    db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
+               (cid, int(time.time())))
+    db.execute("UPDATE profiles SET settings=? WHERE code=?",
+               (J(clean), cid))
+    db.commit()
+    return clean
+
+
 def load_state(db, cid):
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
@@ -683,7 +727,8 @@ def load_state(db, cid):
         db.execute("UPDATE profiles SET initialized=1 WHERE code=?", (cid,))
         initialized = True
     db.commit()
-    return {"subs": subs, "reads": reads, "initialized": initialized}
+    return {"subs": subs, "reads": reads, "initialized": initialized,
+            "settings": load_settings(db, cid)}
 
 
 def save_state(db, cid, data):
@@ -1109,6 +1154,29 @@ class Handler(BaseHTTPRequestHandler):
                                                    "errors": errors, "has_more": has_more,
                                                    "next": next_cursor}),
                                   "application/json; charset=utf-8")
+
+            if path == "/api/settings":
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if self.command == "GET":
+                    return self._send(200, json.dumps({"settings": load_settings(db, cid)}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if self.command == "PUT":
+                    data = self._read_json()
+                    if isinstance(data, int):
+                        return self._send(data, json.dumps({"error": "Не удалось сохранить настройки"}),
+                                          "application/json")
+                    try:
+                        saved = save_settings(db, cid, data)
+                    except ValueError:
+                        return self._send(400, json.dumps({"error": "Такая тема или шрифт не поддерживаются"},
+                                                          ensure_ascii=False), "application/json; charset=utf-8")
+                    return self._send(200, json.dumps({"settings": saved}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                  "application/json")
 
             if path == "/api/state":
                 cid = client_id(self, db)

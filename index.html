@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark" data-font="sans">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <title>Лента</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0d0f14; --surf:#141821; --raise:#1b2029; --line:#242b38;
-  --fg:#e9ecf3; --dim:#98a1b5; --faint:#7a8397;
+  --fg:#e9ecf3; --dim:#98a1b5; --faint:#8690a3;
   --acc:#5aa2ff; --acc-ink:#0b1220;
   --line-hover:#303a4c; --line-hover-strong:#3a4557;
   --scroll-thumb:#2a3242; --scroll-thumb-hover:#3a4557;
@@ -18,24 +18,58 @@
   /* Тени несут смещение и размытие — плоский ореол это декор, а не глубина */
   --sh-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
   --sh-2:0 8px 24px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
-  --r:14px;
+  /* Четыре размера и две формы. Всё остальное скругление — из шкалы. */
+  --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:20px;
+  --r-pill:999px; --r-round:50%;
+  /* Шрифты: только системные, чтобы интерфейс не тянул ничего из сети */
+  --font-ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  --font-read:var(--font-ui);
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
   --space-6:24px; --space-8:32px;
+}
+
+/* Светлая тема. Контраст посчитан: мелкий текст 4.99 и выше на всех трёх
+   подложках, акцент 5.5 против белого. */
+:root[data-theme="light"]{
+  --bg:#f4f6f9; --surf:#ffffff; --raise:#eceff4; --line:#dde2ea;
+  --fg:#151a21; --dim:#4d5766; --faint:#5d6773;
+  --acc:#1a63d8; --acc-ink:#ffffff;
+  --line-hover:#c9d0db; --line-hover-strong:#b6bfcd;
+  --scroll-thumb:#c3cad6; --scroll-thumb-hover:#aab3c2;
+  --paid:#8a5a00; --error:#c22b36; --media-bg:#e9ecf1; --selection-fg:#0b1220;
+  --overlay:rgba(16,20,28,.55);
+  --sh-1:0 1px 2px rgba(20,28,44,.07), 0 2px 8px rgba(20,28,44,.06);
+  --sh-2:0 8px 24px rgba(20,28,44,.12), 0 2px 6px rgba(20,28,44,.08);
+}
+
+/* Шрифты на выбор: системные стеки, ничего не тянем из сети */
+:root[data-font="serif"]{
+  --font-ui:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --font-read:var(--font-ui);
+}
+:root[data-font="mono"]{
+  --font-ui:var(--font-mono);
+  --font-read:var(--font-mono);
+}
+:root[data-font="grotesk"]{
+  --font-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-read:var(--font-ui);
 }
 html{scrollbar-color:var(--scroll-thumb) transparent}
 [hidden]{display:none!important}
 body{
   background:var(--bg); color:var(--fg);
-  font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  font:15px/1.55 var(--font-ui);
   padding-bottom:env(safe-area-inset-bottom);
   -webkit-font-smoothing:antialiased;
 }
 ::selection{background:color-mix(in srgb, var(--acc) 34%, transparent); color:var(--selection-fg)}
 ::-webkit-scrollbar{width:11px;height:11px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:99px;border:3px solid var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:var(--r-pill);border:3px solid var(--bg)}
 ::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover)}
-:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:6px}
+:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:var(--r-xs)}
 svg.i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
@@ -49,17 +83,17 @@ header{position:sticky;top:0;z-index:20;
 .brand{flex:0 0 auto;font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--fg)}
 #sectionTabs{flex:0 0 auto}
 #unreadBtn,#meBtn{flex:0 0 auto}
-.seg{display:flex;background:var(--surf);border:1px solid var(--line);border-radius:11px;padding:3px}
-.seg button{border:0;background:none;color:var(--dim);min-height:44px;padding:8px 13px;border-radius:8px;
+.seg{display:flex;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
+.seg button{border:0;background:none;color:var(--dim);min-height:44px;padding:8px 13px;border-radius:var(--r-sm);
   font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
 .seg button[aria-selected=true]{background:var(--raise);color:var(--fg);box-shadow:var(--sh-1)}
-.toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;border-radius:11px;cursor:pointer;
+.toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;border-radius:var(--r-sm);cursor:pointer;
   background:var(--surf);border:1px solid var(--line);color:var(--dim);white-space:nowrap;
   transition:color .16s,border-color .16s,background .16s}
 .toggle[aria-pressed=true]{background:color-mix(in srgb, var(--acc) 16%, var(--surf));
   border-color:color-mix(in srgb, var(--acc) 46%, var(--line));color:var(--acc);font-weight:600}
 .search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:8px;
-  background:var(--surf);border:1px solid var(--line);border-radius:11px;padding:0 11px}
+  background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 11px}
 .search:focus-within{border-color:var(--acc)}
 .search svg.i{color:var(--faint)}
 .search input{flex:1;min-width:0;background:none;border:0;color:var(--fg);font:inherit;font-size:16px;
@@ -70,7 +104,7 @@ header{position:sticky;top:0;z-index:20;
 nav{max-width:780px;margin:0 auto;display:flex;gap:7px;padding:12px 16px 8px;overflow-x:auto;
   scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
-nav button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:99px;
+nav button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
   background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
 nav button[aria-selected=true]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
 main{max-width:980px;margin:0 auto;padding:0 20px 56px}
@@ -80,7 +114,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .catalog-head h2{font-size:23px;line-height:1.2;letter-spacing:-.025em}
 .catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
 
-.post{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+.post{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);cursor:pointer;
   transition:box-shadow .18s, border-color .18s, transform .18s, opacity .18s}
 .post:hover{border-color:var(--line-hover);box-shadow:var(--sh-2);transform:translateY(-1px)}
@@ -90,11 +124,11 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:var(--dim)}
 .meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
-.dot{width:7px;height:7px;border-radius:50%;background:var(--acc);flex:0 0 auto;
+.dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
   box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
 .meta .stat{display:flex;align-items:center;gap:4px;color:var(--faint);font-variant-numeric:tabular-nums}
 
-.post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:10px;margin:4px 0 11px;
+.post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:var(--r-md);margin:4px 0 11px;
   background:var(--media-bg);border:1px solid var(--line)}
 /* Альбом: свайп по горизонтали, счётчик кадров поверх последнего */
 .galw{position:relative;margin:4px 0 11px}
@@ -104,34 +138,35 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
    влезают в ленту, наблюдатель видит их все и тянет всё разом. */
 .gal>img[data-src]{min-width:200px}
 .gal>video{max-width:100%}
-.gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:999px;
+.gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:var(--r-pill);
   background:rgba(0,0,0,.62);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;
   pointer-events:none}
 /* Кадр открывается целиком: лента показывает только обрезок */
 .gal>img{cursor:zoom-in}
-.lb-img{max-width:94vw;max-height:86vh;object-fit:contain;border-radius:10px;display:block}
+.lb-img{max-width:94vw;max-height:86vh;object-fit:contain;border-radius:var(--r-md);display:block}
 .lb-img[hidden]{display:none}
 /* Подложка плотнее общей: под кадром не должно быть видно страницу */
 #lightbox{background:rgba(0,0,0,.94)}
 .lb-n{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
-  padding:3px 11px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;
+  padding:3px 11px;border-radius:var(--r-pill);background:rgba(0,0,0,.62);color:#fff;
   font-size:12.5px;font-variant-numeric:tabular-nums;pointer-events:none}
 .lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
-  border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:0;font-size:20px;
+  border-radius:var(--r-round);background:rgba(0,0,0,.55);color:#fff;border:0;font-size:20px;
   display:flex;align-items:center;justify-content:center;cursor:pointer}
 .lb-nav:hover{background:rgba(0,0,0,.75)}
 .lb-prev{left:14px}.lb-next{right:14px}
 .lb-nav[hidden]{display:none}
-.txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68}
+.txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68;
+  font-family:var(--font-read)}
 .post.read .txt{color:var(--dim)}
 .txt a{color:var(--acc);text-underline-offset:2px;text-decoration-thickness:1px}
 .txt a:hover{text-decoration-thickness:2px}
 .txt b,.txt strong{font-weight:650;color:var(--fg)}
 .txt i,.txt em{font-style:italic}
 .txt s,.txt del{color:var(--dim)}
-.txt code{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--raise);
-  padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
-.txt pre{background:var(--raise);border:1px solid var(--line);border-radius:9px;
+.txt code{font:13px/1.5 var(--font-mono);background:var(--raise);
+  padding:1px 5px;border-radius:var(--r-xs);border:1px solid var(--line)}
+.txt pre{background:var(--raise);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:11px 13px;overflow-x:auto;margin:9px 0}
 .txt pre code{background:none;border:0;padding:0}
 .txt blockquote{border-left:2px solid var(--line);padding-left:12px;color:var(--dim);margin:8px 0}
@@ -139,10 +174,10 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* --- Реакции --- */
 .rx{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
 .rx span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 9px;
-  border-radius:99px;background:var(--raise);border:1px solid var(--line);color:var(--dim);
+  border-radius:var(--r-pill);background:var(--raise);border:1px solid var(--line);color:var(--dim);
   font-variant-numeric:tabular-nums}
 /* Кастомные эмодзи приходят без символа — показываем точку, а не выдуманный смайлик */
-.rx span.custom .mark{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.rx span.custom .mark{width:6px;height:6px;border-radius:var(--r-round);background:var(--faint)}
 .rx span.paid{color:var(--paid);border-color:color-mix(in srgb,var(--paid) 32%,var(--line))}
 
 /* --- Пересылка и цитата --- */
@@ -155,7 +190,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .quote .line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60ch}
 
 /* --- Файл --- */
-.doc{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;margin-top:10px;
+.doc{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-sm);margin-top:10px;
   background:var(--raise);border:1px solid var(--line);color:inherit;text-decoration:none;
   transition:border-color .16s}
 .doc:hover{border-color:var(--acc)}
@@ -163,11 +198,11 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .doc .mt{font-size:12px;color:var(--dim)}
 
 /* --- Карточка ссылки --- */
-.preview{display:flex;gap:12px;margin-top:11px;padding:11px;border-radius:11px;
+.preview{display:flex;gap:12px;margin-top:11px;padding:11px;border-radius:var(--r-sm);
   background:var(--raise);border:1px solid var(--line);color:inherit;text-decoration:none;
   transition:border-color .16s}
 .preview:hover{border-color:var(--acc)}
-.preview img{width:84px;height:62px;object-fit:cover;border-radius:8px;flex:0 0 auto;margin:0}
+.preview img{width:84px;height:62px;object-fit:cover;border-radius:var(--r-sm);flex:0 0 auto;margin:0}
 .preview .body{min-width:0;display:grid;gap:2px;align-content:center}
 .preview .site{font-size:11.5px;color:var(--acc);letter-spacing:.01em}
 .preview .nm{font-size:13.5px;font-weight:600;line-height:1.35}
@@ -181,7 +216,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .filter-scroll{position:relative}
 .filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
   pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
-.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:99px;
+.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
   background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
 .filters button[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
 
@@ -189,10 +224,10 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-entry{padding:8px 0;border-bottom:1px solid var(--line)}
 .channel-row{display:flex;align-items:center;gap:12px;min-height:64px}
 .channel-open{flex:1;min-width:0;display:flex;align-items:center;gap:13px;padding:8px 10px;
-  border:0;border-radius:12px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
+  border:0;border-radius:var(--r-md);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
   transition:background .16s}
 .channel-open:hover,.channel-open[aria-expanded=true]{background:var(--surf)}
-.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:12px;
+.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-md);
   background:var(--raise);color:var(--dim);font-size:15px;font-weight:650}
 .channel-copy{display:grid;gap:3px;min-width:0;flex:1}
 .channel-name{font-size:15px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -201,11 +236,11 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:11px}
-.channel-action{flex:0 0 auto;min-width:108px;min-height:42px;padding:8px 12px;border-radius:10px;
+.channel-action{flex:0 0 auto;min-width:108px;min-height:42px;padding:8px 12px;border-radius:var(--r-sm);
   background:transparent;border:1px solid var(--line);color:var(--dim);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .channel-action:hover{border-color:var(--acc);color:var(--acc)}
 .channel-action.is-on{background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:color-mix(in srgb,var(--acc) 32%,var(--line));color:var(--acc)}
-.channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:12px;
+.channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:var(--r-md);
   animation:preview-in .2s cubic-bezier(.2,.8,.2,1) both}
 .channel-preview[hidden]{display:none}
 .channel-preview-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
@@ -220,23 +255,23 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 @keyframes preview-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .empty-action{color:var(--acc);border:0;background:none;font:inherit;font-weight:650;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .channel-form{display:flex;gap:8px;margin:2px 0 8px}
-.channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 12px;border-radius:10px;
+.channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 12px;border-radius:var(--r-sm);
   background:var(--surf);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:16px}
 .channel-form input::placeholder{color:var(--faint)}
 .channel-state{min-height:0;margin:0 0 8px;color:var(--dim);font-size:12.5px}
 .channel-state:empty{display:none}
 .channel-state[data-error="true"]{color:var(--error)}
 .auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px}
-.auth-card{width:min(100%,440px);padding:30px;background:var(--surf);border-radius:16px;box-shadow:var(--sh-2)}
+.auth-card{width:min(100%,440px);padding:30px;background:var(--surf);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
 .auth-card h1{font-size:26px;line-height:1.2;letter-spacing:-.03em}
 .auth-card>p{margin-top:9px;color:var(--dim);font-size:14px;line-height:1.55}
 .auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:24px 0 18px;
-  background:var(--bg);border-radius:11px}
-.auth-modes button{min-height:42px;border:0;border-radius:8px;background:none;color:var(--dim);font:inherit;cursor:pointer}
+  background:var(--bg);border-radius:var(--r-sm)}
+.auth-modes button{min-height:42px;border:0;border-radius:var(--r-sm);background:none;color:var(--dim);font:inherit;cursor:pointer}
 .auth-modes button[aria-pressed=true]{background:var(--raise);color:var(--fg);font-weight:650}
 .auth-form{display:grid;gap:8px}
 .auth-form label{margin-top:8px;font-size:13px;font-weight:600}
-.auth-form input{width:100%;min-height:46px;padding:10px 12px;border-radius:10px;background:var(--bg);
+.auth-form input{width:100%;min-height:46px;padding:10px 12px;border-radius:var(--r-sm);background:var(--bg);
   border:1px solid var(--line);color:var(--fg);font:inherit;font-size:16px}
 .auth-form input:focus{border-color:var(--acc);outline:2px solid color-mix(in srgb,var(--acc) 25%,transparent)}
 .auth-help{min-height:20px;color:var(--dim);font-size:12.5px}
@@ -247,7 +282,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .account-name{padding:12px 0;font-size:15px;font-weight:650}
 .account-actions{display:flex;gap:8px;margin-top:12px}
 .account-actions button{flex:1}
-.feed-warning{margin:0 0 12px;padding:10px 12px;border-radius:10px;
+.feed-warning{margin:0 0 12px;padding:10px 12px;border-radius:var(--r-sm);
   background:color-mix(in srgb,var(--error) 10%,var(--surf));color:var(--fg);font-size:13px}
 .load-more{display:block;margin:16px auto 28px}
 .feed-empty-more{padding:20px 16px;text-align:center;color:var(--dim)}
@@ -256,7 +291,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .empty{color:var(--dim);text-align:center;padding:64px 24px;display:grid;gap:10px;justify-items:center}
 .empty svg.i{width:28px;height:28px;color:var(--faint)}
 .empty p{max-width:38ch;font-size:14px;line-height:1.6}
-.btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:9px;cursor:pointer;
+.btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);cursor:pointer;
   background:var(--acc);border:1px solid var(--acc);color:var(--acc-ink);font-weight:600}
 /* Оверлей профиля. position:fixed обязателен — иначе блок раздвигает страницу. */
 .ov{position:fixed;inset:0;z-index:100;background:var(--overlay);
@@ -267,27 +302,33 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
    вместе — безвкусная связка, которую ловит детектор. */
 .ov .dlg{width:min(420px,100%);max-height:86vh;overflow:auto;display:flex;flex-direction:column;
   background:var(--surf);color:var(--fg);
-  border-radius:var(--r);padding:18px;box-shadow:var(--sh-2)}
+  border-radius:var(--r-md);padding:18px;box-shadow:var(--sh-2)}
 .ov .dlg h2{font-size:17px;margin-bottom:4px;letter-spacing:-.01em}
 .ov .dlg p{color:var(--dim);font-size:13px;margin-bottom:14px;line-height:1.55}
 .ov .dlg .empty{padding:20px}
 .ov .dlgbtns{display:flex;gap:8px;margin-top:16px}
 .ov .dlgbtns button{flex:1}
 .ov .dlgbtns .btn{flex:1}
-.ov .dlgbtns .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:9px;
+.ov .dlgbtns .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);
   cursor:pointer;background:var(--raise);border:1px solid var(--line);color:var(--fg)}
 .ov .dlg input{min-height:44px}
+  /* Настройки оформления в оверлее профиля */
+  .dlg .settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+  .dlg .settings h3{font-size:14px;margin:0 0 4px}
+  .dlg .settings-hint{font-size:12.5px;color:var(--faint);margin:0 0 12px}
+  .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap}
+  .dlg .settings .seg button{flex:1 1 auto}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
 .read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
-  margin:-10px 0 -10px -10px;border-radius:8px}
+  margin:-10px 0 -10px -10px;border-radius:var(--r-sm)}
 .read-toggle{border:0;background:none;color:var(--acc);cursor:pointer}
 .read-toggle:hover{background:color-mix(in srgb,var(--acc) 12%,transparent)}
 .read-toggle .dot{width:8px;height:8px}
 .read-status{color:var(--dim)}
 
-.skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);
+.skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:15px 17px;margin-bottom:12px}
-.skel i{display:block;height:10px;border-radius:5px;background:var(--raise);margin-bottom:9px;
+.skel i{display:block;height:10px;border-radius:var(--r-xs);background:var(--raise);margin-bottom:9px;
   animation:breathe 1.4s ease-in-out infinite}
 .skel i:nth-child(2){width:42%}
 .skel i:nth-child(3){width:100%;height:56px}
@@ -410,6 +451,22 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
       <button id="logoutBtn" class="quiet-btn">Выйти</button>
       <button id="meClose" class="btn">Готово</button>
     </div>
+    <div class="settings">
+      <h3>Оформление</h3>
+      <p class="settings-hint">Выбор сохраняется в профиле и переезжает на другое устройство.</p>
+      <div class="seg" id="themeSeg" role="group" aria-label="Тема">
+        <button type="button" data-set="theme" data-value="dark">Тёмная</button>
+        <button type="button" data-set="theme" data-value="light">Светлая</button>
+        <button type="button" data-set="theme" data-value="auto">Как в системе</button>
+      </div>
+      <div class="seg" id="fontSeg" role="group" aria-label="Шрифт">
+        <button type="button" data-set="font" data-value="sans">Системный</button>
+        <button type="button" data-set="font" data-value="serif">Классический</button>
+        <button type="button" data-set="font" data-value="mono">Моноширинный</button>
+        <button type="button" data-set="font" data-value="grotesk">Гротеск</button>
+      </div>
+      <p class="auth-message" id="settingsState" role="status" aria-live="polite"></p>
+    </div>
   </div>
 </div>
 </div>
@@ -463,7 +520,36 @@ function saveRead(s){ localStorage.setItem(LS.read, JSON.stringify([...s].slice(
 function applyState(data){
   localStorage.setItem(LS.sub, JSON.stringify(Array.isArray(data.subs)?data.subs:[]));
   localStorage.setItem(LS.read, JSON.stringify(Array.isArray(data.reads)?data.reads:[]));
+  applySettings(data.settings);
 }
+// Тема и шрифт живут в атрибутах корня: тема решается в JS, потому что
+// варианта «как в системе» в CSS без дублирования палитры не выразить.
+const THEMES = ['dark','light','auto'], FONTS = ['sans','serif','mono','grotesk'];
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+let settings = {theme:'dark', font:'sans'};
+function applySettings(next){
+  if(next) settings = Object.assign({}, settings, next);
+  const theme = settings.theme === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : settings.theme;
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.font = settings.font;
+  document.documentElement.dataset.themePref = settings.theme;
+  for(const btn of document.querySelectorAll('[data-set]')){
+    const on = settings[btn.dataset.set] === btn.dataset.value;
+    btn.setAttribute('aria-pressed', String(on));
+  }
+}
+async function saveSettings(patch){
+  applySettings(patch);
+  try{
+    const r = await fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'},
+                                            body: JSON.stringify(settings)});
+    if(!r.ok) throw new Error();
+    setFormMessage('settingsState','');
+  }catch(err){
+    setFormMessage('settingsState','Не удалось сохранить настройки.',true);
+  }
+}
+darkQuery.addEventListener('change', () => { if(settings.theme === 'auto') applySettings(); });
 function replayPending(){
   const nextSubs = new Set(subs()), nextReads = seen();
   pendingOps().forEach(op => {
@@ -1089,6 +1175,10 @@ $('#lbNext').onclick = () => stepLightbox(1);
 $('#lightbox').onclick = closeLightbox;
 
 $('#meBtn').onclick=openProfile; $('#meClose').onclick=closeProfile;
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-set]');
+  if(btn) saveSettings({ [btn.dataset.set]: btn.dataset.value });
+});
 $('#meOvl').onclick=e=>{if(e.target===e.currentTarget)closeProfile();};
 $('#emailForm').onsubmit=async e=>{
   e.preventDefault(); const button=$('#emailSubmit'); button.disabled=true; setFormMessage('emailMessage','');
@@ -1234,9 +1324,9 @@ $('#authForm').onsubmit=async e=>{
 };
 async function startApp(){
   if(location.protocol==='file:'){
-    document.body.innerHTML='<main style="max-width:560px;margin:12vh auto;padding:32px;color:#eef2f8;background:#141821;border:1px solid #242b38;border-radius:18px;font:16px/1.6 system-ui,sans-serif">'+
+    document.body.innerHTML='<main style="max-width:560px;margin:12vh auto;padding:32px;color:#eef2f8;background:#141821;border:1px solid #242b38;border-radius:var(--r-lg);font:16px/1.6 system-ui,sans-serif">'+
       '<h1 style="margin-top:0">Открой ленту</h1><p>Чтобы посмотреть публикации, открой ленту по ссылке.</p>'+ 
-      '<a style="display:inline-block;padding:10px 16px;border-radius:10px;background:#5aa2ff;color:#0b1220;text-decoration:none;font-weight:700" href="http://127.0.0.1:8090/">Открыть ленту</a></main>';
+      '<a style="display:inline-block;padding:10px 16px;border-radius:var(--r-sm);background:#5aa2ff;color:#0b1220;text-decoration:none;font-weight:700" href="http://127.0.0.1:8090/">Открыть ленту</a></main>';
     return;
   }
   const params=new URLSearchParams(location.search), verification=params.get('token');
