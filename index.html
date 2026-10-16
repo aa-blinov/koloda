@@ -80,7 +80,6 @@ header{position:sticky;top:0;z-index:20;
   border-bottom:1px solid var(--line);
   padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top))}
 .bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
-.brand{flex:0 0 auto;font-size:17px;font-weight:700;letter-spacing:-.025em;color:var(--fg)}
 #sectionTabs,#sortTabs{flex:0 0 auto}
 #unreadBtn,#meBtn{flex:0 0 auto}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
@@ -393,7 +392,6 @@ body:has(.ov.open){overflow:hidden}
 @media(max-width:640px){
   header{padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top))}
   .bar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"sections profile" "search search" "extra extra";gap:8px}
-  .brand{display:none}
   #sectionTabs{grid-area:sections;justify-self:start}
   #meBtn{grid-area:profile;justify-self:end}
   #unreadBtn,#sortTabs{grid-area:extra;justify-self:start}
@@ -440,7 +438,6 @@ body:has(.ov.open){overflow:hidden}
 </svg>
 
 <header>
-  <h1 class="brand">Лента</h1>
   <div class="bar">
     <div class="seg" role="tablist" aria-label="Разделы" id="sectionTabs">
       <button role="tab" id="tabFeed" aria-controls="viewFeed" aria-selected="true" tabindex="0"><svg class="i"><use href="#i-rss"/></svg>Лента</button>
