@@ -834,12 +834,19 @@ def mark_posts_read(db, cid, post_keys, unread=False):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def version_string(self):
+        # по умолчанию BaseHTTPRequestHandler отдаёт точную версию Python
+        return "koloda"
+
     def _send(self, code, body, ctype, headers=None):
         b = body.encode() if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(b)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header("X-Frame-Options", "DENY")
         for name, value in headers or []:
             self.send_header(name, value)
         self.end_headers()
@@ -850,6 +857,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         self._route()
+
+    def _reject(self):
+        self._send(405, json.dumps({"error": "метод не поддерживается"}, ensure_ascii=False),
+                   "application/json; charset=utf-8")
+
+    # остальные методы должны отвечать JSON-кодом, а не HTML-страницей 501
+    do_DELETE = do_PATCH = do_OPTIONS = do_HEAD = _reject
 
     def do_POST(self):   # navigator.sendBeacon при уходе со страницы
         self._route()
@@ -1152,6 +1166,12 @@ class Handler(BaseHTTPRequestHandler):
                 if bad:
                     return self._send(400, json.dumps({"error": "неверное имя канала"}),
                                       "application/json")
+                if not chans:
+                    # без подписок лента пустая: иначе поиск без фильтра отдавал бы
+                    # весь кэш, а с пустым списком это весь кэш целиком
+                    return self._send(200, json.dumps(
+                        {"posts": [], "titles": {}, "errors": [], "has_more": False,
+                         "unread": 0, "next": None}), "application/json; charset=utf-8")
                 force = self._query("refresh") == "1"
                 errors = refresh_channels(db, chans, force)
 
@@ -1187,7 +1207,8 @@ class Handler(BaseHTTPRequestHandler):
                         if p.get(k):
                             try: p[k] = json.loads(p[k])
                             except ValueError: p[k] = None
-                titles = dict(db.execute("SELECT channel,title FROM cache"))
+                titles = dict(db.execute("SELECT channel,title FROM cache WHERE channel IN (%s)"
+                                          % ",".join("?" * len(chans)), chans))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "has_more": has_more,
                                                    "unread": count_unread(db, chans, unread_profile),
