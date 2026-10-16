@@ -525,6 +525,17 @@ body:has(.ov.open){overflow:hidden}
       </div>
       <p class="auth-message" id="settingsState" role="status" aria-live="polite"></p>
     </div>
+    <div class="settings">
+      <h3>Файл ленты</h3>
+      <p class="settings-hint">Скачай каналы и отметки о прочитанном. На другом устройстве
+        войди в профиль и загрузи этот файл, лента восстановится.</p>
+      <div class="account-actions">
+        <button id="exportBtn" class="quiet-btn">Скачать файл</button>
+        <button id="importBtn" class="quiet-btn">Загрузить файл</button>
+      </div>
+      <input id="importFile" type="file" accept=".jsonl" hidden>
+      <p class="auth-message" id="transferState" role="status" aria-live="polite"></p>
+    </div>
   </div>
 </div>
 </div>
@@ -1355,6 +1366,47 @@ $('#logoutBtn').onclick=async()=>{
   try{await fetch('/api/auth/logout',{method:'POST'});}catch(e){}
   ['sub','read','pending'].forEach(k=>localStorage.removeItem(LS[k]));
   localStorage.setItem(LS.migrated,'1'); closeProfile(); showAuth('Ты вышел из профиля.'); $('#logoutBtn').disabled=false;
+};
+$('#exportBtn').onclick=async()=>{
+  const btn=$('#exportBtn'); btn.disabled=true;
+  try{
+    const r=await fetch('/api/state/export');
+    if(r.status===401) throw new Error('Войди в профиль ещё раз');
+    if(!r.ok) throw new Error();
+    const url=URL.createObjectURL(await r.blob());
+    const a=document.createElement('a'); a.href=url; a.download='koloda-lenta.jsonl';
+    document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    setFormMessage('transferState','Файл скачан.');
+  }catch(err){
+    setFormMessage('transferState', err.message || 'Не удалось сохранить файл.', true);
+  }finally{ btn.disabled=false; }
+};
+$('#importBtn').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=async e=>{
+  const file=e.target.files[0]; e.target.value='';
+  if(!file) return;
+  const subs=[], reads=[];
+  try{
+    // строки читаем здесь, а не на сервере: дальше всё равно идёт уже готовая
+    // проверка каналов и отметок в /api/state/merge
+    for(const line of (await file.text()).split('\n')){
+      if(!line.trim()) continue;
+      const rec=JSON.parse(line);
+      if(rec.type==='channel' && typeof rec.channel==='string') subs.push(rec.channel);
+      else if(rec.type==='read' && typeof rec.post==='string') reads.push(rec.post);
+    }
+    if(!subs.length && !reads.length) throw new Error('пусто');
+  }catch(err){
+    setFormMessage('transferState','Файл не подошёл. Нужен файл, скачанный кнопкой выше.',true);
+    return;
+  }
+  try{
+    applyState(await postState('/api/state/merge',{subs,reads}));
+    setFormMessage('transferState','Загружено: каналов '+subs.length+', отметок '+reads.length+'.');
+    renderTabs(); load();
+  }catch(err){
+    setFormMessage('transferState', err.message || 'Не удалось загрузить файл.', true);
+  }
 };
 let authMode='login', authToken='';
 function setAuthMode(mode){
