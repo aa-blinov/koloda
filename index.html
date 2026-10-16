@@ -104,6 +104,9 @@ header{position:sticky;top:0;z-index:20;
 nav{max-width:780px;margin:0 auto;display:flex;gap:7px;padding:12px 16px 8px;overflow-x:auto;
   scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
+/* Ряд уезжает за край, а полосы прокрутки нет: без затемнения канал с краю
+   выглядит срезанным по слову, и непонятно, что список продолжается */
+nav.has-more{mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent)}
 nav button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
   background:var(--surf);border:1px solid var(--line);color:var(--dim);cursor:pointer;white-space:nowrap}
 nav button[aria-selected=true]{background:var(--fg);border-color:var(--fg);color:var(--bg);font-weight:600}
@@ -955,9 +958,18 @@ function renderTabs(){
   if(list.length > 1) mk('Все', '');
   list.forEach(c => mk(titles[c] || c, c));
   const activeTab = [...nav.querySelectorAll('[role="tab"]')].find(b => b.getAttribute('aria-selected') === 'true');
+  // выбранный канал мог остаться за краем: показываем его целиком
+  activeTab?.scrollIntoView({inline:'nearest', block:'nearest'});
+  tabFade();
   if(activeTab){ $('#feed').setAttribute('aria-labelledby', activeTab.id); $('#feed').removeAttribute('aria-label'); }
   else { $('#feed').removeAttribute('aria-labelledby'); $('#feed').setAttribute('aria-label','Публикации'); }
 }
+function tabFade(){
+  const nav = $('#tabs');
+  nav.classList.toggle('has-more', nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 2);
+}
+$('#tabs').addEventListener('scroll', tabFade, {passive:true});
+addEventListener('resize', tabFade);
 
 /* ---------- Каталог ---------- */
 async function loadCatalog(){

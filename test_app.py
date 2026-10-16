@@ -335,6 +335,19 @@ class FeedAPITest(unittest.TestCase):
         status, payload = self.request("/api/feed?" + urlencode({"channels": "alpha"}))
         self.assertEqual(set(payload["titles"]), {"alpha"})
 
+    def test_feed_titles_also_cover_the_channels_of_the_profile(self):
+        # по заголовкам подписаны вкладки в шапке: при выборе одного канала
+        # остальные не должны остаться сырыми именами
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "titles", "password": "long-password"})
+        for channel in ("alpha", "beta"):
+            self.request("/api/state/subscription", method="POST",
+                         data={"channel": channel, "subscribed": True})
+        self.db.execute("INSERT INTO cache VALUES ('gamma','Gamma',1)")
+        self.db.commit()
+        status, payload = self.request("/api/feed?" + urlencode({"channels": "alpha"}))
+        self.assertEqual(set(payload["titles"]), {"alpha", "beta"})
+
     def test_response_headers_do_not_advertise_the_runtime(self):
         status, headers, _ = self.request_raw("/api/feed?" + urlencode({"channels": "alpha"}))
         self.assertEqual(status, 200)
