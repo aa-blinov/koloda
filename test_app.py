@@ -128,6 +128,17 @@ class FeedAPITest(unittest.TestCase):
         self.assertTrue(payload["posts"])
         self.assertEqual([error["channel"] for error in payload["errors"]], ["alpha"])
 
+    def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
+        # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
+        # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,
+        # и Telegram блокирует адрес всей ленты.
+        self.cookie = ""
+        with patch.object(app, "fetch_channel") as fetch:
+            self.assertEqual(self.request("/api/check?c=durov")[0], 401)
+            self.assertEqual(self.request("/api/feed?channels=alpha&refresh=1")[0], 200)
+        # refresh=1 больше не форсирует обновление: кэш свежий, сети быть не должно
+        fetch.assert_not_called()
+
     def test_channel_preview_returns_six_latest_cached_posts(self):
         status, payload = self.request("/api/preview?c=alpha")
         self.assertEqual(status, 200)

@@ -407,20 +407,6 @@ def count_unread(db, channels, profile):
     return db.execute(sql, list(channels) + [profile]).fetchone()[0]
 
 
-def refresh(db, channel, force=False):
-    row = db.execute("SELECT fetched FROM cache WHERE channel=?", (channel,)).fetchone()
-    if row and not force and time.time() - row[0] < TTL:
-        return row and True
-    title, posts = fetch_channel(channel)
-    db.executemany(
-        POST_INSERT,
-        posts,
-    )
-    db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (channel, title, int(time.time())))
-    db.commit()
-    return True
-
-
 def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
     """Простой LIKE поверх SQLite — FTS5 тут оверинжиниринг."""
     sql = "SELECT " + ",".join(POST_FIELDS) + " FROM posts WHERE 1=1"
@@ -445,19 +431,22 @@ def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
     return db.execute(sql, args).fetchall()
 
 
-def refresh_channels(db, channels, force=False, workers=8):
+def refresh_channels(db, channels, workers=8):
     """Обновляет просроченные каналы параллельно и сохраняет успешные ответы.
 
     Один недоступный канал не мешает обновлению остальных. Все записи SQLite
     выполняются в основном потоке: в пул уходят только сетевые запросы.
+
+    Принудительного обновления нет намеренно: иначе любой, кто знает адрес,
+    заставил бы сервер обходить t.me, и Telegram заблокировал бы адрес
+    всей ленты.
     """
     now = int(time.time())
     cached = dict(db.execute(
         "SELECT channel,fetched FROM cache WHERE channel IN (%s)" %
         ",".join("?" * len(channels)), channels
     )) if channels else {}
-    stale = [c for c in channels
-             if force or c not in cached or now - cached[c] >= TTL]
+    stale = [c for c in channels if c not in cached or now - cached[c] >= TTL]
     if not stale:
         return []
 
@@ -1175,8 +1164,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, json.dumps(
                         {"posts": [], "titles": {}, "errors": [], "has_more": False,
                          "unread": 0, "next": None}), "application/json; charset=utf-8")
-                force = self._query("refresh") == "1"
-                errors = refresh_channels(db, chans, force)
+                errors = refresh_channels(db, chans)
 
                 before = None
                 cursor_values = (self._query("before_ts"), self._query("before_channel"),
@@ -1392,6 +1380,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not valid_channel(c):
                     return self._send(400, json.dumps({"error": "неверное имя канала"}),
                                       "application/json")
+                # Запрос идёт в t.me, поэтому без профиля его нет: иначе сайт
+                # становится чужим способом обходить Telegram.
+                if not client_id(self, db):
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 try:
                     title, posts = fetch_channel(c)
                     store_channel_cache(db, c, title, posts)
@@ -1438,6 +1431,12 @@ if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
     connect().close()
     print(f"Лента: http://127.0.0.1:{PORT}")
+    # Ссылки из писем ведут на APP_BASE_URL. Если там остался адрес этой машины,
+    # друг нажмёт «восстановить пароль» и откроет пустую страницу.
+    if SMTP_ENABLED and APP_BASE_URL.startswith("http://"):
+        print("ВНИМАНИЕ: ссылки из писем ведут на " + APP_BASE_URL +
+              " — они откроются только на этом компьютере. Для сайта в интернете "
+              "укажи в APP_BASE_URL публичный адрес с HTTPS.")
     # Каждый HTTP-запрос обслуживается отдельным потоком; сетевое ожидание t.me
     # не блокирует другие вкладки.
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
