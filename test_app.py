@@ -36,6 +36,8 @@ class FeedAPITest(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+        app.wait_refresh_idle()
+        app._failed.clear()
         self.db.close()
         app.DB = self.previous_db
         self.temp.cleanup()
@@ -129,9 +131,43 @@ class FeedAPITest(unittest.TestCase):
         self.db.commit()
         with patch.object(app, "fetch_channel", side_effect=TimeoutError("timed out")):
             status, payload = self.request("/api/feed?channels=alpha,beta")
+            self.assertEqual(status, 200)
+            self.assertTrue(payload["posts"])
+            self.assertTrue(app.wait_refresh_idle())
+            # Ошибка попадает в ответ следующего запроса: обновление идёт в фоне
+            status, payload = self.request("/api/feed?channels=alpha,beta")
         self.assertEqual(status, 200)
         self.assertTrue(payload["posts"])
         self.assertEqual([error["channel"] for error in payload["errors"]], ["alpha"])
+
+    def test_feed_answers_from_cache_while_a_stale_channel_is_still_loading(self):
+        self.db.execute("UPDATE cache SET fetched=0 WHERE channel='alpha'")
+        self.db.commit()
+        release = threading.Event()
+
+        def slow(channel):
+            release.wait(5)
+            return "Alpha", []
+
+        with patch.object(app, "fetch_channel", side_effect=slow):
+            started = time.time()
+            status, payload = self.request("/api/feed?channels=alpha,beta")
+            elapsed = time.time() - started
+            release.set()
+            self.assertTrue(app.wait_refresh_idle())
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["posts"])
+        self.assertLess(elapsed, 3)
+
+    def test_failing_channel_is_not_retried_on_every_request(self):
+        self.db.execute("UPDATE cache SET fetched=0 WHERE channel='alpha'")
+        self.db.commit()
+        with patch.object(app, "fetch_channel", side_effect=TimeoutError("timed out")) as fetch:
+            self.request("/api/feed?channels=alpha,beta")
+            self.assertTrue(app.wait_refresh_idle())
+            self.request("/api/feed?channels=alpha,beta")
+            self.assertTrue(app.wait_refresh_idle())
+        self.assertEqual(fetch.call_count, 1)
 
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
@@ -583,6 +619,8 @@ class PrivateChannelsTest(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+        app.wait_refresh_idle()
+        app._failed.clear()
         self.db.close()
         app.DB = self.previous_db
         self.temp.cleanup()

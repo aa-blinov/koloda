@@ -12,13 +12,16 @@ import hashlib
 import http.cookies
 import smtplib
 import os
+import queue
 import re
 import secrets
 import sqlite3
 import sys
+import threading
 import time
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import zlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -146,6 +149,9 @@ PRIVATE_RE = re.compile(r"^private:-100\d{6,20}$")
 
 # Короткий TTL: t.me отдаёт превью без ограничений, но и обновляется не мгновенно.
 TTL = 300
+TTL_SPREAD = 60       # TTL канала = TTL ± TTL_SPREAD: каналы, загруженные вместе, не устаревают разом
+FETCH_TIMEOUT = 8     # сколько ждём ответа t.me на один канал
+REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт канал, которого ещё нет в кэше
 FEED_PAGE_SIZE = 80
 
 
@@ -365,7 +371,7 @@ def fetch_channel(channel):
     """Один канал -> (title, [posts]). Бросает ValueError если канала нет."""
     url = f"https://t.me/s/{channel}"
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
+    html = urllib.request.urlopen(req, timeout=FETCH_TIMEOUT).read().decode("utf-8", "replace")
 
     t = re.search(r'property="og:title" content="([^"]+)"', html) or \
         re.search(r"<title>([^<]+)</title>", html)
@@ -542,38 +548,129 @@ def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
     return db.execute(sql, args).fetchall()
 
 
-def refresh_channels(db, channels, workers=8):
-    """Обновляет просроченные каналы параллельно и сохраняет успешные ответы.
+def channel_ttl(channel):
+    """TTL канала с разбросом: каналы, загруженные одним запросом, не устаревают разом."""
+    return TTL + zlib.crc32(channel.encode()) % (2 * TTL_SPREAD + 1) - TTL_SPREAD
 
-    Один недоступный канал не мешает обновлению остальных. Все записи SQLite
-    выполняются в основном потоке: в пул уходят только сетевые запросы.
 
-    Принудительного обновления нет намеренно: иначе любой, кто знает адрес,
-    заставил бы сервер обходить t.me, и Telegram заблокировал бы адрес
-    всей ленты.
-    """
+# Обновление каналов в фоне (stale-while-revalidate). Лента отдаёт кэш сразу, а
+# устаревшие каналы тянет в фоне. Ждём только канал, которого ещё нет в кэше, и
+# не дольше REFRESH_TIMEOUT. Сеть идёт через пул потоков, а запись в кэш делает
+# один фоновый поток со своим подключением, поэтому конфликтов записи нет.
+_jobs = {}        # канал -> Event, пока его загружают
+_failed = {}      # канал -> {"message", "count", "retry_at"}, пока последняя попытка не удалась
+_jobs_lock = threading.Lock()
+_workers_lock = threading.Lock()
+_fetch_pool = None
+_writes = queue.Queue()
+
+
+def _ensure_workers():
+    global _fetch_pool
+    with _workers_lock:
+        if _fetch_pool is None:
+            _fetch_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="fetch")
+            threading.Thread(target=_cache_writer, daemon=True, name="cache-writer").start()
+
+
+def _cache_writer():
+    while True:
+        channel, title, posts = _writes.get()
+        error = None
+        try:
+            db = connect()
+            try:
+                store_channel_cache(db, channel, title, posts)
+                db.commit()
+            finally:
+                db.close()
+        except Exception as exc:
+            error = str(exc)[:180]
+        _finish(channel, error)
+
+
+def _fetch_job(channel):
+    try:
+        title, posts = fetch_channel(channel)
+    except Exception as exc:
+        _finish(channel, str(exc)[:180])
+        return
+    _writes.put((channel, title, posts))
+
+
+def _finish(channel, error):
+    with _jobs_lock:
+        event = _jobs.pop(channel, None)
+        if error is None:
+            _failed.pop(channel, None)
+        else:
+            count = _failed.get(channel, {}).get("count", 0) + 1
+            # После ошибки t.me не дёргаем на каждый запрос: пауза растёт до 15 минут
+            _failed[channel] = {"message": error, "count": count,
+                                "retry_at": time.time() + min(60 * 2 ** (count - 1), 900)}
+    if event:
+        event.set()
+
+
+def request_refresh(db, channels, wait_all=False):
+    """Ставит в фон устаревшие каналы и возвращает события, которых стоит дождаться:
+    для каналов без кэша, а при wait_all и для всех устаревших."""
     now = int(time.time())
     cached = dict(db.execute(
         "SELECT channel,fetched FROM cache WHERE channel IN (%s)" %
         ",".join("?" * len(channels)), channels
     )) if channels else {}
-    stale = [c for c in channels if c not in cached or now - cached[c] >= TTL]
-    if not stale:
-        return []
-
-    errors = []
-    with ThreadPoolExecutor(max_workers=min(workers, len(stale))) as pool:
-        futures = {pool.submit(fetch_channel, channel): channel for channel in stale}
-        for future in as_completed(futures):
-            channel = futures[future]
-            try:
-                title, posts = future.result()
-            except Exception as exc:
-                errors.append({"channel": channel, "message": str(exc)[:180]})
+    waits = []
+    with _jobs_lock:
+        for channel in channels:
+            needed = wait_all or channel not in cached
+            if channel in _jobs:
+                if needed:
+                    waits.append(_jobs[channel])
                 continue
-            store_channel_cache(db, channel, title, posts)
-    db.commit()
-    return sorted(errors, key=lambda item: channels.index(item["channel"]))
+            if channel in cached and now - cached[channel] < channel_ttl(channel):
+                continue
+            failure = _failed.get(channel)
+            if failure and time.time() < failure["retry_at"]:
+                continue
+            event = _jobs[channel] = threading.Event()
+            if needed:
+                waits.append(event)
+            _ensure_workers()
+            _fetch_pool.submit(_fetch_job, channel)
+    return waits
+
+
+def wait_for(events):
+    deadline = time.time() + REFRESH_TIMEOUT
+    for event in events:
+        event.wait(max(0.0, deadline - time.time()))
+
+
+def failures_for(channels):
+    with _jobs_lock:
+        return [{"channel": c, "message": _failed[c]["message"]} for c in channels if c in _failed]
+
+
+def wait_refresh_idle(timeout=10):
+    """Ждёт, пока фоновые загрузки закончатся. Нужна тестам."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with _jobs_lock:
+            if not _jobs:
+                return True
+        time.sleep(0.01)
+    return False
+
+
+def refresh_channels(db, channels):
+    """Превью канала: обновляет устаревшие каналы и ждёт результата по ним.
+
+    Принудительного обновления нет намеренно: иначе любой, кто знает адрес,
+    заставил бы сервер обходить t.me, и Telegram заблокировал бы адрес всей ленты.
+    """
+    wait_for(request_refresh(db, channels, wait_all=True))
+    return failures_for(channels)
 
 
 def store_channel_cache(db, channel, title, posts):
@@ -1277,7 +1374,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, json.dumps(
                         {"posts": [], "titles": {}, "errors": [], "has_more": False,
                          "unread": 0, "next": None}), "application/json; charset=utf-8")
-                errors = refresh_channels(db, public_channels(chans))
+                # Кэш отдаём сразу. Ждём только каналы, которых в базе ещё нет совсем
+                public_chans = public_channels(chans)
+                wait_for(request_refresh(db, public_chans))
+                errors = failures_for(public_chans)
 
                 before = None
                 cursor_values = (self._query("before_ts"), self._query("before_channel"),
