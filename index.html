@@ -126,7 +126,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .catalog-head h2{font-size:23px;line-height:1.2;letter-spacing:-.025em}
 .catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
 
-.post{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
+.post{position:relative;scroll-margin-top:80px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);
   transition:box-shadow .18s, border-color .18s, transform .18s, opacity .18s}
 .post:hover{border-color:var(--line-hover);box-shadow:var(--sh-2);transform:translateY(-1px)}
@@ -242,7 +242,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   cursor:pointer;white-space:nowrap}
 
 .channel-list{display:grid;gap:2px}
-.channel-entry{padding:8px 0;border-bottom:1px solid var(--line)}
+.channel-entry{min-width:0;padding:8px 0;border-bottom:1px solid var(--line)}
 .channel-row{display:flex;align-items:center;gap:12px;min-height:64px}
 .channel-open{flex:1;min-width:0;display:flex;align-items:center;gap:13px;padding:8px 10px;
   border:0;border-radius:var(--r-md);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
@@ -331,7 +331,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-preview-label,.tabs-toggle,.chan-item,.quiet-btn{
   background:var(--surf);border:1px solid var(--line);color:var(--fg);
   transition:border-color .16s,color .16s,background .16s}
-.btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,,
+.btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,
 .filters button:hover,.channel-action:hover,.channel-preview-label:hover,.chan-item:hover{
   border-color:var(--acc);color:var(--acc)}
 .seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
@@ -416,6 +416,14 @@ body:has(.ov.open){overflow:hidden}
 .view.enter{animation:rise .28s cubic-bezier(.16,1,.3,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* На планшете пять элементов шапки в один ряд не помещались: поле поиска
+   сжималось до нуля и становилось недоступным. Ниже этой ширины поиск
+   занимает отдельную строку, остальные остаются в шапке. */
+@media(max-width:900px){
+  .bar{flex-wrap:wrap}
+  .search{order:10;flex:1 0 100%}
+}
 
 @media(max-width:640px){
   header{padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top))}
@@ -1016,7 +1024,7 @@ function extras(p){
       // овал ни о чём не говорит, поэтому такая реакция остаётся счётчиком.
       const cls = r.paid ? 'paid' : (r.emoji ? '' : 'bare');
       const tip = r.emoji ? '' : ' title="Реакция без значка"';
-      h += '<span class="'+cls+'"'+tip+'>'+esc(r.emoji)+esc(r.count)+'</span>';
+      h += '<span class="'+cls+'"'+tip+'>'+esc(r.emoji)+nfmt(r.count)+'</span>';
     }
     h += '</div>';
   }
@@ -1102,13 +1110,17 @@ function render(posts,append=false){
     // Кнопка уходила в span, и фокус проваливался в body. Ставим его на
     // замену: клавиатурный пользователь остаётся на том же посте.
     btn.outerHTML = NEW_MARK;
-    const fresh = post.querySelector('.read-toggle');
-    if(fresh) fresh.tabIndex = -1;
+    // Фокус на кнопке, которая исчезла, без возврата падал в body. Отдаём его
+    // самому посту: он и есть то место, где человек только что находился.
+    post.focus({preventScroll:true});
   });
   for(const p of list){
     const read = s.has(key(p));
     const el = document.createElement('article');
     el.className = 'post' + (read ? ' read' : '');
+    // Пост сам принимает фокус: когда отметка прочитанного исчезает, отдаём
+    // фокус сюда, иначе он уходит в body и клавиатура теряет место
+    el.tabIndex = -1;
     el.dataset.post = key(p);
     el.innerHTML =
       '<div class="meta">'+
