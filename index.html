@@ -11,7 +11,7 @@
   --bg:#0d0f14; --surf:#141821; --raise:#1b2029; --line:#242b38;
   --fg:#e9ecf3; --dim:#98a1b5; --faint:#8690a3;
   --acc:#5aa2ff; --acc-ink:#0b1220;
-  --line-hover:#303a4c;;
+  --line-hover:#303a4c;
   --scroll-thumb:#2a3242; --scroll-thumb-hover:#3a4557;
   --paid:#f0b429; --error:#f07c83; --media-bg:#000; --selection-fg:#fff;
   --overlay:rgba(0,0,0,.72);
@@ -96,6 +96,8 @@ header{position:sticky;top:0;z-index:20;
 .search input{flex:1;min-width:0;min-height:44px;background:none;border:0;color:var(--fg);font:inherit;font-size:16px;
   padding:9px 0;outline:none}
 .search input::placeholder{color:var(--faint)}
+.search-hint{margin:8px 2px 0;color:var(--dim);font-size:12.5px}
+.search-hint[hidden]{display:none}
 
 /* ---------- Лента ---------- */
 /* Каналы открываются отдельным экраном, а не выпадашкой: список под кнопкой
@@ -103,6 +105,8 @@ header{position:sticky;top:0;z-index:20;
    остаётся: на ней видно, какой канал открыт. Отступы 12/16/8 — как был ряд,
    иначе кнопка упирается в края окна. */
 /* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
+.fresh{margin:6px 0 0;color:var(--faint);font-size:11.5px;min-height:0}
+.fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
   min-height:44px;padding:10px 14px;font:inherit;font-size:14px;text-align:left;cursor:pointer;
@@ -133,9 +137,21 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .post:active{transform:translateY(0)}
 .post.read{background:color-mix(in srgb,var(--surf) 78%,var(--bg))}
 
+.day-sep{display:flex;align-items:center;gap:12px;margin:22px 0 12px;color:var(--faint);
+  font-size:12px;font-weight:600;letter-spacing:.01em}
+.day-sep::after{content:'';flex:1;height:1px;background:var(--line)}
+.day-sep:first-child{margin-top:4px}
 .meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:var(--dim)}
 .meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em;min-width:0;overflow:hidden;
+  display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:2px 6px 2px 2px;margin-left:-2px;
+  background:none;border:0;border-radius:var(--r-xs);font:inherit;font-size:12.5px;cursor:pointer;
+  text-align:left;transition:color .16s,background .16s;
   text-overflow:ellipsis;white-space:nowrap}
+.meta .who:hover{color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.meta .who::after{content:'';flex:0 0 auto}
+.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-xs);
+  background:var(--raise);color:var(--dim);font-size:11px;font-weight:700}
+.meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 .meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
@@ -159,7 +175,8 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .post img.got{aspect-ratio:auto;background:var(--media-bg)}
 .gal>video{max-width:100%}
 .gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:var(--r-pill);
-  background:rgba(0,0,0,.62);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);color:var(--fg);font-size:12px;
+  font-variant-numeric:tabular-nums;box-shadow:0 0 0 1px var(--line);
   pointer-events:none}
 /* Кадр открывается целиком: лента показывает только обрезок */
 .gal>img{cursor:zoom-in}
@@ -178,7 +195,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* На телефоне Escape нет, а закрывать просмотр иначе нечем */
 .lb-close{top:12px;right:12px;transform:none;font-size:15px}
 .lb-nav[hidden]{display:none}
-.txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:70ch;color:var(--fg);line-height:1.68;
+.txt{white-space:pre-wrap;overflow-wrap:anywhere;max-width:34em;color:var(--fg);line-height:1.68;
   font-family:var(--font-read)}
 .post.read .txt{color:var(--dim)}
 .txt a{color:var(--acc);text-underline-offset:2px;text-decoration-thickness:1px}
@@ -344,7 +361,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* Нажатие: полупрозрачный слой поверх, как в Material. Живёт только пока палец
    на кнопке, поэтому обводка вместо заливки как основной язык не ломается.
    Без него интерфейс не отзывается на палец и кажется стеклянным. */
-.btn:active,.toggle:active,.seg button:active,.auth-modes button:active:active,
+.btn:active,.toggle:active,.seg button:active,.auth-modes button:active,
 .filters button:active,.channel-action:active,.channel-preview-label:active,
 .tabs-toggle:active,.quiet-btn:active,.read-toggle:active,.empty-action:active{
   background:color-mix(in srgb,var(--fg) 10%,var(--surf))}
@@ -426,8 +443,14 @@ body:has(.ov.open){overflow:hidden}
 }
 
 @media(max-width:640px){
-  header{padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top))}
-  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"sections profile" "search search" "extra extra";gap:8px}
+  header{padding:6px 10px;padding-top:calc(6px + env(safe-area-inset-top))}
+  .bar{gap:6px}
+  /* пустая полоса справа от «Непрочитанные» съедала 226px впустую */
+  #unreadBtn{grid-area:extra;justify-self:end}
+  #sortTabs{grid-area:extra;justify-self:start;grid-row:2}
+  /* «Непрочитанные» переехал в первый ряд: третий ряд шапки стоил 44px,
+     а справа от него было 226px пустоты */
+  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"sections extra profile" "search search search";gap:6px}
   #sectionTabs{grid-area:sections;justify-self:start}
   #meBtn{grid-area:profile;justify-self:end}
   #unreadBtn,#sortTabs{grid-area:extra;justify-self:start}
@@ -438,9 +461,9 @@ body:has(.ov.open){overflow:hidden}
   .tabs-wrap{padding:12px 14px 8px}
   .chan-list{max-height:none}
   .ov:has(.dlg-channels){padding:0}
-  .ov .dlg-channels{width:100%;height:100%;max-height:none;border-radius:0;padding:0 14px calc(14px + env(safe-area-inset-bottom))}
+  .ov .dlg-channels{width:100%;height:auto;max-height:100%;border-radius:0;padding:0 14px calc(14px + env(safe-area-inset-bottom))}
   .ov .dlg-channels h2{padding-top:calc(20px + env(safe-area-inset-top))}
-  .ov .dlg-channels .chan-list{flex:1 1 auto}
+  .ov .dlg-channels .chan-list{flex:0 1 auto;max-height:none}
   .catalog-main{padding-top:22px}
   .catalog-head{margin-bottom:18px}
   .catalog-head h2{font-size:21px}
@@ -509,6 +532,7 @@ body:has(.ov.open){overflow:hidden}
     <button id="unreadBtn" class="toggle" aria-pressed="false">Непрочитанные</button>
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
+  <p class="search-hint" id="searchHint" role="status" aria-live="polite" hidden></p>
   <p class="sync-status" id="syncStatus" role="status" aria-live="polite" hidden></p>
 </header>
 
@@ -524,6 +548,7 @@ body:has(.ov.open){overflow:hidden}
     <span id="tabsToggleLabel">Все каналы</span>
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
+  <p class="fresh" id="fresh" aria-live="polite"></p>
 </div>
     <main id="feed" aria-label="Публикации канала" tabindex="0"></main>
 </section>
@@ -571,8 +596,8 @@ body:has(.ov.open){overflow:hidden}
       <button class="btn" id="emailSubmit" type="submit">Подтвердить почту</button>
     </form>
     <div class="account-actions">
-      <button id="logoutBtn" class="quiet-btn">Выйти</button>
-      <button id="meClose" class="btn">Готово</button>
+      <button id="logoutBtn" class="quiet-btn">Выйти из профиля</button>
+      <button id="meClose" class="quiet-btn">Закрыть</button>
     </div>
     <div class="settings">
       <h3>Приватные каналы</h3>
@@ -651,7 +676,7 @@ body:has(.ov.open){overflow:hidden}
     <h1 id="authTitle">Своя лента</h1>
     <p>Выбирай каналы и читай их публикации в одном месте. У каждого профиля своя подборка.</p>
     <div class="auth-modes" id="authModes" role="group" aria-label="Действие с профилем">
-      <button type="button" id="authLoginMode" aria-pressed="true">Войти</button>
+      <button type="button" id="authLoginMode" aria-pressed="true">Уже есть профиль</button>
       <button type="button" id="authRegisterMode" aria-pressed="false">Создать профиль</button>
     </div>
     <form class="auth-form" id="authForm">
@@ -694,11 +719,58 @@ const nfmt = n => {
   if(v>=1e3) return Math.round(v/1e3)+' тыс.';
   return String(Math.round(v));
 };
+// Монограмма канала: в каталоге это плитка 42px, в ленте канал снова становился
+// безликой строкой текста. Одна функция на оба места.
+function paintSearchHint(q, count, append){
+  const el=$('#searchHint');
+  if(!el) return;
+  const term=String(q||'').trim();
+  if(!term){ el.textContent=''; el.hidden=true; return; }
+  el.hidden=false;
+  if(!count){
+    el.textContent='По запросу «'+term+'» ничего нет. Проверь раскладку или попробуй короче.';
+    return;
+  }
+  el.textContent=(append?'Ещё ':'')+'По запросу «'+term+'»: '+count+
+    ' '+plural(count,'пост','поста','постов');
+}
+
+let lastFetched=0;
+function paintFreshness(){
+  const el=$('#fresh');
+  if(!el) return;
+  if(!lastFetched){ el.textContent=''; return; }
+  const mins=Math.floor((Date.now()-lastFetched)/60000);
+  el.textContent = mins<1 ? 'обновлено только что'
+    : mins<60 ? 'обновлено '+mins+' '+plural(mins,'минуту','минуты','минут')+' назад'
+    : 'обновлено '+Math.floor(mins/60)+' '+plural(Math.floor(mins/60),'час','часа','часов')+' назад';
+}
+function plural(n,one,few,many){
+  const m10=n%10, m100=n%100;
+  return m10===1 && m100!==11 ? one : m10>=2 && m10<=4 && (m100<10||m100>=20) ? few : many;
+}
+setInterval(paintFreshness,30000);
+
+const dayLabel = ts => {
+  const d = new Date(ts*1000), now = new Date();
+  const same = a => a.toDateString() === d.toDateString();
+  if(same(now)) return 'Сегодня';
+  const y = new Date(now.getTime() - 86400000);
+  if(same(y)) return 'Вчера';
+  return d.getFullYear() === now.getFullYear()
+    ? d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'})
+    : d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
+};
+
+const monogramOf = (channel, name) =>
+  '<span class="chan-dot" aria-hidden="true">'+esc((String(name||channel).trim()[0]||'?').toUpperCase())+'</span>';
+
 const viewsText = raw => {
   const m = /^([\d.,]+)\s*([KkMm])?/.exec(String(raw||'').trim());
   if(!m) return String(raw||'');
   const base = Number(m[1].replace(',','.')) * ({K:1e3,k:1e3,M:1e6,m:1e6}[m[2]]||1);
-  return nfmt(base);
+  // Округлять до сотен при 1 999 значило показывать не тот счёт, что у Telegram.
+  return base<1000 ? String(base) : nfmt(Math.round(base/100)*100);
 };
 const kfmt  = n => nfmt(n);
 
@@ -947,11 +1019,14 @@ async function load(append=false){
     if(!r.ok) throw new Error('request failed');
     const d = await r.json();
     if(requestId!==feedRequestId) return;
+    lastFetched=Date.now();
     titles = d.titles || {};
     feedCursor=d.next || null; feedHasMore=Boolean(d.has_more); feedErrors=d.errors || [];
       unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
+    paintFreshness();
+    paintSearchHint(q, d.posts.length, append);
   }catch(e){
     if(e.name==='AbortError' || requestId!==feedRequestId) return;
     if(append){
@@ -1099,6 +1174,12 @@ function render(posts,append=false){
   // делегирование: авто-отметка подменяет точку на галочку через outerHTML,
   // и слушатель на каждый элемент повесить нельзя — пропадёт при подмене
   postList.addEventListener('click', e => {
+    const who = e.target.closest('.meta .who');
+    if(who){
+      tab = who.dataset.chan === tab ? '' : who.dataset.chan;
+      load();
+      return;
+    }
     const btn = e.target.closest('.read-status');
     if(!btn) return;
     const post = btn.closest('.post');
@@ -1114,6 +1195,7 @@ function render(posts,append=false){
     // самому посту: он и есть то место, где человек только что находился.
     post.focus({preventScroll:true});
   });
+  let lastDay = '';
   for(const p of list){
     const read = s.has(key(p));
     const el = document.createElement('article');
@@ -1125,7 +1207,8 @@ function render(posts,append=false){
     el.innerHTML =
       '<div class="meta">'+
         (read ? READ_MARK : NEW_MARK)+
-        '<span class="who">'+esc(titles[p.channel] || p.channel)+'</span>'+
+        '<button type="button" class="who" data-chan="'+esc(p.channel)+'" title="Показать только этот канал">'+
+          monogramOf(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
       '</div>'+ extras(p);
@@ -1138,6 +1221,15 @@ function render(posts,append=false){
     };
     // Пост засчитывается прочитанным, когда его видно целиком. Клик для этого
     // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
+    const day = p.ts ? new Date(p.ts*1000).toDateString() : '';
+    if(day && day !== lastDay){
+      lastDay = day;
+      const sep = document.createElement('div');
+      sep.className = 'day-sep';
+      sep.setAttribute('role','separator');
+      sep.textContent = dayLabel(p.ts);
+      postList.appendChild(sep);
+    }
     markFn.set(el, setRead);
     postSeen.observe(el);
     postList.appendChild(el);
@@ -1561,7 +1653,10 @@ document.addEventListener('keydown',e=>{
     if(e.key==='ArrowLeft'){e.preventDefault();stepLightbox(-1);return;}
     if(e.key==='ArrowRight'){e.preventDefault();stepLightbox(1);return;}
     if(e.key!=='Tab')return;
-    const nav=[...lb.querySelectorAll('button:not(:disabled)')]; if(!nav.length)return;
+    const nav=[...lb.querySelectorAll('button:not(:disabled)')]
+    .filter(el=>el.offsetParent!==null||el.getClientRects().length);
+  // при одном кадре навигации нет и ловушка только мешает выходу
+  if(!nav.length || lbItems.length<2) return;
     if(e.shiftKey&&document.activeElement===nav[0]){e.preventDefault();nav.at(-1).focus();}
     else if(!e.shiftKey&&document.activeElement===nav.at(-1)){e.preventDefault();nav[0].focus();}
     return;
@@ -1691,13 +1786,19 @@ $('#tgSync').onclick=async()=>{
   finally{ btn.disabled=false; }
 };
 $('#tgUnlink').onclick=async()=>{
-  const btn=$('#tgUnlink'); btn.disabled=true;
+  const btn=$('#tgUnlink');
+  if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Отключить Telegram'; }
+  else{ btn.dataset.armed='1'; btn.textContent='Отключить и стереть вход?'; setTimeout(()=>{ if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Отключить Telegram'; } },6000); return; }
+  btn.disabled=true;
   try{ await tgPost('/api/tg/unlink'); setTgState('Telegram отключён'); tgToken=''; await loadTgStatus(); load(); }
   catch(e){ setTgState(e.message,true); }
   finally{ btn.disabled=false; }
 };
 
 $('#logoutBtn').onclick=async()=>{
+  const btn=$('#logoutBtn');
+  if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Выйти'; }
+  else{ btn.dataset.armed='1'; btn.textContent='Точно выйти?'; setTimeout(()=>{ if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Выйти'; } },6000); return; }
   $('#logoutBtn').disabled=true; await stateQueue.catch(()=>{});
   try{await fetch('/api/auth/logout',{method:'POST'});}catch(e){}
   ['sub','read','pending'].forEach(k=>localStorage.removeItem(LS[k]));
