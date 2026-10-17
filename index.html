@@ -79,6 +79,7 @@ header{position:sticky;top:0;z-index:20;
 .bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
 #sectionTabs,#sortTabs{flex:0 0 auto}
 #unreadBtn,#meBtn{flex:0 0 auto}
+#unreadBtn{display:inline-flex;align-items:center;gap:6px}
 #unreadBtn .u-count{font-variant-numeric:tabular-nums}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
@@ -549,6 +550,7 @@ body:has(.ov.open){overflow:hidden}
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
   <p class="search-hint" id="searchHint" role="status" aria-live="polite" hidden></p>
+  <p class="undo-bar" id="undoBar" role="status" aria-live="polite" hidden></p>
   <p class="sync-status" id="syncStatus" role="status" aria-live="polite" hidden></p>
 </header>
 
@@ -611,6 +613,19 @@ body:has(.ov.open){overflow:hidden}
       <p class="auth-message" id="emailMessage" role="status" aria-live="polite"></p>
       <button class="btn" id="emailSubmit" type="submit">Подтвердить почту</button>
     </form>
+    <div class="settings">
+      <h3>Клавиши</h3>
+      <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
+      <dl class="keys">
+        <div><dt>j</dt><dd>следующий пост</dd></div>
+        <div><dt>k</dt><dd>предыдущий пост</dd></div>
+        <div><dt>n</dt><dd>к первому непрочитанному</dd></div>
+        <div><dt>u</dt><dd>снять или вернуть отметку</dd></div>
+        <div><dt>/</dt><dd>поиск</dd></div>
+        <div><dt>?</dt><dd>эта подсказка</dd></div>
+        <div><dt>Esc</dt><dd>закрыть окно</dd></div>
+      </dl>
+    </div>
     <div class="account-actions">
       <button id="logoutBtn" class="quiet-btn">Выйти из профиля</button>
       <button id="meClose" class="quiet-btn">Закрыть</button>
@@ -641,18 +656,6 @@ body:has(.ov.open){overflow:hidden}
         </div>
       </div>
       <button class="btn" id="tgStart" type="button">Подключить Telegram</button>
-    </div>
-    <div class="settings">
-      <h3>Клавиши</h3>
-      <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
-      <dl class="keys">
-        <div><dt>j</dt><dd>следующий пост</dd></div>
-        <div><dt>k</dt><dd>предыдущий пост</dd></div>
-        <div><dt>n</dt><dd>к первому непрочитанному</dd></div>
-        <div><dt>u</dt><dd>снять или вернуть отметку</dd></div>
-        <div><dt>/</dt><dd>поиск</dd></div>
-        <div><dt>Esc</dt><dd>закрыть окно</dd></div>
-      </dl>
     </div>
     <div class="settings">
       <h3>Оформление</h3>
@@ -760,7 +763,7 @@ function paintSearchHint(q, count, append){
     return;
   }
   if(!count){
-    el.textContent='По запросу «'+term+'» ничего нет. Проверь раскладку или попробуй короче.';
+    el.textContent='По запросу «'+term+'» ничего нет. Проверь раскладку или добавь слово.';
     return;
   }
   el.textContent=(append?'Ещё ':'')+'По запросу «'+term+'»: '+count+
@@ -874,6 +877,19 @@ function replayPending(){
     if(op.type === 'read') op.unread ? nextReads.delete(op.post) : nextReads.add(op.post);
   });
   saveSubs([...nextSubs]); saveRead(nextReads);
+}
+// Отмена живёт отдельно от строки статуса: очередь сохранений чистит статус после
+// каждой успешной отправки, и отмена исчезала раньше, чем её успевали нажать.
+let undoTimer=null;
+function showUndo(text, action){
+  const bar=$('#undoBar'); bar.replaceChildren();
+  bar.hidden=false; bar.append(document.createTextNode(text+' '));
+  const b=document.createElement('button');
+  b.type='button'; b.className='undo-btn'; b.textContent='Вернуть';
+  b.onclick=()=>{ clearTimeout(undoTimer); bar.hidden=true; bar.replaceChildren(); action(); };
+  bar.append(b); b.focus();
+  clearTimeout(undoTimer);
+  undoTimer=setTimeout(()=>{ bar.hidden=true; bar.replaceChildren(); }, 12000);
 }
 function setSyncStatus(message, retry=false){
   const el=$('#syncStatus'); el.hidden=!message; el.replaceChildren();
@@ -1007,7 +1023,11 @@ function when(ts){
   if(diff < 3600)   return Math.floor(diff/60) + ' мин';
   if(diff < 86400)  return Math.floor(diff/3600) + ' ч';
   if(diff < 604800) return Math.floor(diff/86400) + ' дн';
-  return new Date(ts*1000).toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+  // «11 окт.» и «11 окт. прошлого года» неразличимы, а лента живёт через
+  // несколько календарных лет — в запасной дате год обязателен
+  const d = new Date(ts*1000), opts = {day:'numeric', month:'short'};
+  if(d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('ru-RU', opts);
 }
 function emptyState(glyph, text, action){
   return '<div class="empty" role="status" aria-live="polite">'+icon(glyph)+'<p>'+esc(text)+'</p>'+
@@ -1059,7 +1079,7 @@ async function load(append=false){
     const d = await r.json();
     if(requestId!==feedRequestId) return;
     lastFetched=Date.now();
-    if(d.posts && d.posts.length) newestPost=Math.max(newestPost, Number(d.posts[0].ts)||0);
+    newestPost=d.posts && d.posts.length ? Number(d.posts[0].ts)||0 : 0;
     titles = d.titles || {};
     feedCursor=d.next || null; feedHasMore=Boolean(d.has_more); feedErrors=d.errors || [];
       unreadTotal=Number(d.unread)||0; paintUnread();
@@ -1605,9 +1625,12 @@ function markFocused(){
   focusPost(post);
 }
 
+const anyOverlayOpen = () => !!document.querySelector('.ov.open');
+
 document.addEventListener('keydown', e => {
   if(typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
   if(e.key === 'Escape') return;                       // закрытием оверлеев занят сам скрипт
+  if(anyOverlayOpen() && e.key !== '?') return;         // под окном лентой не листаем
   const key = e.key.toLowerCase();
   if(key === '/'){ e.preventDefault(); $('#q').focus(); return; }
   if(key === '?'){ e.preventDefault(); openProfile(); return; }
@@ -1641,14 +1664,9 @@ $('#catList').onclick = e => {
       // Отписка — единственное разрушительное действие в интерфейсе, и
       // раньше оно срабатывало одним тапом вслепую: без отмены промахнувшийся
       // палец убирал канал, и вернуть его можно было только поиском в каталоге.
-      const name=(titles[channel]||channel), back=$('#syncStatus');
-      back.hidden=false; back.replaceChildren();
-      back.append(document.createTextNode('Канал «'+name+'» убран из ленты. '));
-      const undo=document.createElement('button');
-      undo.type='button'; undo.textContent='Вернуть';
-      undo.onclick=()=>{ setSubscription(channel,true); loadCatalog(); load(); setSyncStatus(''); };
-      back.append(undo);
-      undo.focus();
+      showUndo('Канал «'+(titles[channel]||channel)+'» убран из ленты.', () => {
+        setSubscription(channel,true); loadCatalog(); load();
+      });
     }
   }
 };
