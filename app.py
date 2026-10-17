@@ -1388,6 +1388,10 @@ class Handler(BaseHTTPRequestHandler):
                     if not valid_feed_channel(channel) or not isinstance(msg_id, int) or msg_id < 1:
                         return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
+                    if on and not db.execute("SELECT 1 FROM posts WHERE channel=? AND msg_id=?",
+                                             (channel, msg_id)).fetchone():
+                        return self._send(404, json.dumps({"error": "такой публикации нет"}, ensure_ascii=False),
+                                          "application/json; charset=utf-8")
                     if on:
                         db.execute("INSERT OR REPLACE INTO saved_posts VALUES (?,?,?,?)",
                                    (cid, channel, msg_id, int(time.time())))
@@ -1396,11 +1400,39 @@ class Handler(BaseHTTPRequestHandler):
                                    (cid, channel, msg_id))
                     db.commit()
                     return self._send(200, json.dumps({"saved": on}), "application/json; charset=utf-8")
+                q = self._query("q").strip()
+                conditions, args = ["s.profile=?"], [cid]
+                if q:
+                    conditions.append("p.text LIKE ?")
+                    args.append(f"%{q}%")
+                if any(self._query(k) for k in ("before_saved", "before_channel", "before_id")):
+                    try:
+                        before_saved = int(self._query("before_saved"))
+                        before_channel = self._query("before_channel")
+                        before_id = int(self._query("before_id"))
+                    except (TypeError, ValueError):
+                        return self._send(400, json.dumps({"error": "неверная позиция списка"}, ensure_ascii=False),
+                                          "application/json; charset=utf-8")
+                    if not valid_feed_channel(before_channel) or before_id < 1:
+                        return self._send(400, json.dumps({"error": "неверная позиция списка"}, ensure_ascii=False),
+                                          "application/json; charset=utf-8")
+                    conditions.append("(s.saved < ? OR (s.saved = ? AND (s.channel < ? OR (s.channel = ? AND p.msg_id < ?))))")
+                    args += [before_saved, before_saved, before_channel, before_channel, before_id]
+                # Страницы по времени сохранения: порядок как у ленты, курсор — последний пост страницы
                 rows = db.execute(
-                    "SELECT " + ",".join("p." + f for f in POST_FIELDS) +
+                    "SELECT " + ",".join("p." + f for f in POST_FIELDS) + ",s.saved"
                     " FROM saved_posts s JOIN posts p ON p.channel=s.channel AND p.msg_id=s.msg_id"
-                    " WHERE s.profile=? ORDER BY s.saved DESC, p.msg_id DESC LIMIT 200", (cid,)).fetchall()
-                posts = [dict(zip(POST_FIELDS, r)) for r in rows]
+                    " WHERE " + " AND ".join(conditions) +
+                    " ORDER BY s.saved DESC, s.channel DESC, p.msg_id DESC LIMIT ?",
+                    args + [FEED_PAGE_SIZE + 1]).fetchall()
+                has_more = len(rows) > FEED_PAGE_SIZE
+                rows = rows[:FEED_PAGE_SIZE]
+                posts = [dict(zip(POST_FIELDS, r[:-1])) for r in rows]
+                next_cursor = None
+                if has_more and rows:
+                    last = rows[-1]
+                    next_cursor = {"saved_at": last[-1], "channel": last[POST_FIELDS.index("channel")],
+                                   "msg_id": last[POST_FIELDS.index("msg_id")]}
                 for p in posts:
                     p["saved"] = True
                     for k in ("media", "reactions", "preview", "doc", "fwd", "quote"):
@@ -1410,7 +1442,8 @@ class Handler(BaseHTTPRequestHandler):
                 names = list({p["channel"] for p in posts})
                 titles = dict(db.execute("SELECT channel,title FROM cache WHERE channel IN (%s)"
                                          % ",".join("?" * len(names)), names)) if names else {}
-                return self._send(200, json.dumps({"posts": posts, "titles": titles}, ensure_ascii=False),
+                return self._send(200, json.dumps({"posts": posts, "titles": titles, "has_more": has_more,
+                                                   "next": next_cursor}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/feed":
