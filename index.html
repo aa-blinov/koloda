@@ -9,35 +9,45 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d0f14; --surf:#141821; --raise:#1b2029; --line:#242b38;
-  --fg:#e9ecf3; --dim:#98a1b5; --faint:#8690a3;
-  --acc:#5aa2ff; --acc-ink:#0b1220; --line-hover:#303a4c;
-  --scroll-thumb:#2a3242; --scroll-thumb-hover:#3a4557;
-  --paid:#f0b429; --error:#f07c83; --media-bg:#000; --selection-fg:#fff;
-  --overlay:rgba(0,0,0,.72);
-  /* Тени несут смещение и размытие — плоский ореол это декор, а не глубина */
-  --sh-1:0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.28);
-  --sh-2:0 8px 24px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
-  /* Четыре размера и две формы. Всё остальное скругление — из шкалы. */
-  --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:20px;
+  /* Роли Material 3: поверхности по уровням, контейнеры акцента и выделения,
+     инверсная пара для снэкбара. Пары текста считает тест ThemeContrastTest. */
+  --bg:#0C0E12; --surf:#171A1F; --surf-hi:#1C2026; --raise:#22262D;
+  --line:#444850; --edge:#72757E;
+  --fg:#E2E5EF; --dim:#A7ABB4; --faint:#8E929B;
+  --acc:#78B0FF; --acc-ink:#002F5B; --acc-cont:#3E5373; --on-acc-cont:#D6E4FF;
+  --sec-cont:#323C4C; --on-sec-cont:#B5C0D4;
+  --inv-surf:#E2E5EF; --inv-fg:#2E333A; --inv-acc:#43608A;
+  --scroll-thumb:#3A3F49; --scroll-thumb-hover:#4A505B;
+  --paid:#F0B429; --error:#FA746F; --media-bg:#000; --selection-fg:#fff;
+  --overlay:rgba(0,0,0,.6);
+  /* Тени уровней 1 и 2 из M3: поверхность держится тоном, тень лишь подсказывает слой */
+  --sh-1:0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
+  --sh-2:0 1px 3px rgba(0,0,0,.3), 0 4px 8px 3px rgba(0,0,0,.15);
+  /* Шкала форм M3: 4, 8, 12 и 28 пикселей. Кнопки, поиск и сегменты: pill. */
+  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-xl:28px;
   --r-pill:999px; --r-round:50%;
+  /* Кривая M3 emphasized для переходов и появления экранов */
+  --ease:cubic-bezier(.2,0,0,1);
   /* Шрифты: только системные, чтобы интерфейс не тянул ничего из сети */
   --font-ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
   --font-read:var(--font-ui);
   --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 
-/* Светлая тема. Контраст посчитан: мелкий текст 4.99 и выше на всех трёх
-   подложках, акцент 5.5 против белого. */
+/* Светлая тема: те же роли на светлых тонах. Поверхность карточки темнее фона,
+   как filled-карточка M3 на surface. */
 :root[data-theme="light"]{
-  --bg:#f4f6f9; --surf:#ffffff; --raise:#eceff4; --line:#dde2ea;
-  --fg:#151a21; --dim:#4d5766; --faint:#5d6773;
-  --acc:#1a63d8; --acc-ink:#ffffff; --line-hover:#c9d0db;
-  --scroll-thumb:#c3cad6; --scroll-thumb-hover:#aab3c2;
-  --paid:#8a5a00; --error:#c22b36; --media-bg:#e9ecf1; --selection-fg:#0b1220;
-  --overlay:rgba(16,20,28,.55);
-  --sh-1:0 1px 2px rgba(20,28,44,.07), 0 2px 8px rgba(20,28,44,.06);
-  --sh-2:0 8px 24px rgba(20,28,44,.12), 0 2px 6px rgba(20,28,44,.08);
+  --bg:#F9F9FE; --surf:#ECEDF5; --surf-hi:#E6E8F1; --raise:#DFE2EC;
+  --line:#C4C7D0; --edge:#777B84;
+  --fg:#2E333A; --dim:#4A4F58; --faint:#5E626B;
+  --acc:#005CAA; --acc-ink:#EEF2FF; --acc-cont:#A3C0EF; --on-acc-cont:#1C3B63;
+  --sec-cont:#D8E3F8; --on-sec-cont:#485264;
+  --inv-surf:#2E333A; --inv-fg:#F2F3FA; --inv-acc:#A3C0EF;
+  --scroll-thumb:#C3C6CF; --scroll-thumb-hover:#AEB2BB;
+  --paid:#8A5A00; --error:#A83836; --media-bg:#E9ECF1; --selection-fg:#0B1220;
+  --overlay:rgba(16,20,28,.5);
+  --sh-1:0 1px 2px rgba(20,28,44,.12), 0 1px 3px 1px rgba(20,28,44,.08);
+  --sh-2:0 1px 3px rgba(20,28,44,.2), 0 4px 8px 3px rgba(20,28,44,.1);
 }
 
 /* Шрифты на выбор: системные стеки, ничего не тянем из сети */
@@ -71,9 +81,9 @@ svg.i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
 /* ---------- Шапка ---------- */
-header{position:sticky;top:0;z-index:20;
-  background:color-mix(in srgb, var(--bg) 86%, transparent);
-  -webkit-backdrop-filter:blur(14px) saturate(140%); backdrop-filter:blur(14px) saturate(140%);
+/* Верхняя панель M3: сплошная поверхность без размытия. Размытие делало шапку
+   контейнером для fixed-элементов, и снэкбар отмены уезжал внутрь неё. */
+header{position:sticky;top:0;z-index:20;background:var(--bg);
   border-bottom:1px solid var(--line);
   padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top))}
 .bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
@@ -81,18 +91,24 @@ header{position:sticky;top:0;z-index:20;
 #unreadBtn,#meBtn{flex:0 0 auto}
 #unreadBtn{display:inline-flex;align-items:center;gap:6px}
 #unreadBtn .u-count{font-variant-numeric:tabular-nums}
+/* бейдж M3: счётчик пилюлей акцента, пустой не занимает места */
+#unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);
+  background:var(--acc);color:var(--acc-ink);font-size:12px;font-weight:500;line-height:20px;text-align:center}
 #unreadBtn .u-glyph{display:none}
 @media(max-width:640px){#unreadBtn .u-glyph{display:block;width:16px;height:16px}}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
-.seg{display:flex;gap:4px}
-.seg button{min-height:44px;padding:8px 13px;border-radius:var(--r-sm);
-  font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
-.toggle{flex:0 0 auto;font:inherit;font-size:13.5px;min-height:44px;padding:8px 13px;
-  border-radius:var(--r-sm);cursor:pointer;white-space:nowrap}
-.search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:8px;
-  background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 11px}
-.search:focus-within{border-color:var(--acc)}
+/* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
+.seg{display:flex;gap:2px;padding:3px;border:1px solid var(--edge);border-radius:var(--r-pill)}
+.seg button{min-height:38px;padding:6px 14px;border:0;border-radius:var(--r-pill);background:none;
+  color:var(--fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px}
+.toggle{flex:0 0 auto;font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 16px;
+  border:1px solid var(--edge);border-radius:var(--r-pill);background:none;color:var(--fg);
+  cursor:pointer;white-space:nowrap}
+/* Поле поиска M3: заполненная пилюля без рамки, фокус отмечается кольцом */
+.search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:10px;
+  background:var(--surf-hi);border-radius:var(--r-pill);padding:0 16px}
+.search:focus-within{box-shadow:inset 0 0 0 2px var(--acc)}
 .search svg.i{color:var(--faint)}
 /* min-height ровно 44, как у всех прочих кнопок: клик по полю не должен
    промахиваться мимо input, а нажатие на поля рамки его не ловит */
@@ -112,8 +128,8 @@ header{position:sticky;top:0;z-index:20;
 .fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
-  min-height:44px;padding:10px 14px;font:inherit;font-size:14px;text-align:left;cursor:pointer;
-  background:var(--surf);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--fg)}
+  min-height:44px;padding:10px 16px;font:inherit;font-size:14px;text-align:left;cursor:pointer;
+  background:var(--surf-hi);border:0;border-radius:var(--r-sm);color:var(--fg)}
 .tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
 .tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
 .tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
@@ -122,23 +138,23 @@ header{position:sticky;top:0;z-index:20;
 .chan-list{display:flex;flex-direction:column;gap:2px;margin:0 -6px;overflow-y:auto;
   max-height:min(56vh,400px);overscroll-behavior:contain}
 .chan-item{justify-content:flex-start;text-align:left;min-height:44px;padding:10px 12px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chan-item[aria-current=true]{background:color-mix(in srgb,var(--acc) 12%,var(--surf));
-  border-color:var(--acc);color:var(--acc);font-weight:600}
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border:0;border-radius:var(--r-sm);background:none;color:var(--fg);font:inherit;font-size:14px}
+.chan-item[aria-current=true]{background:var(--sec-cont);color:var(--on-sec-cont);font-weight:500}
 .chan-hint{padding:10px 12px;margin:0}
 main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 #feed{max-width:748px;margin-inline:auto}
 .catalog-main{padding-top:28px}
 .catalog-head{margin:4px 0 22px}
-.catalog-head h2{font-size:23px;line-height:1.2;letter-spacing:-.025em}
+.catalog-head h2{font-size:24px;line-height:1.25;font-weight:400;letter-spacing:0}
 .catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
 
 .post:not(:has(.gal,.doc,.preview,.photo)){max-width:calc(34em + 42px)}
-.post{position:relative;scroll-margin-top:80px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
-  padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);
-  transition:box-shadow .18s, border-color .18s, transform .18s, opacity .18s}
-.post:hover{border-color:var(--line-hover);box-shadow:var(--sh-2);transform:translateY(-1px)}
-.post:active{transform:translateY(0)}
+/* Карточка M3 «filled»: поверхность тоном, без рамки и подъёма. Наведение: слой 8% */
+.post{position:relative;scroll-margin-top:80px;background:var(--surf);border-radius:var(--r-md);
+  padding:18px 20px;margin-bottom:12px;
+  transition:background .2s var(--ease), opacity .18s}
+.post:hover{background:color-mix(in srgb,var(--fg) 8%,var(--surf))}
 .post.read{background:color-mix(in srgb,var(--surf) 78%,var(--bg))}
 
 .day-sep{display:flex;align-items:center;gap:12px;margin:22px 0 12px;color:var(--faint);
@@ -152,10 +168,10 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   background:none;border:0;border-radius:var(--r-xs);font:inherit;font-size:12.5px;cursor:pointer;
   text-align:left;transition:color .16s,background .16s;
   text-overflow:ellipsis;white-space:nowrap}
-.meta .who:hover{color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.meta .who:hover{color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .meta .who::after{content:'';flex:0 0 auto}
-.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-xs);
-  background:var(--raise);color:var(--dim);font-size:11px;font-weight:700}
+.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-round);
+  background:var(--acc-cont);color:var(--on-acc-cont);font-size:11px;font-weight:500}
 .meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
@@ -272,13 +288,13 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   border:0;border-radius:var(--r-md);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
   transition:background .16s}
 .channel-open:hover,.channel-open[aria-expanded=true]{background:var(--surf)}
-.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-md);
-  background:var(--raise);color:var(--dim);font-size:15px;font-weight:650}
+.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-round);
+  background:var(--acc-cont);color:var(--on-acc-cont);font-size:16px;font-weight:500}
 .channel-copy{display:grid;gap:3px;min-width:0;flex:1}
 .channel-fresh{font-size:12px;color:var(--dim)}
-.channel-name{font-size:15px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.channel-preview-label{flex:0 0 auto;min-height:44px;display:flex;align-items:center;padding:8px 12px;
-  border-radius:var(--r-sm);font-size:13px;font-weight:600}
+.channel-name{font-size:15px;font-weight:500;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-preview-label{flex:0 0 auto;min-height:40px;display:flex;align-items:center;padding:8px 16px;
+  border-radius:var(--r-pill);font-size:14px;font-weight:500}
 /* На телефоне подпись «Посмотреть» уступает шеврону: строка и так кнопка,
    а текстовая подпись внутри кнопки читалась третьим элементом управления */
 .channel-chevron{display:none;flex:0 0 auto;color:var(--faint);transition:transform .16s}
@@ -287,9 +303,9 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:11px}
-.channel-action{flex:0 0 auto;min-width:108px;min-height:44px;padding:8px 12px;border-radius:var(--r-sm);
+.channel-action{flex:0 0 auto;min-width:108px;min-height:40px;padding:8px 16px;border-radius:var(--r-pill);
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 /* Знак появляется только там, где подпись не помещается, — на телефоне */
 .channel-action .i{display:none}
 .channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:var(--r-md);
@@ -305,35 +321,42 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-preview-post img,.channel-preview-post video{max-height:240px;object-fit:cover}
 .channel-preview-state{color:var(--dim);font-size:13px;padding:16px 0}
 @keyframes preview-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-.empty-action{color:var(--acc);border:0;background:none;font:inherit;font-weight:650;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.empty-action{color:var(--acc);border:0;background:none;font:inherit;font-size:14px;font-weight:500;
+  min-height:40px;padding:8px 12px;border-radius:var(--r-pill);cursor:pointer}
 .channel-form{display:flex;gap:8px;margin:2px 0 8px}
-.channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 12px;border-radius:var(--r-sm);
-  background:var(--surf);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:16px}
+/* Поле M3 «filled»: заливка, скруглены только верхние углы, линия снизу. Фокус
+   утолщает линию до акцента, не сдвигая текст. */
+.channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 16px;border:0;
+  border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--surf-hi);box-shadow:inset 0 -1px 0 var(--edge);
+  color:var(--fg);font:inherit;font-size:16px}
+.channel-form input:focus{outline:none;box-shadow:inset 0 -2px 0 var(--acc)}
 .channel-form input::placeholder{color:var(--faint)}
 .channel-state{min-height:0;margin:0 0 8px;color:var(--dim);font-size:12.5px}
 .channel-state:empty{display:none}
 .channel-state[data-error="true"]{color:var(--error)}
 .auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px}
-.auth-card{width:min(100%,440px);padding:30px;background:var(--surf);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.auth-card{width:min(100%,440px);padding:32px;background:var(--surf);border-radius:var(--r-xl);box-shadow:var(--sh-2)}
 /* Название и знак: раньше продукт не называл себя нигде, и первые восемь
    секунд экрана входа не говорили ни слова о том, что это за вещь */
 .auth-brand{display:flex;align-items:center;gap:8px;margin-bottom:14px;color:var(--dim);
   font-size:12.5px;font-weight:650;letter-spacing:.02em}
 .brand-mark{width:17px;height:17px;color:var(--acc)}
-.auth-card h1{font-size:26px;line-height:1.2;letter-spacing:-.03em}
+.auth-card h1{font-size:28px;line-height:36px;font-weight:400;letter-spacing:0}
 .auth-card>p{margin-top:9px;color:var(--dim);font-size:14px;line-height:1.55}
-.auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:24px 0 18px;
-  background:var(--bg);border-radius:var(--r-sm)}
-.auth-modes button{min-height:42px;border-radius:var(--r-sm);font:inherit;cursor:pointer}
+.auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:3px;margin:24px 0 18px;
+  border:1px solid var(--edge);border-radius:var(--r-pill)}
+.auth-modes button{min-height:38px;border:0;border-radius:var(--r-pill);background:none;color:var(--fg);
+  font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 .auth-form{display:grid;gap:8px}
 .auth-form label{margin-top:8px;font-size:13px;font-weight:600}
-.auth-form input{width:100%;min-height:46px;padding:10px 12px;border-radius:var(--r-sm);background:var(--bg);
-  border:1px solid var(--line);color:var(--fg);font:inherit;font-size:16px}
-.auth-form input:focus{border-color:var(--acc);outline:2px solid color-mix(in srgb,var(--acc) 25%,transparent)}
+.auth-form input{width:100%;min-height:48px;padding:10px 16px;border:0;border-radius:var(--r-xs) var(--r-xs) 0 0;
+  background:var(--surf-hi);box-shadow:inset 0 -1px 0 var(--edge);color:var(--fg);font:inherit;font-size:16px}
+.auth-form input:focus{outline:none;box-shadow:inset 0 -2px 0 var(--acc)}
 .auth-help{min-height:20px;color:var(--dim);font-size:12.5px}
 .auth-message{min-height:20px;color:var(--error);font-size:13px}
 .auth-message[data-success="true"]{color:var(--acc)}
 .auth-form .btn{width:100%;margin-top:5px}
+.auth-form .empty-action{justify-self:start;padding-left:0}
 .auth-footnote{margin-top:20px!important;font-size:12px!important;color:var(--faint)!important}
 .account-name{padding:12px 0;font-size:15px;font-weight:650}
 .account-actions{display:flex;gap:8px;margin-top:12px}
@@ -343,36 +366,54 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .load-more{display:block;margin:16px auto 28px}
 .feed-empty-more{padding:20px 16px;text-align:center;color:var(--dim)}
 
+/* Снэкбар M3: инверсная поверхность у нижнего края. Лежит в шапке, поэтому
+   позиционируется от окна и держится без размытия шапки. */
+.undo-bar{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  z-index:40;width:min(560px,calc(100% - 32px));margin:0;display:flex;align-items:center;
+  justify-content:space-between;gap:12px;padding:12px 8px 12px 16px;border-radius:var(--r-xs);
+  background:var(--inv-surf);color:var(--inv-fg);font-size:14px;line-height:20px;box-shadow:var(--sh-2)}
+.undo-btn{flex:0 0 auto;min-height:36px;padding:6px 12px;border:0;border-radius:var(--r-pill);background:none;
+  color:var(--inv-acc);font:inherit;font-size:14px;font-weight:500;cursor:pointer}
+.undo-btn:hover{background:color-mix(in srgb,var(--inv-acc) 8%,transparent)}
+/* Статус синхронизации: плашка под шапкой, кнопка «Повторить» текстовая */
+.sync-status{margin:8px 2px 0;padding:8px 12px;border-radius:var(--r-sm);background:var(--surf-hi);
+  color:var(--dim);font-size:13px;line-height:20px}
+.sync-status button{margin-left:6px;padding:4px 10px;border:0;border-radius:var(--r-pill);background:none;
+  color:var(--acc);font:inherit;font-weight:500;cursor:pointer}
+.sync-status button:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 /* ---------- Состояния ---------- */
 .empty{color:var(--dim);text-align:center;padding:64px 24px;display:grid;gap:10px;justify-items:center}
 .empty svg.i{width:28px;height:28px;color:var(--faint)}
 .empty p{max-width:38ch;font-size:14px;line-height:1.6}
-.btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;border-radius:var(--r-sm);
-  cursor:pointer;font-weight:600}
-/* Единая кнопка: обводка вместо заливки, текст в основном цвете. Акцентная
-   обводка помечает главное действие и выбранный вариант — заливки нет нигде,
-   поэтому Добавить, Убрать и Посмотреть читаются одинаково на любом фоне. */
-.btn,.toggle,.seg button,.auth-modes button,.filters button,.channel-action,
-.channel-preview-label,.tabs-toggle,.chan-item,.quiet-btn{
-  background:var(--surf);border:1px solid var(--line);color:var(--fg);
-  transition:border-color .16s,color .16s,background .16s}
-.btn:hover,.toggle:hover,.seg button:hover,.auth-modes button:hover,
-.filters button:hover,.channel-action:hover,.channel-preview-label:hover,.chan-item:hover{
-  border-color:var(--acc);color:var(--acc)}
+/* Три вида кнопок, как в Material 3. Главное действие заливается акцентом,
+   второстепенные обведены или тональны, текстовые без рамки. Слой состояния
+   считается по спецификации: 8% на наведении, 12% при нажатии. */
+.btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 24px;border:0;
+  border-radius:var(--r-pill);cursor:pointer;background:var(--acc);color:var(--acc-ink);
+  text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
+  transition:background .2s var(--ease)}
+.btn:hover{background:color-mix(in srgb,var(--acc-ink) 8%,var(--acc))}
+.btn:active{background:color-mix(in srgb,var(--acc-ink) 12%,var(--acc))}
+/* обведённые: переключатели, чипы фильтров, кнопки каталога */
+.toggle,.channel-action,.chan-action,.channel-preview-label,.filters button{
+  background:none;border:1px solid var(--edge);color:var(--fg);transition:background .2s var(--ease)}
+/* текстовые кнопки без рамки и заливки: первая кнопка диалога, ссылки-действия */
+.quiet-btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 12px;border:0;
+  border-radius:var(--r-pill);background:none;color:var(--acc);cursor:pointer}
+.toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
+.filters button:hover,.chan-item:hover,.seg button:hover,.auth-modes button:hover,
+.read-toggle:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.quiet-btn:hover,.empty-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+/* Выбранное: тональный контейнер без рамки, как сегмент и чип в M3. Идёт после
+   наведения и нажатия, поэтому перекрывает их при той же специфичности. */
 .seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
-.toggle[aria-pressed=true],.filters button[aria-pressed=true][aria-selected=true],.channel-action.is-on{
-  background:color-mix(in srgb,var(--acc) 12%,var(--surf));border-color:var(--acc);
-  color:var(--acc);font-weight:600}
-/* 12%, а не больше: в светлой теме акцент на тонированном фоне держится ровно
-   в 4.5:1, и каждый процент сверху уводит его за порог. */
-.btn{border-color:var(--acc);color:var(--acc)}
-/* Нажатие: полупрозрачный слой поверх, как в Material. Живёт только пока палец
-   на кнопке, поэтому обводка вместо заливки как основной язык не ломается.
-   Без него интерфейс не отзывается на палец и кажется стеклянным. */
-.btn:active,.toggle:active,.seg button:active,.auth-modes button:active,
-.filters button:active,.channel-action:active,.channel-preview-label:active,
-.tabs-toggle:active,.quiet-btn:active,.read-toggle:active,.empty-action:active{
-  background:color-mix(in srgb,var(--fg) 10%,var(--surf))}
+.toggle[aria-pressed=true],.filters button[aria-pressed=true],.chan-action[aria-pressed=true],
+.channel-action.is-on{background:var(--sec-cont);border-color:transparent;color:var(--on-sec-cont);font-weight:500}
+/* Нажатие: слой 12% поверх фона. Палец на кнопке виден, даже когда кнопка без заливки */
+.toggle:active,.channel-action:active,.chan-action:active,.channel-preview-label:active,
+.filters button:active,.chan-item:active,.seg button:active,.auth-modes button:active,
+.read-toggle:active{background:color-mix(in srgb,var(--fg) 12%,transparent)}
+.quiet-btn:active,.empty-action:active{background:color-mix(in srgb,var(--acc) 12%,transparent)}
 /* Отключённая кнопка обязана отличаться: её гасят одиннадцать раз, и без этого
    «Загружаю…» выглядит живой кнопкой, на которую смело жмут. */
 :disabled{cursor:default;opacity:.38}
@@ -386,22 +427,20 @@ body:has(.ov.open){overflow:hidden}
 /* Панель внутри оверлея обязана иметь свой непрозрачный фон: иначе сквозь неё
    видно страницу под ней. Форму даёт тень, а не волосяная рамка: та и другая
    вместе — безвкусная связка, которую ловит детектор. */
+/* Диалог M3: поверхность, скругление 28, заголовок headline, действия справа */
 .ov .dlg{width:min(420px,100%);max-height:86vh;overflow:auto;display:flex;flex-direction:column;
   background:var(--surf);color:var(--fg);
-  border-radius:var(--r-md);padding:18px;box-shadow:var(--sh-2)}
-.ov .dlg h2{font-size:17px;margin-bottom:4px;letter-spacing:-.01em}
-.ov .dlg p{color:var(--dim);font-size:13px;margin-bottom:14px;line-height:1.55}
+  border-radius:var(--r-xl);padding:24px;box-shadow:var(--sh-2)}
+.ov .dlg h2{font-size:24px;line-height:32px;font-weight:400;margin-bottom:8px;letter-spacing:0}
+.ov .dlg p{color:var(--dim);font-size:14px;margin-bottom:16px;line-height:1.55}
 .ov .dlg .empty{padding:20px}
-.ov .account-actions{display:flex;gap:8px;margin-top:16px}
-.ov .account-actions button{flex:1}
-.ov .account-actions .btn{flex:1}
-.ov .account-actions .quiet-btn{font:inherit;font-size:13.5px;min-height:44px;padding:8px 15px;
-  border-radius:var(--r-sm);cursor:pointer;font-weight:600}
+.ov .account-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:16px}
+.ov .account-actions button,.ov .account-actions .btn{flex:0 0 auto}
 .ov .dlg input{min-height:44px}
 /* Экран каналов: панель выше профиля и без своих отступов по краю окна — на
    телефоне она занимает весь экран, иначе список снова оказывается тесным. */
-.ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 18px 18px}
-.ov .dlg-channels h2{padding-top:18px;margin-bottom:10px}
+.ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 24px 24px}
+.ov .dlg-channels h2{padding-top:24px;margin-bottom:12px}
 .ov .dlg-channels .chan-list{flex:0 1 auto;min-height:0}
 .ov .dlg-channels .account-actions{margin-top:12px}
   /* Настройки оформления в оверлее профиля */
@@ -419,11 +458,9 @@ body:has(.ov.open){overflow:hidden}
 .tg-row .chan-open{border:0;background:none;padding:9px 2px;color:var(--fg);
   font:inherit;font-size:14.5px;min-height:44px;opacity:1;cursor:default}
 .chan-action{display:flex;align-items:center;justify-content:space-between;gap:8px;
-  width:100%;min-height:44px;padding:9px 11px;margin-bottom:6px;font:inherit;font-size:13.5px;
-  text-align:left;cursor:pointer;background:var(--surf);border:1px solid var(--line);
-  border-radius:var(--r-sm);color:var(--fg)}
-.chan-action[aria-pressed=true]{background:color-mix(in srgb,var(--acc) 12%,var(--surf));
-  border-color:var(--acc);color:var(--acc);font-weight:600}
+  width:100%;min-height:44px;padding:9px 16px;margin-bottom:6px;font:inherit;font-size:14px;
+  text-align:left;cursor:pointer;background:none;border:1px solid var(--edge);
+  border-radius:var(--r-pill);color:var(--fg)}
 .chan-action .chan-count{color:var(--dim);font-size:12px;white-space:nowrap}
   .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap}
   /* кнопка занимает всю свободную ширину ряда, а текст внутри по центру:
@@ -440,7 +477,7 @@ body:has(.ov.open){overflow:hidden}
 .read-status{border:0;background:none;color:var(--dim);cursor:pointer}
 .read-status:hover{color:var(--acc)}
 
-.skel{background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
+.skel{background:var(--surf);border-radius:var(--r-md);
   padding:15px 17px;margin-bottom:12px}
 .skel i{display:block;height:10px;border-radius:var(--r-xs);background:var(--raise);margin-bottom:9px;
   animation:breathe 1.4s ease-in-out infinite}
@@ -448,7 +485,7 @@ body:has(.ov.open){overflow:hidden}
 .skel i:nth-child(3){width:100%;height:56px}
 @keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
 .view[hidden]{display:none}
-.view.enter{animation:rise .28s cubic-bezier(.16,1,.3,1) both}
+.view.enter{animation:rise .28s var(--ease) both}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
@@ -467,25 +504,31 @@ body:has(.ov.open){overflow:hidden}
 .m-brand,.m-search-btn{display:none}
 .sort-row{margin:0 0 16px}
 @media(max-width:640px){
+  /* Нижняя панель M3: иконка сидит в пилюле, которая заливается у текущего раздела.
+     Пилюля 64×32 центрирована по иконке 24px, поэтому её верх на 8px выше иконки. */
   .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;
-    z-index:30;background:var(--surf);border-top:1px solid var(--line);
-    padding-bottom:env(safe-area-inset-bottom)}
-  .tabbar-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-    min-height:56px;padding:6px 4px;background:none;border:0;font:inherit;font-size:11px;
-    color:var(--dim);cursor:pointer}
-  .tabbar-item .i{width:21px;height:21px}
-  .tabbar-item[aria-current="page"]{color:var(--acc)}
-  .tabbar-item[aria-current="page"] span{font-weight:650}
-  #appShell{padding-bottom:calc(56px + env(safe-area-inset-bottom))}
+    z-index:30;background:var(--surf);padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    gap:4px;min-height:64px;padding:12px 4px 8px;background:none;border:0;font:inherit;font-size:12px;
+    font-weight:500;color:var(--dim);cursor:pointer}
+  .tabbar-item::before{content:'';position:absolute;top:8px;left:50%;width:64px;height:32px;margin-left:-32px;
+    border-radius:var(--r-pill);background:transparent}
+  .tabbar-item .i{position:relative;width:24px;height:24px}
+  .tabbar-item[aria-current="page"]{color:var(--fg)}
+  .tabbar-item[aria-current="page"]::before{background:var(--sec-cont)}
+  .tabbar-item[aria-current="page"] .i{color:var(--on-sec-cont)}
+  #appShell{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  /* снэкбар над нижней панелью, иначе панель его закрывает */
+  .undo-bar{bottom:calc(80px + env(safe-area-inset-bottom))}
   /* шапка: поиск, название, непрочитанные — один ряд */
   #sectionTabs{display:none}
   #meBtn{display:none}
   .bar{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
     gap:8px;align-items:center}
-  .m-brand{grid-area:brand;display:block;font-weight:650;letter-spacing:-.01em;font-size:15px}
+  .m-brand{grid-area:brand;display:block;font-size:22px;line-height:28px;font-weight:400;letter-spacing:0}
   .m-search-btn{grid-area:qtoggle;display:grid;place-items:center;width:44px;height:44px;
-    background:none;border:0;border-radius:var(--r-sm);color:var(--fg);cursor:pointer}
-  .m-search-btn[aria-expanded="true"]{background:var(--raise);color:var(--acc)}
+    background:none;border:0;border-radius:var(--r-round);color:var(--fg);cursor:pointer}
+  .m-search-btn[aria-expanded="true"]{background:var(--sec-cont);color:var(--on-sec-cont)}
   /* поиск появляется по требованию и занимает второй ряд */
   .search{grid-area:search;grid-column:1/-1;display:none}
   header.search-open .search{display:flex}
