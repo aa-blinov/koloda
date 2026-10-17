@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
 <title>Колода — своя лента каналов</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21.9 2.1 2.6 9.3c-1 .4-1 1.9.1 2.2l4.6 1.4 1.7 5.2c.3 1 1.7 1.2 2.3.3l2.5-2.7 4.3 3.2c.8.6 2 .1 2.2-.9l3.6-14c.2-1-.8-1.9-1.9-1.9Z' fill='%235aa2ff'/%3E%3C/svg%3E">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -33,7 +34,7 @@
   --bg:#f4f6f9; --surf:#ffffff; --raise:#eceff4; --line:#dde2ea;
   --fg:#151a21; --dim:#4d5766; --faint:#5d6773;
   --acc:#1a63d8; --acc-ink:#ffffff;
-  --line-hover:#c9d0db;;
+  --line-hover:#c9d0db;
   --scroll-thumb:#c3cad6; --scroll-thumb-hover:#aab3c2;
   --paid:#8a5a00; --error:#c22b36; --media-bg:#e9ecf1; --selection-fg:#0b1220;
   --overlay:rgba(16,20,28,.55);
@@ -80,6 +81,7 @@ header{position:sticky;top:0;z-index:20;
 .bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
 #sectionTabs,#sortTabs{flex:0 0 auto}
 #unreadBtn,#meBtn{flex:0 0 auto}
+#unreadBtn .u-count{font-variant-numeric:tabular-nums}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 .seg{display:flex;gap:4px}
@@ -130,6 +132,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .catalog-head h2{font-size:23px;line-height:1.2;letter-spacing:-.025em}
 .catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
 
+.post:not(:has(.gal,.doc,.preview,.photo)){max-width:calc(34em + 42px)}
 .post{position:relative;scroll-margin-top:80px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r-md);
   padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh-1);
   transition:box-shadow .18s, border-color .18s, transform .18s, opacity .18s}
@@ -143,7 +146,8 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .day-sep:first-child{margin-top:4px}
 .meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:var(--dim)}
 .meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em;min-width:0;overflow:hidden;
-  display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:2px 6px 2px 2px;margin-left:-2px;
+  display:inline-flex;align-items:center;gap:7px;max-width:100%;min-height:44px;
+  padding:0 6px 0 2px;margin-left:-2px;
   background:none;border:0;border-radius:var(--r-xs);font:inherit;font-size:12.5px;cursor:pointer;
   text-align:left;transition:color .16s,background .16s;
   text-overflow:ellipsis;white-space:nowrap}
@@ -151,7 +155,6 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .meta .who::after{content:'';flex:0 0 auto}
 .chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-xs);
   background:var(--raise);color:var(--dim);font-size:11px;font-weight:700}
-.meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 .meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
@@ -169,6 +172,9 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* Пока кадр не подгружен, у него нет размера: без заполнителя все десять
    влезают в ленту, наблюдатель видит их все и тянет всё разом. */
 .gal>img:not(.got){min-width:200px}
+/* та же заглушка для панели предпросмотра: правило ниже привязано к .post,
+   а .channel-preview-post — не .post, и картинка схлопывалась в 200×0 */
+.channel-preview-post img:not(.got):not(.sticker){aspect-ratio:1}
 /* Тот же довод для высоты: без заглушки лента прыгала на 460px, когда
    фотография доезжала. .got снимает и квадрат, и подложку. */
 .post img:not(.sticker):not(.got){aspect-ratio:1;background:var(--raise)}
@@ -455,6 +461,12 @@ body:has(.ov.open){overflow:hidden}
   #meBtn{grid-area:profile;justify-self:end}
   #unreadBtn,#sortTabs{grid-area:extra;justify-self:start}
   #sortTabs{overflow-x:auto;max-width:100%;scrollbar-width:none}
+  #unreadBtn .u-label{display:none}
+  #unreadBtn .u-count:empty{display:none}
+  /* переключатель разделов не должен уезжать под соседние кнопки:
+     без min-width:0 его собственная ширина не ужималась, и «Каталог»
+     оказывался под «Непрочитанные» — нажатие не доходило */
+  #sectionTabs{min-width:0}
   .search{grid-area:search;width:100%}
   .seg button{padding:8px 10px;font-size:13px}
   main{padding-left:14px;padding-right:14px}
@@ -529,7 +541,7 @@ body:has(.ov.open){overflow:hidden}
       <button type="button" data-sort="name" aria-pressed="false">По названию</button>
       <button type="button" data-sort="fresh" aria-pressed="false">По постам</button>
     </div>
-    <button id="unreadBtn" class="toggle" aria-pressed="false">Непрочитанные</button>
+    <button id="unreadBtn" class="toggle" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
   <p class="search-hint" id="searchHint" role="status" aria-live="polite" hidden></p>
@@ -735,15 +747,17 @@ function paintSearchHint(q, count, append){
     ' '+plural(count,'пост','поста','постов');
 }
 
-let lastFetched=0;
+let lastFetched=0, newestPost=0;
 function paintFreshness(){
   const el=$('#fresh');
   if(!el) return;
   if(!lastFetched){ el.textContent=''; return; }
-  const mins=Math.floor((Date.now()-lastFetched)/60000);
-  el.textContent = mins<1 ? 'обновлено только что'
-    : mins<60 ? 'обновлено '+mins+' '+plural(mins,'минуту','минуты','минут')+' назад'
-    : 'обновлено '+Math.floor(mins/60)+' '+plural(Math.floor(mins/60),'час','часа','часов')+' назад';
+  if(newestPost){
+    const d=new Date(newestPost*1000), mins=Math.floor((Date.now()-newestPost)/86400);
+    el.textContent = 'последний пост '+(mins<1?'сегодня':mins<2?'вчера':d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'}));
+    return;
+  }
+  el.textContent = lastFetched ? 'обновлено только что' : '';
 }
 function plural(n,one,few,many){
   const m10=n%10, m100=n%100;
@@ -936,7 +950,9 @@ let feedPageFailed=false;
 let unreadTotal=0;
 
 const paintUnread = () => {
-  $('#unreadBtn').textContent = unreadTotal ? 'Непрочитанные ('+unreadTotal+')' : 'Непрочитанные';
+  const ub=$('#unreadBtn');
+  ub.querySelector('.u-count').textContent = unreadTotal ? String(unreadTotal) : '';
+  ub.setAttribute('aria-label', unreadTotal ? 'Непрочитанные: '+unreadTotal : 'Непрочитанные');
 };
 
 // Пост прочитан, когда видно 60% карточки. Ниже порога пост просто мелькнул
@@ -1020,6 +1036,7 @@ async function load(append=false){
     const d = await r.json();
     if(requestId!==feedRequestId) return;
     lastFetched=Date.now();
+    if(d.posts && d.posts.length) newestPost=Math.max(newestPost, Number(d.posts[0].ts)||0);
     titles = d.titles || {};
     feedCursor=d.next || null; feedHasMore=Boolean(d.has_more); feedErrors=d.errors || [];
       unreadTotal=Number(d.unread)||0; paintUnread();
@@ -1084,7 +1101,7 @@ function extras(p){
   const pv = p.preview;
   if(pv && (pv.title || pv.site || pv.image))
     h += '<a class="preview" href="'+esc(pv.url)+'" target="_blank" rel="noopener">'+
-         (pv.image?'<img loading="lazy" src="'+esc(pv.image)+'" alt="'+esc(pv.title||pv.site||'Предпросмотр ссылки')+'">':'')+
+         (pv.image?'<img loading="lazy" src="'+esc(pv.image)+'" alt="'+((pv.title||pv.site)?'':'Предпросмотр ссылки')+'">':'')+
          '<span class="body">'+
            (pv.site?'<span class="site">'+esc(pv.site)+'</span>':'')+
            (pv.title?'<span class="nm">'+esc(pv.title)+'</span>':'')+
@@ -1195,6 +1212,13 @@ function render(posts,append=false){
     // самому посту: он и есть то место, где человек только что находился.
     post.focus({preventScroll:true});
   });
+  // Размер группы заранее: разделитель рисуем только там, где он скрывает
+  // переход, то есть подряд стоит больше одного поста одного дня.
+  const dayGroups = new Map();
+  for(const p of list){
+    const d = p.ts ? new Date(p.ts*1000).toDateString() : '';
+    if(d) dayGroups.set(d, (dayGroups.get(d) || 0) + 1);
+  }
   let lastDay = '';
   for(const p of list){
     const read = s.has(key(p));
@@ -1223,12 +1247,15 @@ function render(posts,append=false){
     // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
     const day = p.ts ? new Date(p.ts*1000).toDateString() : '';
     if(day && day !== lastDay){
+      // Одиночный пост под собственной датой разделителя не стоит: он вставляет
+      // линейку между человеком и текстом, который тот читал.
+      if((dayGroups.get(day) || 1) > 1){
+        const sep = document.createElement('div');
+        sep.className = 'day-sep';
+        sep.textContent = dayLabel(p.ts);
+        postList.appendChild(sep);
+      }
       lastDay = day;
-      const sep = document.createElement('div');
-      sep.className = 'day-sep';
-      sep.setAttribute('role','separator');
-      sep.textContent = dayLabel(p.ts);
-      postList.appendChild(sep);
     }
     markFn.set(el, setRead);
     postSeen.observe(el);
@@ -1653,10 +1680,12 @@ document.addEventListener('keydown',e=>{
     if(e.key==='ArrowLeft'){e.preventDefault();stepLightbox(-1);return;}
     if(e.key==='ArrowRight'){e.preventDefault();stepLightbox(1);return;}
     if(e.key!=='Tab')return;
-    const nav=[...lb.querySelectorAll('button:not(:disabled)')]
+    // Плеер тоже в списке: <video controls> фокусируется, но не кнопка.
+  const nav=[...lb.querySelectorAll('button:not(:disabled),video[controls]')]
     .filter(el=>el.offsetParent!==null||el.getClientRects().length);
-  // при одном кадре навигации нет и ловушка только мешает выходу
-  if(!nav.length || lbItems.length<2) return;
+  // Ловушка нужна и при одном кадре: фон inert, и без неё Tab уводит фокус
+  // в BODY — на каждом втором нажатии экранный диктор теряет контекст.
+  if(!nav.length) return;
     if(e.shiftKey&&document.activeElement===nav[0]){e.preventDefault();nav.at(-1).focus();}
     else if(!e.shiftKey&&document.activeElement===nav.at(-1)){e.preventDefault();nav[0].focus();}
     return;
@@ -1798,7 +1827,7 @@ $('#tgUnlink').onclick=async()=>{
 $('#logoutBtn').onclick=async()=>{
   const btn=$('#logoutBtn');
   if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Выйти'; }
-  else{ btn.dataset.armed='1'; btn.textContent='Точно выйти?'; setTimeout(()=>{ if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Выйти'; } },6000); return; }
+  else{ btn.dataset.armed='1'; btn.textContent='Точно выйти?'; setTimeout(()=>{ if(btn.dataset.armed){ delete btn.dataset.armed; btn.textContent='Выйти из профиля'; } },6000); return; }
   $('#logoutBtn').disabled=true; await stateQueue.catch(()=>{});
   try{await fetch('/api/auth/logout',{method:'POST'});}catch(e){}
   ['sub','read','pending'].forEach(k=>localStorage.removeItem(LS[k]));
