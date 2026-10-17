@@ -136,6 +136,14 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
   font:inherit;font-size:13px;font-weight:500;cursor:pointer}
 .act-btn:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
 .act-save[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont);border-color:transparent}
+/* Экран канала: заголовок, подписка и последние публикации */
+.ch-page{max-width:748px;margin:0 auto;padding:24px 20px 56px}
+.ch-back{padding-left:0;margin-bottom:8px}
+.ch-page h2{font-size:24px;line-height:1.25;font-weight:400;margin:4px 0 4px;letter-spacing:0}
+.ch-meta{color:var(--dim);font-size:14px;margin-bottom:16px}
+.ch-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.ch-actions .quiet-btn{text-decoration:none}
+@media(max-width:640px){.ch-page{padding:18px 14px 56px}}
 .fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
@@ -200,9 +208,6 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* Пока кадр не подгружен, у него нет размера: без заполнителя все десять
    влезают в ленту, наблюдатель видит их все и тянет всё разом. */
 .gal>img:not(.got){min-width:200px}
-/* та же заглушка для панели предпросмотра: правило ниже привязано к .post,
-   а .channel-preview-post — не .post, и картинка схлопывалась в 200×0 */
-.channel-preview-post img:not(.got):not(.sticker){aspect-ratio:1}
 /* Тот же довод для высоты: без заглушки лента прыгала на 460px, когда
    фотография доезжала. .got снимает и квадрат, и подложку. */
 .post img:not(.sticker):not(.got){aspect-ratio:1;background:var(--raise)}
@@ -319,7 +324,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* На телефоне подпись «Посмотреть» уступает шеврону: строка и так кнопка,
    а текстовая подпись внутри кнопки читалась третьим элементом управления */
 .channel-chevron{display:none;flex:0 0 auto;color:var(--faint);transition:transform .16s}
-.channel-open[aria-expanded=true] .channel-chevron{transform:rotate(180deg)}
+.channel-chevron{transform:rotate(-90deg)}
 .channel-meta{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
@@ -329,28 +334,15 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 /* Знак появляется только там, где подпись не помещается, — на телефоне */
 .channel-action .i{display:none}
-.channel-preview{margin:6px 0 8px 64px;padding:16px 18px;background:var(--surf);border-radius:var(--r-md);
-  animation:preview-in .2s cubic-bezier(.2,.8,.2,1) both}
-.channel-preview[hidden]{display:none}
-.channel-preview-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
-.channel-preview-head strong{font-size:13px}
-.channel-preview-head a{font-size:12px;color:var(--dim);text-decoration:underline;text-underline-offset:3px}
-.channel-preview-post{padding:13px 0;border-top:1px solid var(--line)}
-.channel-preview-post:first-child{border-top:0;padding-top:5px}
-.channel-preview-post time{display:block;margin-bottom:6px;color:var(--faint);font-size:11.5px}
-.channel-preview-post .txt{font-size:13.5px;line-height:1.58}
-.channel-preview-post img,.channel-preview-post video{max-height:240px;object-fit:cover}
-.channel-preview-state{color:var(--dim);font-size:13px;padding:16px 0}
-@keyframes preview-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .empty-action{color:var(--acc);border:0;background:none;font:inherit;font-size:14px;font-weight:500;
   min-height:40px;padding:8px 12px;border-radius:var(--r-pill);cursor:pointer}
 .channel-form{display:flex;gap:8px;margin:2px 0 8px}
 /* Поле M3 «filled»: заливка, скруглены только верхние углы, линия снизу. Фокус
    утолщает линию до акцента, не сдвигая текст. */
+/* Поле добавления канала — той же пилюлей, что поиск и кнопки рядом */
 .channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 16px;border:0;
-  border-radius:var(--r-xs) var(--r-xs) 0 0;background:var(--surf-hi);box-shadow:inset 0 -1px 0 var(--edge);
-  color:var(--fg);font:inherit;font-size:16px}
-.channel-form input:focus{outline:none;box-shadow:inset 0 -2px 0 var(--acc)}
+  border-radius:var(--r-pill);background:var(--surf-hi);color:var(--fg);font:inherit;font-size:16px}
+.channel-form input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--acc)}
 .channel-form input::placeholder{color:var(--faint)}
 .channel-state{min-height:0;margin:0 0 8px;color:var(--dim);font-size:12.5px}
 .channel-state:empty{display:none}
@@ -461,7 +453,7 @@ body:has(.ov.open){overflow:hidden}
 /* Профиль отдельным экраном: карточка во всю страницу, без внутренней прокрутки */
 .me-page{width:min(560px,100%);max-height:none;overflow:visible;margin:0 auto;padding:24px 24px 56px}
 @media(max-width:640px){.me-page{padding:18px 16px 56px;border-radius:0;box-shadow:none}}
-body.view-me .search{display:none}
+body.view-solo .search{display:none}
 /* Экран каналов: панель выше профиля и без своих отступов по краю окна — на
    телефоне она занимает весь экран, иначе список снова оказывается тесным. */
 .ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 24px 24px}
@@ -601,7 +593,6 @@ body.view-me .search{display:none}
      знак, иначе содержимое вылезало за 44px и тянуло страницу вбок */
   .channel-action-text{display:none}
   .channel-desc{display:none}
-  .channel-preview{margin:7px 0 8px;padding:13px}
 }
 </style>
 </head>
@@ -670,6 +661,19 @@ body.view-me .search{display:none}
 
 </section>
 
+<section class="view" id="viewChannel" role="region" aria-labelledby="chTitle" hidden>
+  <div class="ch-page">
+    <button type="button" class="quiet-btn ch-back" id="chBack">Назад в каталог</button>
+    <h2 id="chTitle" tabindex="-1">Канал</h2>
+    <p class="ch-meta" id="chMeta"></p>
+    <div class="ch-actions">
+      <button type="button" class="channel-action" id="chAction" aria-pressed="false"></button>
+      <a class="quiet-btn" id="chTg" href="#" target="_blank" rel="noopener">Открыть в Telegram</a>
+    </div>
+    <p class="channel-state" id="chState" role="status" aria-live="polite"></p>
+    <div id="chList"></div>
+  </div>
+</section>
 <section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
   <main class="catalog-main">
     <div class="catalog-head">
@@ -1075,8 +1079,8 @@ function showApp(account){
     : 'Добавь почту, чтобы восстановить пароль, если забудешь его.';
   $('#authScreen').hidden=true; $('#appShell').hidden=false;
   setSyncStatus(''); renderTabs();
-  const initialView = HASH_VIEW[location.hash.slice(1)] || (localStorage.getItem(LS.view)==='cat'?'cat':'feed');
-  show(initialView, {replace:true});
+  const start = location.hash ? viewFromHash() : {view: localStorage.getItem(LS.view)==='cat' ? 'cat' : 'feed'};
+  show(start.view, {replace:true, channel: start.channel});
   if(feedMode !== 'saved') load();
   setInterval(pullState,15000);
   window.addEventListener('focus',pullState);
@@ -1097,7 +1101,7 @@ async function pullState(){
 }
 
 let tab = '', onlyUnread = localStorage.getItem(LS.only) === '1', titles = {};
-let catalogCat = 'all', timer, catTimer, feedQuery='', catalogQuery='', expandedChannel='', previewCache=new Map(), catalogItems=new Map();
+let catalogCat = 'all', timer, catTimer, feedQuery='', catalogQuery='', catalogItems=new Map();
 let feedCursor=null, feedHasMore=false, feedErrors=[], feedRequestId=0, feedController=null, feedLoading=false;
 let feedPageFailed=false;
 let unreadTotal=0;
@@ -1739,13 +1743,13 @@ async function loadCatalog(){
       const entry=document.createElement('article'); entry.className='channel-entry';
       const row=document.createElement('div'); row.className='channel-row';
       const open=document.createElement('button'); open.type='button'; open.className='channel-open';
-      open.dataset.act='preview'; open.dataset.channel=c.username; open.setAttribute('aria-expanded',String(expandedChannel===c.username));
+      open.dataset.act='preview'; open.dataset.channel=c.username;
       open.innerHTML='<span class="channel-mark" aria-hidden="true">'+esc((c.name[0]||'@').toUpperCase())+'</span>'+ 
         '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+
         (c.last_ts?'<span class="channel-fresh">последний пост '+esc(dayLabel(c.last_ts))+'</span>':'')+ 
         '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(catRu(c.cat))+')':'')+'</span>'+ 
         (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+ 
-        (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">'+(expandedChannel===c.username?'Скрыть':'Посмотреть')+'</span>'+
+        (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">Посмотреть</span>'+
         '<svg class="i channel-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>';
       const action=document.createElement('button'); action.type='button'; action.className='channel-action'+(have.has(c.username)?' is-on':'');
       action.dataset.act='subscribe'; action.dataset.channel=c.username; action.setAttribute('aria-pressed',String(have.has(c.username)));
@@ -1756,47 +1760,67 @@ async function loadCatalog(){
         '<svg class="i" aria-hidden="true"><use href="#'+(on?'i-check':'i-plus')+'"/></svg>';
       action.setAttribute('aria-label',on?'Убрать '+c.name+' из ленты':'Добавить '+c.name+' в ленту');
       row.append(open,action);
-      const panel=document.createElement('section'); panel.className='channel-preview'; panel.hidden=expandedChannel!==c.username;
-      panel.id='preview-'+c.username; panel.setAttribute('aria-label','Предпросмотр канала '+c.name);
-      if(!panel.hidden) renderPreview(panel,c);
-      entry.append(row,panel); box.append(entry);
+      entry.append(row); box.append(entry);
     }
   }catch(e){
     box.innerHTML=emptyState('alert','Каталог временно недоступен. Проверь соединение и попробуй ещё раз.',['retry','Повторить']);
   }
 }
-function renderPreview(panel,channel){
-  panel.innerHTML='<div class="channel-preview-head"><strong>Последние публикации</strong><a href="https://t.me/'+encodeURIComponent(channel.username)+'" target="_blank" rel="noopener">Открыть канал</a></div>';
-  const cached=previewCache.get(channel.username);
-  if(!cached){ panel.insertAdjacentHTML('beforeend','<p class="channel-preview-state">Загружаю публикации…</p>'); fetchPreview(panel,channel); return; }
-  if(cached.error){ panel.insertAdjacentHTML('beforeend','<p class="channel-preview-state">Не удалось показать публикации. <button class="empty-action" data-act="preview-retry" data-channel="'+esc(channel.username)+'">Повторить</button></p>'); return; }
-  if(!cached.posts.length){ panel.insertAdjacentHTML('beforeend','<p class="channel-preview-state">Пока нет доступных публикаций.</p>'); return; }
-  for(const post of cached.posts){
-    const item=document.createElement('article'); item.className='channel-preview-post';
-    item.innerHTML='<time>'+esc(when(post.ts))+'</time>'+extras(post);
-    panel.append(item);
-  }
-  watchGalleries(panel);
+// Экран канала: последние публикации и подписка. Адрес экрана — #channel/<имя>
+let channelName = '';
+function openChannel(name){ show('channel', {channel: name}); }
+function channelPost(p){
+  const el = document.createElement('article');
+  el.className = 'post';
+  el.dataset.post = key(p);
+  el.dataset.url = p.url || ('https://t.me/' + key(p));
+  el.innerHTML = '<div class="meta"><time>'+esc(when(p.ts))+'</time>'+
+    (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+'</div>'+
+    extras(p) + actionsRow(p);
+  return el;
 }
-async function fetchPreview(panel,channel){
+function paintChannelAction(){
+  const on = subs().includes(channelName);
+  const b = $('#chAction');
+  b.setAttribute('aria-pressed', String(on));
+  b.classList.toggle('is-on', on);
+  b.innerHTML = '<span class="channel-action-text">'+(on?'Убрать':'Добавить')+'</span>'+
+    '<svg class="i" aria-hidden="true"><use href="#'+(on?'i-check':'i-plus')+'"/></svg>';
+  b.setAttribute('aria-label', on ? 'Убрать из ленты' : 'Добавить в ленту');
+}
+async function loadChannel(){
+  const name = channelName;
+  const list = $('#chList'), state = $('#chState');
+  list.innerHTML = '';
+  state.textContent = 'Загружаю публикации…';
+  $('#chTitle').textContent = titles[name] || catalogItems.get(name)?.name || name;
+  $('#chMeta').textContent = '@' + name;
+  $('#chTg').href = 'https://t.me/' + encodeURIComponent(name);
+  paintChannelAction();
   try{
-    const r=await fetch('/api/preview?c='+encodeURIComponent(channel.username));
+    const r = await fetch('/api/preview?c=' + encodeURIComponent(name));
     if(!r.ok) throw new Error('preview unavailable');
-    const data=await r.json(); previewCache.set(channel.username,data);
-  }catch(e){ previewCache.set(channel.username,{error:true,posts:[]}); }
-  if(expandedChannel===channel.username && panel.isConnected) renderPreview(panel,channel);
-}
-function togglePreview(channel){
-  expandedChannel=expandedChannel===channel?'':channel;
-  for(const entry of $('#catList').querySelectorAll('.channel-entry')){
-    const button=entry.querySelector('.channel-open'), panel=entry.querySelector('.channel-preview');
-    const expanded=button.dataset.channel===expandedChannel;
-    button.setAttribute('aria-expanded',String(expanded));
-    button.querySelector('.channel-preview-label').textContent=expanded?'Скрыть':'Посмотреть';
-    panel.hidden=!expanded;
-    if(expanded) renderPreview(panel,catalogItems.get(expandedChannel));
+    const d = await r.json();
+    if(name !== channelName) return;
+    if(d.title) $('#chTitle').textContent = d.title;
+    state.textContent = d.posts.length ? '' : 'Пока нет доступных публикаций.';
+    for(const p of d.posts) list.append(channelPost(p));
+    watchGalleries(list);
+  }catch(e){
+    if(name !== channelName) return;
+    state.textContent = 'Не удалось загрузить публикации. Попробуй позже.';
   }
 }
+$('#chAction').onclick = () => {
+  const name = channelName, active = subs().includes(name);
+  setSubscription(name, !active);
+  paintChannelAction();
+  loadCatalog(); load();
+  if(active) showUndo('Канал «'+(titles[name]||name)+'» убран из ленты.', () => {
+    setSubscription(name, true); paintChannelAction(); loadCatalog(); load();
+  });
+};
+$('#chBack').onclick = () => show('cat');
 
 function setSubscription(channel,subscribed){
   const list=new Set(subs());
@@ -1876,44 +1900,58 @@ window.addEventListener('resize',updateFilterScroll);
 // Выбор каналов — диалог внутри ленты, на экран он не выносится.
 const VIEW_HASH = {feed:'feed', cat:'catalog', saved:'saved', me:'profile'};
 const HASH_VIEW = {feed:'feed', catalog:'cat', saved:'saved', profile:'me'};
+function viewFromHash(){
+  const h = location.hash.slice(1);
+  if(h.startsWith('channel/')) return {view:'channel', channel: decodeURIComponent(h.slice(8))};
+  return {view: HASH_VIEW[h] || 'feed'};
+}
 function show(which, opts={}){
   const me = which === 'me';
   const cat = which === 'cat';
   const saved = which === 'saved';
+  const channel = which === 'channel';
   const wasSaved = feedMode === 'saved';
+  if(channel) channelName = opts.channel || channelName;
   feedMode = saved ? 'saved' : 'feed';
   queueMicrotask(paintTabbar);
-  document.body.classList.toggle('view-me', me);
+  document.body.classList.toggle('view-solo', me || channel);
   if(me) $('header').classList.toggle('search-open', false);
   $('#viewMe').hidden = !me;
-  $('#viewFeed').hidden = me || cat;
-  $('#viewCat').hidden = me || !cat;
-  $('#tabFeed').setAttribute('aria-selected', String(!cat && !me && !saved));
-  $('#tabCat').setAttribute('aria-selected', String(cat));
+  $('#viewChannel').hidden = !channel;
+  $('#viewFeed').hidden = me || cat || channel;
+  $('#viewCat').hidden = me || channel || !cat;
+  // Экран канала относится к каталогу: вкладка «Каталог» остаётся выбранной
+  const inCatalog = cat || channel;
+  $('#tabFeed').setAttribute('aria-selected', String(!inCatalog && !me && !saved));
+  $('#tabCat').setAttribute('aria-selected', String(inCatalog));
   $('#tabSaved').setAttribute('aria-selected', String(saved));
-  $('#tabFeed').tabIndex = cat || me || saved ? -1 : 0;
-  $('#tabCat').tabIndex = cat ? 0 : -1;
+  $('#tabFeed').tabIndex = inCatalog || me || saved ? -1 : 0;
+  $('#tabCat').tabIndex = inCatalog ? 0 : -1;
   $('#tabSaved').tabIndex = saved ? 0 : -1;
   $('#meBtn').setAttribute('aria-pressed', String(me));
-  $('#unreadBtn').hidden = cat || me || saved;
-  document.querySelector('.tabs-wrap').hidden = saved;
+  $('#unreadBtn').hidden = inCatalog || me || saved;
+  document.querySelector('.tabs-wrap').hidden = saved || channel;
   // Поиск относится к тому экрану, где он уместен
   const placeholder = cat ? 'Поиск по каталогу' : saved ? 'Поиск по сохранённым' : 'Поиск по постам';
   $('#q').placeholder = placeholder;
   $('#q').setAttribute('aria-label', placeholder);
   $('#q').value = cat ? catalogQuery : feedQuery;
-  const v = $(me ? '#viewMe' : cat ? '#viewCat' : '#viewFeed');
+  const v = $(me ? '#viewMe' : channel ? '#viewChannel' : cat ? '#viewCat' : '#viewFeed');
   v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
-  if(!me) localStorage.setItem(LS.view, which);
+  if(!me && !channel) localStorage.setItem(LS.view, which);
   if(!opts.fromHistory){
-    const hash = '#' + VIEW_HASH[which];
+    const hash = channel ? '#channel/' + encodeURIComponent(channelName) : '#' + VIEW_HASH[which];
     if(location.hash !== hash) history[opts.replace ? 'replaceState' : 'pushState'](null, '', hash);
   }
   if(cat && !$('#catList').children.length){ loadCategories(); loadCatalog(); }
+  if(channel) loadChannel();
   if(saved) loadSaved();
   else if(wasSaved) load();
 }
-window.addEventListener('popstate', () => show(HASH_VIEW[location.hash.slice(1)] || 'feed', {fromHistory:true}));
+window.addEventListener('popstate', () => {
+  const v = viewFromHash();
+  show(v.view, {fromHistory:true, channel: v.channel});
+});
 
 function enableTabKeyboard(tablist){
   tablist.addEventListener('keydown', e => {
@@ -1995,7 +2033,7 @@ document.addEventListener('keydown', e => {
 /* ---------- Нижняя панель ---------- */
 function paintTabbar(){
   const me = !$('#viewMe').hidden;
-  const cat = !$('#viewCat').hidden;
+  const cat = !$('#viewCat').hidden || !$('#viewChannel').hidden;
   const anyOverlay = document.querySelector('.ov.open');
   const mark = (id, on) => {
     const b = $(id);
@@ -2034,8 +2072,7 @@ $('#catList').onclick = e => {
   const action=e.target.closest('[data-act]'); if(!action) return;
   if(action.dataset.act==='retry') loadCatalog();
   if(action.dataset.act==='clearCatalog'){ catalogQuery=''; catalogCat='all'; $('#q').value=''; $('#cats').querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-pressed',String(i===0))); loadCatalog(); }
-  if(action.dataset.act==='preview') togglePreview(action.dataset.channel);
-  if(action.dataset.act==='preview-retry'){ previewCache.delete(action.dataset.channel); loadCatalog(); }
+  if(action.dataset.act==='preview') openChannel(action.dataset.channel);
   if(action.dataset.act==='subscribe'){
     const channel=action.dataset.channel, active=action.getAttribute('aria-pressed')==='true';
     setSubscription(channel,!active); loadCatalog(); load();
