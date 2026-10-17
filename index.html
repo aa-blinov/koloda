@@ -675,6 +675,8 @@ body.view-solo .search{display:none}
     </div>
     <p class="channel-state" id="chState" role="status" aria-live="polite"></p>
     <div id="chList"></div>
+    <button class="btn load-more" id="chMore" type="button" hidden>Загрузить ещё</button>
+    <p class="feed-empty-more" id="chEnd" hidden>Сохранённые публикации канала закончились. Более старые посты есть в <a id="chEndTg" href="#" target="_blank" rel="noopener">Telegram</a>.</p>
   </div>
 </section>
 <section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
@@ -1267,6 +1269,7 @@ async function load(append=false, silent=false){
       unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
+    $('#feedEnd').hidden = feedHasMore || !$('#postList')?.querySelector('.post');
     paintFreshness();
     paintSearchHint(q, d.posts.length, append);
   }catch(e){
@@ -1503,7 +1506,8 @@ function render(posts,append=false){
       return;
     }
     box.innerHTML='<div class="feed-warning" id="feedWarning" role="status" hidden></div><div id="postList"></div>'+
-      '<p class="feed-empty-more" id="feedPageNote" hidden></p><button class="btn load-more" id="loadMore" type="button" data-act="loadmore">Загрузить ещё</button>';
+      '<p class="feed-empty-more" id="feedPageNote" hidden></p><button class="btn load-more" id="loadMore" type="button" data-act="loadmore">Загрузить ещё</button>'+
+      '<p class="feed-empty-more" id="feedEnd" hidden>Это все сохранённые публикации ваших каналов. Более старые посты каждого канала есть в Telegram.</p>';
   }
   const postList=$('#postList');
   if(!postList) return;
@@ -1792,29 +1796,43 @@ function paintChannelAction(){
     '<svg class="i" aria-hidden="true"><use href="#'+(on?'i-check':'i-plus')+'"/></svg>';
   b.setAttribute('aria-label', on ? 'Убрать из ленты' : 'Добавить в ленту');
 }
-async function loadChannel(){
+// Публикации канала по страницам. Конец списка говорит прямо: это не конец канала,
+// а конец того, что приложение сохранило. Старые посты есть в Telegram.
+let chCursor = null;
+async function loadChannel(append=false){
   const name = channelName;
-  const list = $('#chList'), state = $('#chState');
-  list.innerHTML = '';
-  state.textContent = 'Загружаю публикации…';
-  $('#chTitle').textContent = titles[name] || catalogItems.get(name)?.name || name;
-  $('#chMeta').textContent = '@' + name;
-  $('#chTg').href = 'https://t.me/' + encodeURIComponent(name);
-  paintChannelAction();
+  const list = $('#chList'), state = $('#chState'), more = $('#chMore'), end = $('#chEnd');
+  if(!append){
+    list.innerHTML = '';
+    chCursor = null;
+    state.textContent = 'Загружаю публикации…';
+    $('#chTitle').textContent = titles[name] || catalogItems.get(name)?.name || name;
+    $('#chMeta').textContent = '@' + name;
+    $('#chTg').href = 'https://t.me/' + encodeURIComponent(name);
+    $('#chEndTg').href = 'https://t.me/' + encodeURIComponent(name);
+    paintChannelAction();
+  }
+  more.hidden = true; end.hidden = true;
   try{
-    const r = await fetch('/api/preview?c=' + encodeURIComponent(name));
+    const params = new URLSearchParams({c: name});
+    if(append && chCursor){ params.set('before_ts', chCursor.ts); params.set('before_id', chCursor.msg_id); }
+    const r = await fetch('/api/preview?' + params.toString());
     if(!r.ok) throw new Error('preview unavailable');
     const d = await r.json();
     if(name !== channelName) return;
     if(d.title) $('#chTitle').textContent = d.title;
-    state.textContent = d.posts.length ? '' : 'Пока нет доступных публикаций.';
+    chCursor = d.next || null;
+    state.textContent = !d.posts.length && !append ? 'Пока нет доступных публикаций.' : '';
     for(const p of d.posts) list.append(channelPost(p));
     watchGalleries(list);
+    more.hidden = !d.has_more;
+    end.hidden = d.has_more || !list.children.length;
   }catch(e){
     if(name !== channelName) return;
     state.textContent = 'Не удалось загрузить публикации. Попробуй позже.';
   }
 }
+$('#chMore').onclick = () => loadChannel(true);
 $('#chAction').onclick = () => {
   const name = channelName, active = subs().includes(name);
   setSubscription(name, !active);

@@ -160,6 +160,7 @@ TTL_SPREAD = 60       # TTL канала = TTL ± TTL_SPREAD: каналы, за
 FETCH_TIMEOUT = 8     # сколько ждём ответа t.me на один канал
 REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт канал, которого ещё нет в кэше
 FEED_PAGE_SIZE = 80
+CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 
 
 def connect():
@@ -1870,18 +1871,34 @@ class Handler(BaseHTTPRequestHandler):
                 if not valid_channel(channel):
                     return self._send(400, json.dumps({"error": "неверное имя канала"}),
                                       "application/json; charset=utf-8")
-                errors = refresh_channels(db, [channel])
+                # Первая страница обновляет канал, следующие читают базу как есть
+                cursor_ts, cursor_id = self._query("before_ts"), self._query("before_id")
+                paging = bool(cursor_ts or cursor_id)
+                try:
+                    before = (int(cursor_ts), int(cursor_id)) if paging else None
+                except ValueError:
+                    return self._send(400, json.dumps({"error": "неверная позиция списка"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                errors = [] if paging else refresh_channels(db, [channel])
+                where, args = "channel=?", [channel]
+                if before:
+                    where += " AND (ts < ? OR (ts = ? AND msg_id < ?))"
+                    args += [before[0], before[0], before[1]]
                 rows = db.execute(
                     "SELECT channel,msg_id,url,text,media,views,ts,reactions,"
-                    "preview,doc,fwd,quote,sticker FROM posts WHERE channel=? "
-                    "ORDER BY ts DESC,msg_id DESC LIMIT 6", (channel,)
+                    "preview,doc,fwd,quote,sticker FROM posts WHERE " + where +
+                    " ORDER BY ts DESC,msg_id DESC LIMIT ?", args + [CHANNEL_PAGE_SIZE + 1]
                 ).fetchall()
-                if not rows:
+                if not rows and not paging:
                     status = 502 if errors else 404
                     message = "Не удалось загрузить публикации канала" if errors else "Канал не найден"
                     return self._send(status, json.dumps({"error": message}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
+                has_more = len(rows) > CHANNEL_PAGE_SIZE
+                rows = rows[:CHANNEL_PAGE_SIZE]
                 posts = [dict(zip(POST_FIELDS, row)) for row in rows]
+                next_cursor = ({"ts": posts[-1]["ts"], "msg_id": posts[-1]["msg_id"]}
+                               if has_more and posts else None)
                 for post in posts:
                     for key in ("media", "reactions", "preview", "doc", "fwd", "quote"):
                         if post.get(key):
@@ -1892,7 +1909,8 @@ class Handler(BaseHTTPRequestHandler):
                 title = db.execute("SELECT title FROM cache WHERE channel=?", (channel,)).fetchone()
                 return self._send(200, json.dumps({"channel": channel,
                                                    "title": title[0] if title else channel,
-                                                   "posts": posts, "errors": errors},
+                                                   "posts": posts, "errors": errors,
+                                                   "has_more": has_more, "next": next_cursor},
                                                   ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
