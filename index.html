@@ -11,8 +11,7 @@
 :root{
   --bg:#0d0f14; --surf:#141821; --raise:#1b2029; --line:#242b38;
   --fg:#e9ecf3; --dim:#98a1b5; --faint:#8690a3;
-  --acc:#5aa2ff; --acc-ink:#0b1220;
-  --line-hover:#303a4c;
+  --acc:#5aa2ff; --acc-ink:#0b1220; --line-hover:#303a4c;
   --scroll-thumb:#2a3242; --scroll-thumb-hover:#3a4557;
   --paid:#f0b429; --error:#f07c83; --media-bg:#000; --selection-fg:#fff;
   --overlay:rgba(0,0,0,.72);
@@ -33,8 +32,7 @@
 :root[data-theme="light"]{
   --bg:#f4f6f9; --surf:#ffffff; --raise:#eceff4; --line:#dde2ea;
   --fg:#151a21; --dim:#4d5766; --faint:#5d6773;
-  --acc:#1a63d8; --acc-ink:#ffffff;
-  --line-hover:#c9d0db;
+  --acc:#1a63d8; --acc-ink:#ffffff; --line-hover:#c9d0db;
   --scroll-thumb:#c3cad6; --scroll-thumb-hover:#aab3c2;
   --paid:#8a5a00; --error:#c22b36; --media-bg:#e9ecf1; --selection-fg:#0b1220;
   --overlay:rgba(16,20,28,.55);
@@ -459,13 +457,13 @@ body:has(.ov.open){overflow:hidden}
   .bar{gap:6px}
   /* пустая полоса справа от «Непрочитанные» съедала 226px впустую */
   #unreadBtn{grid-area:extra;justify-self:end}
-  #sortTabs{grid-area:extra;justify-self:start;grid-row:2}
+  #sortTabs{grid-area:sorts;justify-self:stretch}
   /* «Непрочитанные» переехал в первый ряд: третий ряд шапки стоил 44px,
      а справа от него было 226px пустоты */
-  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"sections extra profile" "search search search";gap:6px}
+  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"sections extra profile" "search search search" "sorts sorts sorts";gap:6px}
   #sectionTabs{grid-area:sections;justify-self:start}
   #meBtn{grid-area:profile;justify-self:end}
-  #unreadBtn,#sortTabs{grid-area:extra;justify-self:start}
+  #unreadBtn{grid-area:extra;justify-self:end}
   #sortTabs{overflow-x:auto;max-width:100%;scrollbar-width:none}
   #unreadBtn .u-label{display:none}
   #unreadBtn .u-count:empty{display:none}
@@ -1658,7 +1656,10 @@ $('#catList').onclick = e => {
 
 let profileReturnFocus=null, profileInertState=[];
 function openProfile(){
-  profileReturnFocus=document.activeElement;
+  // Возвращать фокус нужно на кнопку, которая открыла окно, а не на пост,
+  // на котором человек случайно стоял: иначе после закрытия он «проваливается»
+  // обратно в ленту и следующий Tab уходит не туда.
+  profileReturnFocus=$('#meBtn').contains(document.activeElement) ? $('#meBtn') : document.activeElement;
   const background=[$('header'),$('#viewFeed'),$('#viewCat')];
   profileInertState=background.map(el=>[el,el.inert]); background.forEach(el=>{el.inert=true;});
   $('#meOvl').classList.add('open'); $('#meOvl').setAttribute('aria-hidden','false');
