@@ -60,6 +60,13 @@ CREATE TABLE IF NOT EXISTS posts (
     PRIMARY KEY (channel, msg_id)
 );
 CREATE INDEX IF NOT EXISTS posts_ts ON posts (ts DESC);
+CREATE TABLE IF NOT EXISTS saved_posts (
+    profile TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    msg_id INTEGER NOT NULL,
+    saved INTEGER NOT NULL,
+    PRIMARY KEY (profile, channel, msg_id)
+);
 CREATE TABLE IF NOT EXISTS cache (
     channel  TEXT PRIMARY KEY,
     title    TEXT,
@@ -1364,6 +1371,48 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps({"ok": True}), "application/json",
                                   [("Set-Cookie", expired)])
 
+            if path == "/api/saved":
+                # Сохранённые посты профиля: список для экрана «Сохранённое» и переключение
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if self.command == "POST":
+                    data = self._read_json()
+                    if isinstance(data, int):
+                        return self._send(data, json.dumps({"error": "неверные данные"}, ensure_ascii=False),
+                                          "application/json; charset=utf-8")
+                    channel = str(data.get("channel", ""))
+                    msg_id = data.get("msg_id")
+                    on = data.get("on") is True
+                    if not valid_feed_channel(channel) or not isinstance(msg_id, int) or msg_id < 1:
+                        return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
+                                          "application/json; charset=utf-8")
+                    if on:
+                        db.execute("INSERT OR REPLACE INTO saved_posts VALUES (?,?,?,?)",
+                                   (cid, channel, msg_id, int(time.time())))
+                    else:
+                        db.execute("DELETE FROM saved_posts WHERE profile=? AND channel=? AND msg_id=?",
+                                   (cid, channel, msg_id))
+                    db.commit()
+                    return self._send(200, json.dumps({"saved": on}), "application/json; charset=utf-8")
+                rows = db.execute(
+                    "SELECT " + ",".join("p." + f for f in POST_FIELDS) +
+                    " FROM saved_posts s JOIN posts p ON p.channel=s.channel AND p.msg_id=s.msg_id"
+                    " WHERE s.profile=? ORDER BY s.saved DESC, p.msg_id DESC LIMIT 200", (cid,)).fetchall()
+                posts = [dict(zip(POST_FIELDS, r)) for r in rows]
+                for p in posts:
+                    p["saved"] = True
+                    for k in ("media", "reactions", "preview", "doc", "fwd", "quote"):
+                        if p.get(k):
+                            try: p[k] = json.loads(p[k])
+                            except ValueError: p[k] = None
+                names = list({p["channel"] for p in posts})
+                titles = dict(db.execute("SELECT channel,title FROM cache WHERE channel IN (%s)"
+                                         % ",".join("?" * len(names)), names)) if names else {}
+                return self._send(200, json.dumps({"posts": posts, "titles": titles}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
             if path == "/api/feed":
                 q = self._query("q")
                 chans = list(dict.fromkeys(
@@ -1434,6 +1483,11 @@ class Handler(BaseHTTPRequestHandler):
                             try: p[k] = json.loads(p[k])
                             except ValueError: p[k] = None
                 unread_profile = client_id(self, db)
+                # флажок «сохранено» нужен кнопке под каждым постом
+                saved_keys = {(r[0], r[1]) for r in db.execute(
+                    "SELECT channel,msg_id FROM saved_posts WHERE profile=?", (unread_profile,))} if unread_profile else set()
+                for p in posts:
+                    p["saved"] = (p["channel"], p["msg_id"]) in saved_keys
                 # заголовки нужны и запрошенным каналам, и всем подпискам профиля:
                 # по ним подписаны вкладки в шапке, а при выборе одного канала
                 # остальные остались бы без названия

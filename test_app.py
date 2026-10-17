@@ -169,6 +169,36 @@ class FeedAPITest(unittest.TestCase):
             self.assertTrue(app.wait_refresh_idle())
         self.assertEqual(fetch.call_count, 1)
 
+    def test_saved_posts_need_a_profile(self):
+        self.cookie = ""
+        self.assertEqual(self.request("/api/saved")[0], 401)
+        self.assertEqual(self.request("/api/saved", "POST", {"channel": "alpha", "msg_id": 1, "on": True})[0], 401)
+
+    def test_saved_post_shows_in_saved_list_and_feed_flag(self):
+        self.cookie = ""
+        status, _ = self.request("/api/auth/register", "POST", {"username": "saver", "password": "long-password"})
+        self.assertEqual(status, 201)
+        channel, msg_id = self.db.execute(
+            "SELECT channel,msg_id FROM posts WHERE channel='alpha' ORDER BY ts DESC LIMIT 1").fetchone()
+        status, payload = self.request("/api/saved", "POST", {"channel": channel, "msg_id": msg_id, "on": True})
+        self.assertEqual((status, payload), (200, {"saved": True}))
+        status, saved = self.request("/api/saved")
+        self.assertEqual(status, 200)
+        self.assertEqual([(p["channel"], p["msg_id"]) for p in saved["posts"]], [(channel, msg_id)])
+        self.assertTrue(saved["posts"][0]["saved"])
+        status, feed = self.request("/api/feed?channels=alpha,beta")
+        flags = {(p["channel"], p["msg_id"]): p["saved"] for p in feed["posts"]}
+        self.assertTrue(flags[(channel, msg_id)])
+        self.assertEqual(sum(flags.values()), 1)
+        self.request("/api/saved", "POST", {"channel": channel, "msg_id": msg_id, "on": False})
+        self.assertEqual(self.request("/api/saved")[1]["posts"], [])
+
+    def test_saved_post_rejects_a_bad_channel_name(self):
+        self.cookie = ""
+        self.request("/api/auth/register", "POST", {"username": "saver2", "password": "long-password"})
+        status, _ = self.request("/api/saved", "POST", {"channel": "bad name!", "msg_id": 1, "on": True})
+        self.assertEqual(status, 400)
+
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
         # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,
