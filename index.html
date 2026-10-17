@@ -2084,6 +2084,19 @@ async function loadTgChannels(){
     });
   }catch(e){ setTgState('Не удалось загрузить список каналов',true); }
 }
+// Ссылка tg://login живёт около 30 секунд. Пока окно открыто, опрос отдаёт свежую
+// ссылку, и она подменяется в «Открыть Telegram» до того, как её нажмут.
+let tgTimer=null;
+const stopTg=()=>{ clearInterval(tgTimer); tgTimer=null; };
+const refreshTgLink=async()=>{
+  if(!tgToken) return stopTg();
+  try{
+    const d=await tgPost('/api/tg/link/poll',{token:tgToken});
+    if(d.url) $('#tgOpen').href=d.url;
+    if(d.state==='done'){ stopTg(); setTgState('Готово, Telegram подключён'); tgToken=''; await loadTgStatus(); }
+    else if(d.state==='expired'){ stopTg(); setTgState('Ссылка протухла, начни заново',true); tgToken=''; await loadTgStatus(); }
+  }catch(e){}
+};
 $('#tgStart').onclick=async()=>{
   const btn=$('#tgStart'); btn.disabled=true; setTgState('');
   try{
@@ -2091,6 +2104,7 @@ $('#tgStart').onclick=async()=>{
     if(d.linked){ setTgState('Telegram уже подключён'); await loadTgStatus(); return; }
     tgToken=d.token||'';
     $('#tgOpen').href=d.url;
+    stopTg(); tgTimer=setInterval(refreshTgLink,3000);
     $('#tgLink').hidden=false; btn.hidden=true;
     setTgState('Открой ссылку в Telegram и подтверди вход, потом нажми «Я подтвердил вход»');
   }catch(e){ setTgState(e.message,true); }
@@ -2107,6 +2121,7 @@ $('#tgConfirm').onclick=async()=>{
   finally{ btn.disabled=false; }
 };
 $('#tgCancel').onclick=async()=>{
+  stopTg();
   try{ await tgPost('/api/tg/link/cancel',{token:tgToken}); }catch(e){}
   tgToken=''; await loadTgStatus();
 };
