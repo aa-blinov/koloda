@@ -1,4 +1,5 @@
 """Регрессионные проверки личной ленты без обращения к Telegram."""
+import asyncio
 import json
 import os
 import re
@@ -7,7 +8,9 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
+from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -775,6 +778,54 @@ class ThemeContrastTest(unittest.TestCase):
             for text, bg in self.TEXT_ON_BG:
                 with self.subTest(theme=theme, text=text, bg=bg):
                     self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
+
+
+class TgLinkRenewTest(unittest.TestCase):
+    """Ссылка входа перевыпускается, пока её не открыли, и подтверждение не теряется."""
+
+    class FakeQR:
+        def __init__(self, accept_after=1):
+            self.token = 0
+            self.recreated = 0
+            self.waits = 0
+            self.accept_after = accept_after
+            self.expires = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+        @property
+        def url(self):
+            return "tg://login?token=%d" % self.token
+
+        async def recreate(self):
+            self.recreated += 1
+            self.token += 1
+
+        async def wait(self, timeout=None):
+            self.waits += 1
+            if self.waits <= self.accept_after:
+                raise asyncio.TimeoutError
+            return SimpleNamespace(first_name="Ира", last_name="", username="ira", phone="")
+
+    def test_watch_recreates_expired_link_and_keeps_the_account(self):
+        qr = self.FakeQR(accept_after=1)
+        entry = {"profile": "p", "client": None, "qr": qr, "started": time.time()}
+        with patch.object(app.tg, "_tighten"):
+            app.tg.run(app.tg._watch(entry))
+        self.assertEqual(qr.recreated, 1)
+        self.assertEqual(entry["account"]["title"], "Ира")
+        self.assertFalse(entry.get("failed"))
+
+    def test_poll_returns_the_current_url_then_done_or_expired(self):
+        qr = self.FakeQR()
+        app.tg._pending["live"] = {"profile": "p", "client": None, "qr": qr,
+                                   "started": time.time(), "task": None}
+        self.assertEqual(app.tg.poll_link("live"), {"state": "waiting", "url": "tg://login?token=0"})
+        qr.token = 1
+        self.assertEqual(app.tg.poll_link("live")["url"], "tg://login?token=1")
+        app.tg._pending["live"]["account"] = {"title": "Ира", "phone": ""}
+        self.assertEqual(app.tg.poll_link("live")["state"], "done")
+        app.tg._pending["old"] = {"profile": "p", "client": None, "qr": qr,
+                                  "started": time.time() - 700, "task": None}
+        self.assertEqual(app.tg.poll_link("old"), {"state": "expired"})
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ import os
 import secrets
 import threading
 import time
+from datetime import datetime, timezone
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 TG_DIR = os.path.join(DATA_DIR, "tg")
@@ -134,40 +135,58 @@ def start_link(profile):
     if state.get("state") == "done":
         return state
     token = secrets.token_urlsafe(12)
-    _pending[token] = {"profile": profile, "client": state["client"], "qr": state["qr"],
-                       "started": time.time()}
-    return {"state": "waiting", "token": token, "url": state["qr"].url}
+    entry = {"profile": profile, "client": state["client"], "qr": state["qr"],
+             "started": time.time()}
+    # Ждём подтверждения в фоне: событие об импорте может прийти между опросами
+    entry["task"] = asyncio.run_coroutine_threadsafe(_watch(entry), loop())
+    _pending[token] = entry
+    return {"state": "waiting", "token": token, "url": entry["qr"].url}
 
 
-async def _finish(entry):
-    qr, client = entry["qr"], entry["client"]
+async def _watch(entry):
+    """Ждёт подтверждения и перевыпускает ссылку, пока её не открыли.
+
+    Токен живёт около 30 секунд, после этого Telegram отвечает, что ссылка устарела,
+    и нужен новый токен: recreate. Ожидание идёт всё время, а не в момент опроса,
+    иначе подтверждение, пришедшее между опросами, теряется.
+    """
+    qr = entry["qr"]
     try:
-        await asyncio.wait_for(qr.wait(), timeout=5)
-    except asyncio.TimeoutError:
-        return {"state": "waiting"}
-    me = await client.get_me()
-    _tighten(session_path(entry["profile"]))
-    return {"state": "done", "account": _account(me)}
+        while time.time() - entry["started"] <= 600:
+            left = (qr.expires - datetime.now(timezone.utc)).total_seconds()
+            try:
+                me = await qr.wait(timeout=max(left - 2, 1))
+            except asyncio.TimeoutError:
+                await qr.recreate()
+                continue
+            entry["account"] = _account(me)
+            _tighten(session_path(entry["profile"]))
+            return
+    except Exception:
+        pass
+    entry["failed"] = True
 
 
 def poll_link(token):
-    """Проверяет, подтвердил ли человек вход в Telegram."""
+    """Проверяет, подтвердил ли человек вход, и отдаёт ссылку, которая ещё открывается."""
     entry = _pending.get(token)
     if not entry:
         return {"state": "unknown"}
-    if time.time() - entry["started"] > 600:
+    if entry.get("account"):
+        _drop_pending(token)
+        return {"state": "done", "account": entry["account"]}
+    if entry.get("failed") or time.time() - entry["started"] > 600:
         _drop_pending(token)
         return {"state": "expired"}
-    result = run(_finish(entry))
-    if result["state"] == "done":
-        _drop_pending(token)
-    return result
+    return {"state": "waiting", "url": entry["qr"].url}
 
 
 def _drop_pending(token):
     entry = _pending.pop(token, None)
     if not entry:
         return
+    if entry.get("task"):
+        entry["task"].cancel()
 
     async def bye():
         try:
