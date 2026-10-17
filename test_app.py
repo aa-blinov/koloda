@@ -818,6 +818,22 @@ class ThemeContrastTest(unittest.TestCase):
                     self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
 
 
+class DatabaseModeTest(unittest.TestCase):
+    """База открывается в WAL: лента читает, пока фон пишет кэш."""
+
+    def test_connect_switches_the_database_to_wal(self):
+        with tempfile.TemporaryDirectory(prefix="wal-test-") as folder:
+            previous = app.DB
+            app.DB = folder + "/feed.db"
+            try:
+                db = app.connect()
+                mode = db.execute("PRAGMA journal_mode").fetchone()[0]
+                db.close()
+            finally:
+                app.DB = previous
+        self.assertEqual(mode, "wal")
+
+
 class TgLinkRenewTest(unittest.TestCase):
     """Ссылка входа перевыпускается, пока её не открыли, и подтверждение не теряется."""
 
