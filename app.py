@@ -67,6 +67,14 @@ CREATE TABLE IF NOT EXISTS saved_posts (
     saved INTEGER NOT NULL,
     PRIMARY KEY (profile, channel, msg_id)
 );
+CREATE TABLE IF NOT EXISTS backfill (
+    channel TEXT PRIMARY KEY,
+    next_before INTEGER,              -- с какого msg_id тянуть следующую страницу вглубь
+    fetched INTEGER NOT NULL DEFAULT 0,
+    done INTEGER NOT NULL DEFAULT 0,
+    failures INTEGER NOT NULL DEFAULT 0,
+    retry_at INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS cache (
     channel  TEXT PRIMARY KEY,
     title    TEXT,
@@ -159,6 +167,8 @@ TTL = 300
 TTL_SPREAD = 60       # TTL канала = TTL ± TTL_SPREAD: каналы, загруженные вместе, не устаревают разом
 FETCH_TIMEOUT = 8     # сколько ждём ответа t.me на один канал
 REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт канал, которого ещё нет в кэше
+BACKFILL_CAP = 500    # постов истории на канал; дальше только в Telegram
+BACKFILL_PAUSE = 4    # секунд между страницами истории: не дёргаем t.me
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 
@@ -380,11 +390,14 @@ def valid_feed_channel(name):
     return valid_channel(name) or private_channel(name)
 
 
-def fetch_channel(channel):
-    """Один канал -> (title, [posts]). Бросает ValueError если канала нет."""
-    url = f"https://t.me/s/{channel}"
+def fetch_channel(channel, before=None):
+    """Один канал -> (title, [posts]). before — страница старее этого msg_id.
+    Бросает ValueError, если канала нет, и когда t.me попросил подождать (капча)."""
+    url = f"https://t.me/s/{channel}" + (f"?before={before}" if before else "")
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     html = urllib.request.urlopen(req, timeout=FETCH_TIMEOUT).read().decode("utf-8", "replace")
+    if "captcha" in html.lower() or "too many requests" in html.lower():
+        raise ValueError("t.me попросил подождать, попробуем позже")
 
     t = re.search(r'property="og:title" content="([^"]+)"', html) or \
         re.search(r"<title>([^<]+)</title>", html)
@@ -511,6 +524,81 @@ def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, 
     sql += " ORDER BY ts DESC, channel ASC, msg_id DESC LIMIT ?"
     args.append(limit)
     return db.execute(sql, args).fetchall()
+
+
+# История канала догружается в фоне: подписанные публичные каналы листаются вглубь
+# страницами по BACKFILL_PAUSE секунд. Позиция хранится в таблице backfill, поэтому
+# перезапуск её не сбрасывает. Посты пишутся без изменения cache: иначе догрузка
+# сбрасывала бы отсчёт обычного обновления канала.
+def backfill_candidates(db):
+    now = int(time.time())
+    rows = db.execute(
+        "SELECT DISTINCT s.channel FROM user_subs s "
+        "LEFT JOIN backfill b ON b.channel = s.channel "
+        "WHERE COALESCE(b.done, 0) = 0 AND COALESCE(b.retry_at, 0) <= ? "
+        "ORDER BY COALESCE(b.fetched, 0), s.channel", (now,)).fetchall()
+    return public_channels([r[0] for r in rows])
+
+
+def backfill_step(db):
+    """Одна страница истории одного канала. False, если догружать нечего."""
+    candidates = backfill_candidates(db)
+    if not candidates:
+        return False
+    channel = candidates[0]
+    now = int(time.time())
+    row = db.execute("SELECT next_before, fetched, failures FROM backfill WHERE channel=?",
+                     (channel,)).fetchone()
+    next_before, fetched, failures = row if row else (None, 0, 0)
+    if next_before is None:
+        next_before = db.execute("SELECT MIN(msg_id) FROM posts WHERE channel=?",
+                                 (channel,)).fetchone()[0]
+        if next_before is None:  # в базе ни одного поста: догружать нечего
+            db.execute("INSERT OR REPLACE INTO backfill VALUES (?,?,?,1,0,0)", (channel, None, 0))
+            return True
+    try:
+        _, posts = fetch_channel(channel, before=next_before)
+    except Exception:
+        failures += 1
+        retry_at = now + min(60 * 2 ** (failures - 1), 3600)
+        db.execute("INSERT OR REPLACE INTO backfill VALUES (?,?,?,0,?,?)",
+                   (channel, next_before, fetched, failures, retry_at))
+        return True
+    db.executemany(POST_INSERT, posts)
+    older = [p["msg_id"] for p in posts if p["msg_id"] < next_before]
+    fetched += len(older)
+    done = not older or fetched >= BACKFILL_CAP
+    db.execute("INSERT OR REPLACE INTO backfill VALUES (?,?,?,?,0,0)",
+               (channel, min(older) if older else next_before, fetched, int(done)))
+    return True
+
+
+def _backfill_loop():
+    while True:
+        worked = False
+        try:
+            db = connect()
+            try:
+                worked = backfill_step(db)
+                db.commit()
+            finally:
+                db.close()
+        except Exception:
+            pass
+        time.sleep(BACKFILL_PAUSE if worked else 60)
+
+
+def history_status(db, profile):
+    """Для ленты: догружается ли ещё история подписанных каналов."""
+    subs = public_channels([r[0] for r in db.execute(
+        "SELECT channel FROM user_subs WHERE profile=?", (profile,))]) if profile else []
+    if not subs:
+        return {"loading": False, "fetched": 0}
+    rows = {c: (f, d) for c, f, d in db.execute(
+        "SELECT channel,fetched,done FROM backfill WHERE channel IN (%s)" % ",".join("?" * len(subs)),
+        subs)}
+    return {"loading": any(not rows.get(c, (0, 0))[1] for c in subs),
+            "fetched": sum(rows.get(c, (0, 0))[0] for c in subs)}
 
 
 def public_channels(channels):
@@ -1541,6 +1629,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "has_more": has_more,
                                                    "unread": unread_count,
+                                                   "history": history_status(db, unread_profile),
                                                    "next": next_cursor}),
                                   "application/json; charset=utf-8")
 
@@ -1906,11 +1995,14 @@ class Handler(BaseHTTPRequestHandler):
                                 post[key] = json.loads(post[key])
                             except ValueError:
                                 post[key] = None
+                hist = db.execute("SELECT fetched, done FROM backfill WHERE channel=?", (channel,)).fetchone()
                 title = db.execute("SELECT title FROM cache WHERE channel=?", (channel,)).fetchone()
                 return self._send(200, json.dumps({"channel": channel,
                                                    "title": title[0] if title else channel,
                                                    "posts": posts, "errors": errors,
-                                                   "has_more": has_more, "next": next_cursor},
+                                                   "has_more": has_more, "next": next_cursor,
+                                                   "history": {"fetched": hist[0] if hist else 0,
+                                                               "done": bool(hist and hist[1])}},
                                                   ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
@@ -1987,4 +2079,7 @@ if __name__ == "__main__":
               "укажи в APP_BASE_URL публичный адрес с HTTPS.")
     # Каждый HTTP-запрос обслуживается отдельным потоком; сетевое ожидание t.me
     # не блокирует другие вкладки.
+    # История подписанных каналов догружается в фоне. В тестах фон не запускается:
+    # там свой сервер и никаких фоновых запросов к t.me
+    threading.Thread(target=_backfill_loop, daemon=True, name="backfill").start()
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

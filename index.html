@@ -657,6 +657,7 @@ body.view-solo .search{display:none}
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
   <p class="fresh" id="fresh" aria-live="polite"></p>
+  <p class="fresh" id="historyStatus" aria-live="polite" hidden></p>
 </div>
     <button id="newPosts" class="new-posts" type="button" hidden></button>
     <main id="feed" aria-label="Публикации канала" tabindex="0"></main>
@@ -674,9 +675,10 @@ body.view-solo .search{display:none}
       <a class="quiet-btn" id="chTg" href="#" target="_blank" rel="noopener">Открыть в Telegram</a>
     </div>
     <p class="channel-state" id="chState" role="status" aria-live="polite"></p>
+    <p class="fresh" id="chHistory" aria-live="polite" hidden></p>
     <div id="chList"></div>
     <button class="btn load-more" id="chMore" type="button" hidden>Загрузить ещё</button>
-    <p class="feed-empty-more" id="chEnd" hidden>Сохранённые публикации канала закончились. Более старые посты есть в <a id="chEndTg" href="#" target="_blank" rel="noopener">Telegram</a>.</p>
+    <p class="feed-empty-more" id="chEnd" hidden><span id="chEndText"></span> <span id="chEndLink">Более старые посты есть в <a id="chEndTg" href="#" target="_blank" rel="noopener">Telegram</a>.</span></p>
   </div>
 </section>
 <section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
@@ -1166,6 +1168,32 @@ const skeleton = () => '<div class="sr-only" role="status">Загружаю да
 /* ---------- Лента ---------- */
 // Экран «Сохранённое» живёт внутри ленты: те же посты, отметки и поиск, другой источник
 let feedMode = 'feed';   // 'feed' — лента подписок, 'saved' — сохранённые посты
+// Догрузка истории: читатель видит, что старые посты ещё приходят, и не принимает
+// временный конец списка за конец канала
+let historyLoading = false;
+function historyText(fetched, scope=''){
+  const what = 'Догружаем старые публикации' + (scope ? ' ' + scope : '');
+  return fetched ? what+': уже '+fetched+' '+plural(fetched,'публикация','публикации','публикаций') : what;
+}
+function paintHistory(h){
+  historyLoading = Boolean(h && h.loading);
+  const line = $('#historyStatus');
+  line.hidden = !historyLoading;
+  if(historyLoading) line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+historyText(h.fetched);
+  const end = $('#feedEnd');
+  if(end) end.textContent = historyLoading
+    ? 'Старые публикации ещё загружаются, они появятся здесь сами.'
+    : 'Это все публикации ваших каналов. Более старые есть в Telegram.';
+}
+function paintChannelHistory(h){
+  const loading = Boolean(h && !h.done);
+  const line = $('#chHistory');
+  line.hidden = !loading;
+  if(loading) line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+historyText(h.fetched,'канала');
+  $('#chEndText').textContent = loading ? 'Старые публикации ещё загружаются, они появятся здесь сами.' : 'Сохранённые публикации канала закончились.';
+  $('#chEndLink').hidden = loading;
+}
+
 async function loadSaved(append=false){
   if(append && (feedLoading || !feedHasMore)) return;
   if(!append){
@@ -1270,6 +1298,7 @@ async function load(append=false, silent=false){
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
     $('#feedEnd').hidden = feedHasMore || !$('#postList')?.querySelector('.post');
+    paintHistory(d.history);
     paintFreshness();
     paintSearchHint(q, d.posts.length, append);
   }catch(e){
@@ -1356,6 +1385,7 @@ async function pollFresh(){
     const r = await fetch('/api/feed?'+params.toString());
     if(!r.ok) return;
     d = await r.json();
+    paintHistory(d.history);
   }catch(e){ return; }
   if(context !== pollContext() || feedLoading) return;
   const shown = new Set([...($('#postList')?.children || [])].map(el => el.dataset.post).filter(Boolean));
@@ -1825,6 +1855,7 @@ async function loadChannel(append=false){
     state.textContent = !d.posts.length && !append ? 'Пока нет доступных публикаций.' : '';
     for(const p of d.posts) list.append(channelPost(p));
     watchGalleries(list);
+    paintChannelHistory(d.history);
     more.hidden = !d.has_more;
     end.hidden = d.has_more || !list.children.length;
   }catch(e){
