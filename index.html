@@ -81,6 +81,8 @@ header{position:sticky;top:0;z-index:20;
 #unreadBtn,#meBtn{flex:0 0 auto}
 #unreadBtn{display:inline-flex;align-items:center;gap:6px}
 #unreadBtn .u-count{font-variant-numeric:tabular-nums}
+#unreadBtn .u-glyph{display:none}
+@media(max-width:640px){#unreadBtn .u-glyph{display:block;width:16px;height:16px}}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 .seg{display:flex;gap:4px}
@@ -458,26 +460,43 @@ body:has(.ov.open){overflow:hidden}
   .search{order:10;flex:1 0 100%}
 }
 
+/* ---------- Навигация на телефоне ---------- */
+/* Разделы ушли вниз под большой палец: три ряда шапки съедали четверть экрана
+   и переключатель разделов при этом ещё и наезжал на сортировку. */
+.tabbar{display:none}
+.m-brand,.m-search-btn{display:none}
+.sort-row{margin:0 0 16px}
+@media(max-width:640px){
+  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;
+    z-index:30;background:var(--surf);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    min-height:56px;padding:6px 4px;background:none;border:0;font:inherit;font-size:11px;
+    color:var(--dim);cursor:pointer}
+  .tabbar-item .i{width:21px;height:21px}
+  .tabbar-item[aria-current="page"]{color:var(--acc)}
+  .tabbar-item[aria-current="page"] span{font-weight:650}
+  #appShell{padding-bottom:calc(56px + env(safe-area-inset-bottom))}
+  /* шапка: поиск, название, непрочитанные — один ряд */
+  #sectionTabs{display:none}
+  #meBtn{display:none}
+  .bar{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
+    gap:8px;align-items:center}
+  .m-brand{grid-area:brand;display:block;font-weight:650;letter-spacing:-.01em;font-size:15px}
+  .m-search-btn{grid-area:qtoggle;display:grid;place-items:center;width:44px;height:44px;
+    background:none;border:0;border-radius:var(--r-sm);color:var(--fg);cursor:pointer}
+  .m-search-btn[aria-expanded="true"]{background:var(--raise);color:var(--acc)}
+  /* поиск появляется по требованию и занимает второй ряд */
+  .search{grid-area:search;grid-column:1/-1;display:none}
+  header.search-open .search{display:flex}
+  .sort-row{grid-area:auto;justify-self:stretch}
+}
+
 @media(max-width:640px){
   header{padding:6px 10px;padding-top:calc(6px + env(safe-area-inset-top))}
   .bar{gap:6px}
-  /* пустая полоса справа от «Непрочитанные» съедала 226px впустую */
-  #unreadBtn{grid-area:extra;justify-self:end}
-  #sortTabs{grid-area:sorts;justify-self:stretch}
-  /* «Непрочитанные» переехал в первый ряд: третий ряд шапки стоил 44px,
-     а справа от него было 226px пустоты */
-  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"sections extra profile" "search search search" "sorts sorts sorts";gap:6px}
-  #sectionTabs{grid-area:sections;justify-self:start}
-  #meBtn{grid-area:profile;justify-self:end}
-  #unreadBtn{grid-area:extra;justify-self:end}
-  #sortTabs{overflow-x:auto;max-width:100%;scrollbar-width:none}
   #unreadBtn .u-label{display:none}
   #unreadBtn .u-count:empty{display:none}
-  /* переключатель разделов не должен уезжать под соседние кнопки:
-     без min-width:0 его собственная ширина не ужималась, и «Каталог»
-     оказывался под «Непрочитанные» — нажатие не доходило */
-  #sectionTabs{min-width:0}
-  .search{grid-area:search;width:100%}
   .seg button{padding:8px 10px;font-size:13px}
   main{padding-left:14px;padding-right:14px}
   .tabs-wrap{padding:12px 14px 8px}
@@ -530,6 +549,8 @@ body:has(.ov.open){overflow:hidden}
   <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 8v5"/><circle cx="12" cy="16.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="9"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></symbol>
   <symbol id="i-audio" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.6 20a7.6 7.6 0 0 1 14.8 0"/></symbol>
   <symbol id="i-video" viewBox="0 0 24 24"><rect x="2.5" y="5" width="14" height="14" rx="2"/><path d="m16.5 10.5 5-3v9l-5-3z"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-9.5 9.5M21 3l-6.5 18-3.5-7-7-3.5Z"/></symbol>
@@ -538,6 +559,10 @@ body:has(.ov.open){overflow:hidden}
 
 <header>
   <div class="bar">
+    <span class="m-brand" aria-hidden="true">Колода</span>
+    <button type="button" class="m-search-btn" id="qToggle" aria-label="Поиск" aria-expanded="false">
+      <svg class="i"><use href="#i-search"/></svg>
+    </button>
     <div class="seg" role="tablist" aria-label="Разделы" id="sectionTabs">
       <button role="tab" id="tabFeed" aria-controls="viewFeed" aria-selected="true" tabindex="0"><svg class="i"><use href="#i-send"/></svg>Лента</button>
       <button role="tab" id="tabCat" aria-controls="viewCat" aria-selected="false" tabindex="-1"><svg class="i"><use href="#i-grid"/></svg>Каталог</button>
@@ -546,12 +571,7 @@ body:has(.ov.open){overflow:hidden}
       <svg class="i"><use href="#i-search"/></svg>
       <input id="q" type="search" placeholder="Поиск по постам" autocomplete="off" aria-label="Поиск по постам">
     </label>
-    <div class="seg" id="sortTabs" role="group" aria-label="Сортировка каталога" hidden>
-      <button type="button" data-sort="subs" aria-pressed="true">По подписчикам</button>
-      <button type="button" data-sort="name" aria-pressed="false">По названию</button>
-      <button type="button" data-sort="fresh" aria-pressed="false">По постам</button>
-    </div>
-    <button id="unreadBtn" class="toggle" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
+    <button id="unreadBtn" class="toggle" aria-pressed="false"><svg class="i u-glyph" aria-hidden="true"><use href="#i-send"/></svg><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
   <p class="search-hint" id="searchHint" role="status" aria-live="polite" hidden></p>
@@ -574,6 +594,8 @@ body:has(.ov.open){overflow:hidden}
   <p class="fresh" id="fresh" aria-live="polite"></p>
 </div>
     <main id="feed" aria-label="Публикации канала" tabindex="0"></main>
+
+
 </section>
 
 <section class="view" id="viewCat" role="tabpanel" aria-labelledby="tabCat" hidden>
@@ -581,7 +603,12 @@ body:has(.ov.open){overflow:hidden}
     <div class="catalog-head">
       <h1 class="sr-only">Каталог каналов</h1>
       <h2>Собери свою ленту</h2>
-      <p>Открой канал, посмотри последние публикации и добавь только то, что хочется читать.</p>
+      <p>Открой каталог, посмотри последние публикации и добавь только то, что хочется читать.</p>
+    </div>
+    <div class="seg sort-row" id="sortTabs" role="group" aria-label="Сортировка каталога">
+      <button type="button" data-sort="subs" aria-pressed="true">По подписчикам</button>
+      <button type="button" data-sort="name" aria-pressed="false">По названию</button>
+      <button type="button" data-sort="fresh" aria-pressed="false">По постам</button>
     </div>
     <form id="channelForm" class="channel-form">
       <label class="sr-only" for="channelInput">Ссылка или имя публичного канала Telegram</label>
@@ -735,6 +762,17 @@ body:has(.ov.open){overflow:hidden}
     <p class="auth-footnote">Для ленты не нужен аккаунт Telegram. Восстановить пароль можно по подтверждённой почте.</p>
   </section>
 </main>
+
+<nav class="tabbar" id="tabBar" aria-label="Навигация">
+  <button type="button" class="tabbar-item" id="tbFeed" aria-current="page">
+    <svg class="i"><use href="#i-send"/></svg><span>Лента</span></button>
+  <button type="button" class="tabbar-item" id="tbCat">
+    <svg class="i"><use href="#i-grid"/></svg><span>Каталог</span></button>
+  <button type="button" class="tabbar-item" id="tbChans">
+    <svg class="i"><use href="#i-list"/></svg><span>Каналы</span></button>
+  <button type="button" class="tabbar-item" id="tbMe">
+    <svg class="i"><use href="#i-user"/></svg><span>Профиль</span></button>
+</nav>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -1409,6 +1447,7 @@ function openChannels(){
   renderTabs();
   const ovl=$('#channelsOvl');
   ovl.classList.add('open'); ovl.setAttribute('aria-hidden','false');
+  paintTabbar();   // после open: иначе активным остаётся раздел, а не экран
   $('#tabsToggle').setAttribute('aria-expanded','true');
   const first=$('#chanList').querySelector('.chan-item');
   requestAnimationFrame(()=> (first || $('#chanClose')).focus({preventScroll:true}));
@@ -1416,6 +1455,7 @@ function openChannels(){
 function closeChannels(){
   const ovl=$('#channelsOvl');
   ovl.classList.remove('open'); ovl.setAttribute('aria-hidden','true');
+  paintTabbar();
   $('#tabsToggle').setAttribute('aria-expanded','false');
   channelsInert.forEach(([el,was])=>{el.inert=was;});
   channelsFocus?.focus?.();
@@ -1603,13 +1643,13 @@ window.addEventListener('resize',updateFilterScroll);
 /* ---------- Навигация ---------- */
 function show(which){
   const cat = which === 'cat';
+  queueMicrotask(paintTabbar);
   $('#viewFeed').hidden = cat; $('#viewCat').hidden = !cat;
   $('#tabFeed').setAttribute('aria-selected', String(!cat));
   $('#tabCat').setAttribute('aria-selected', String(cat));
   $('#tabFeed').tabIndex = cat ? -1 : 0;
   $('#tabCat').tabIndex = cat ? 0 : -1;
   $('#unreadBtn').hidden = cat;
-  $('#sortTabs').hidden = !cat;
   // Поиск относится к тому виду, где он уместен
   $('#q').placeholder = cat ? 'Поиск по каталогу' : 'Поиск по постам';
   $('#q').setAttribute('aria-label', cat ? 'Поиск по каталогу' : 'Поиск по постам');
@@ -1697,6 +1737,34 @@ document.addEventListener('keydown', e => {
   if(key === 'u'){ markFocused(); e.preventDefault(); }
 });
 
+/* ---------- Нижняя панель ---------- */
+function paintTabbar(){
+  const cat = !$('#viewCat').hidden;
+  const anyOverlay = document.querySelector('.ov.open');
+  const mark = (id, on) => {
+    const b = $(id);
+    if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
+  };
+  mark('#tbFeed', !cat && !anyOverlay);
+  mark('#tbCat', cat && !anyOverlay);
+  mark('#tbChans', !!$('#channelsOvl').classList.contains('open'));
+  mark('#tbMe', !!$('#meOvl').classList.contains('open'));
+}
+$('#tbFeed').onclick = () => { show('feed'); };
+$('#tbCat').onclick  = () => { show('cat'); };
+$('#tbChans').onclick = () => {
+  $('#channelsOvl').classList.contains('open') ? closeChannels() : openChannels();
+};
+$('#tbMe').onclick = () => {
+  $('#meOvl').classList.contains('open') ? closeProfile() : openProfile();
+};
+
+$('#qToggle').onclick = () => {
+  const open = $('header').classList.toggle('search-open');
+  $('#qToggle').setAttribute('aria-expanded', String(open));
+  if(open) $('#q').focus();
+};
+
 $('#q').oninput = () => {
   clearTimeout(timer); const cat=!$('#viewCat').hidden;
   if(cat) catalogQuery=$('#q').value; else feedQuery=$('#q').value;
@@ -1738,12 +1806,13 @@ function openProfile(){
   const background=[$('header'),$('#viewFeed'),$('#viewCat')];
   profileInertState=background.map(el=>[el,el.inert]); background.forEach(el=>{el.inert=true;});
   $('#meOvl').classList.add('open'); $('#meOvl').setAttribute('aria-hidden','false');
+  paintTabbar();
   requestAnimationFrame(()=>$('#meClose').focus({preventScroll:true}));
   loadTgStatus();
 }
 function closeProfile(){
   $('#meOvl').classList.remove('open'); $('#meOvl').setAttribute('aria-hidden','true');
-  profileInertState.forEach(([el,was])=>{el.inert=was;}); profileReturnFocus?.focus();
+  profileInertState.forEach(([el,was])=>{el.inert=was;}); paintTabbar(); profileReturnFocus?.focus();
 }
 // Просмотр кадра целиком: список собираем из самой ленты, отдельного состояния нет
 let lbItems=[], lbIndex=0, lbFocus=null, lbInert=[];
@@ -2161,5 +2230,6 @@ async function startApp(){
 }
 startApp();
 </script>
+
 </body>
 </html>
