@@ -196,7 +196,10 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
    фотография доезжала. .got снимает и квадрат, и подложку. */
 .post img:not(.sticker):not(.got){aspect-ratio:1;background:var(--raise)}
 .post img.got{aspect-ratio:auto;background:var(--media-bg)}
-.gal>video{max-width:100%}
+/* Видео держит пропорции t.me (--ar) и показывает кадр целиком, без обрезки.
+   Высота как у фото в альбоме, одиночное видео до 520px, как одиночный кадр */
+.gal>video{height:460px;width:auto;max-width:82%;aspect-ratio:var(--ar,1/1);object-fit:contain}
+.gal.one>video{height:520px;width:auto;max-width:100%;aspect-ratio:var(--ar,1/1);object-fit:contain}
 /* Счётчик кадров уезжает наверх, когда в альбоме есть видео: снизу он закрывал
    громкость и полноэкранный режим панели управления */
 .galw:has(video) .gal-n{top:10px;bottom:auto}
@@ -1200,6 +1203,18 @@ async function load(append=false){
 const DOC_ICON = {audio:'audio', voice:'audio', video:'video', roundvideo:'video',
                   gif:'file', sticker:'file', file:'file'};
 
+// Видео: превью и пропорции кадра приходят от t.me. Пропорции задают рамку до
+// загрузки файла, поэтому кадр не прыгает, когда видео открылось.
+const videoAttrs = m => (m.p ? ' poster="'+esc(m.p)+'"' : '')+
+  (m.r > 0 ? ' style="--ar:1/'+Number(m.r)+'"' : '');
+// Пропорций от t.me нет (альбом, старые посты): берём размер картинки превью,
+// это кадр того же видео. Пока картинка не загрузилась, рамку задаёт CSS.
+const sizeFromPoster = v => {
+  if(v.style.getPropertyValue('--ar') || !v.poster) return;
+  const probe = new Image();
+  probe.onload = () => { if(probe.naturalWidth) v.style.setProperty('--ar', probe.naturalWidth+'/'+probe.naturalHeight); };
+  probe.src = v.poster;
+};
 function extras(p){
   let h = '';
 
@@ -1214,7 +1229,7 @@ function extras(p){
 
   if(p.media && p.media.length){
     const items = p.media.map((m, i) => m.k === 'v'
-      ? '<video controls preload="none" playsinline src="'+esc(m.u)+'"></video>'
+      ? '<video controls preload="none" playsinline'+videoAttrs(m)+' src="'+esc(m.u)+'"></video>'
       // Кадр получает роль кнопки и tabindex: он открывает просмотрщик, и до
       // этой правки до фотографий можно было дойти только мышью. Подпись
       // нужна и экранному диктору: «открыть кадр 2 из 4», а не «изображение».
@@ -1379,6 +1394,7 @@ function render(posts,append=false){
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
       '</div>'+ extras(p);
+    el.querySelectorAll('.gal video[poster]').forEach(sizeFromPoster);
     const setRead = () => {
       if(seen().has(key(p))) return;
       markRead(p);
@@ -1868,7 +1884,7 @@ function closeProfile(){
 let lbItems=[], lbIndex=0, lbFocus=null, lbInert=[];
 function paintLightbox(){
   const m = lbItems[lbIndex], img=$('#lbImg'), vid=$('#lbVid');
-  if(m.k==='v'){ vid.src=m.u; vid.hidden=false; img.hidden=true; img.removeAttribute('src'); }
+  if(m.k==='v'){ vid.poster=m.p||''; vid.src=m.u; vid.hidden=false; img.hidden=true; img.removeAttribute('src'); }
   else { img.src=m.u; img.hidden=false; vid.hidden=true; vid.removeAttribute('src'); }
   $('#lbN').textContent = lbItems.length > 1 ? (lbIndex+1)+' из '+lbItems.length : '';
   const many = lbItems.length > 1;
@@ -1876,7 +1892,8 @@ function paintLightbox(){
 }
 function openLightbox(gal, start){
   lbItems = [...gal.children].map(n => ({ k: n.tagName==='VIDEO' ? 'v' : 'i',
-                                          u: n.getAttribute('src') || n.dataset.src || '' }));
+                                          u: n.getAttribute('src') || n.dataset.src || '',
+                                          p: n.getAttribute('poster') || '' }));
   lbIndex = Math.max(0, lbItems.findIndex(m => m.u === (start.dataset.src || start.getAttribute('src'))));
   lbFocus = document.activeElement;
   const bg=[$('header'),$('#viewFeed'),$('#viewCat')];
@@ -1910,6 +1927,13 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   openLightbox(media.closest('.gal'), media);
 });
+// Размер кадра берём из файла, когда он открылся: пропорции t.me есть не у всех
+// видео (альбом, старые посты). Высота кадра задана, поэтому он не прыгает.
+document.addEventListener('loadedmetadata', e => {
+  const v = e.target;
+  if(v instanceof HTMLVideoElement && v.closest('.gal') && v.videoWidth)
+    v.style.setProperty('--ar', v.videoWidth+'/'+v.videoHeight);
+}, true);
 // Кадр, который t.me отдал ссылкой, а файл уже не отдаётся (404, 500): вместо
 // пустой подложки ставим ссылку на пост. Ошибка загрузки не всплывает, ловим в фазе захвата.
 document.addEventListener('error', e => {

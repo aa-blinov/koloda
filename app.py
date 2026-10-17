@@ -393,7 +393,24 @@ def fetch_channel(channel):
         videos += [unescape(u) for u in re.findall(r'<video[^>]+src=\'([^\']+)\'', chunk)]
         # t.me отдаёт один и тот же файл в двух <video> поста: в альбоме он стоял дважды
         videos = list(dict.fromkeys(videos))
-        media =[{"k": "i", "u": u} for u in photos] + [{"k": "v", "u": u} for u in videos]
+        # Превью и пропорции кадра лежат рядом с плеером: миниатюра в теге i и
+        # padding-top обёртки (высота в процентах от ширины). Без них клиент не знает,
+        # какой рамки ждать до загрузки видео. Ключи p и r необязательные.
+        video_meta = {}
+        for part in re.split(r'(?=<a class="tgme_widget_message_video_player)', chunk)[1:]:
+            src = re.search(r'<video[^>]+src="([^"]+)"', part)
+            if not src:
+                continue
+            meta = {}
+            poster = _bg(part, "tgme_widget_message_video_thumb")
+            ratio = re.search(r'tgme_widget_message_video_wrap"[^>]*padding-top:([\d.]+)%', part)
+            if poster:
+                meta["p"] = poster
+            if ratio:
+                meta["r"] = round(float(ratio.group(1)) / 100, 4)
+            video_meta.setdefault(unescape(src.group(1)), meta)
+        media = [{"k": "i", "u": u} for u in photos] + [
+            {"k": "v", "u": u, **video_meta.get(u, {})} for u in videos]
         # Видео без src (круглое, с превью) отдаём обложкой.
         thumb = _bg(chunk, "tgme_widget_message_video_wrap")
         if not media and thumb:

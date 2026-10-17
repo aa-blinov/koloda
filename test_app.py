@@ -514,6 +514,16 @@ class MediaParseTest(unittest.TestCase):
         media = self.media(self.parse(video + video))
         self.assertEqual(media, [{"k": "v", "u": "https://cdn4.telesco.pe/file/V.mp4?token=t"}])
 
+    def test_video_keeps_poster_and_frame_ratio_from_player(self):
+        fragment = ('<a class="tgme_widget_message_video_player blured" href="https://t.me/durov/1">'
+                    '<i class="tgme_widget_message_video_thumb" style="background-image:url(\'https://cdn4.telesco.pe/file/P.jpg\')"></i>'
+                    '<video src="https://cdn4.telesco.pe/file/V.mp4" muted></video>'
+                    '<div class="tgme_widget_message_video_wrap" style="width:720px;padding-top:75%">'
+                    '<video src="https://cdn4.telesco.pe/file/V.mp4"></video></div></a>')
+        media = self.media(self.parse(fragment))
+        self.assertEqual(media, [{"k": "v", "u": "https://cdn4.telesco.pe/file/V.mp4",
+                                  "p": "https://cdn4.telesco.pe/file/P.jpg", "r": 0.75}])
+
     def test_photo_wins_over_emoji_and_keeps_extra_classes(self):
         media = self.media(self.parse('<div class="tgme_widget_message_photo_wrap 5215576584121683352 '
                            '1214346053_460000664" style="width:800px;'
