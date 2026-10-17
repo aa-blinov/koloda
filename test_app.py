@@ -239,13 +239,26 @@ class FeedAPITest(unittest.TestCase):
         # refresh=1 больше не форсирует обновление: кэш свежий, сети быть не должно
         fetch.assert_not_called()
 
-    def test_channel_preview_returns_six_latest_cached_posts(self):
-        status, payload = self.request("/api/preview?c=alpha")
+    def test_channel_preview_pages_through_every_cached_post(self):
+        status, first = self.request("/api/preview?c=alpha")
         self.assertEqual(status, 200)
-        self.assertEqual(payload["title"], "Alpha")
-        self.assertEqual(len(payload["posts"]), 6)
-        keys = [(post["ts"], post["msg_id"]) for post in payload["posts"]]
-        self.assertEqual(keys, sorted(keys, key=lambda row: (-row[0], -row[1])))
+        self.assertEqual(first["title"], "Alpha")
+        self.assertEqual(len(first["posts"]), 10)
+        self.assertTrue(first["has_more"])
+        seen = [(post["ts"], post["msg_id"]) for post in first["posts"]]
+        cursor = first["next"]
+        for _ in range(50):  # предел на случай сломанного курсора: тест не должен зависать
+            status, page = self.request("/api/preview?" + urlencode(
+                {"c": "alpha", "before_ts": cursor["ts"], "before_id": cursor["msg_id"]}))
+            self.assertEqual(status, 200)
+            seen += [(post["ts"], post["msg_id"]) for post in page["posts"]]
+            if not page["has_more"]:
+                break
+            cursor = page["next"]
+        total = self.db.execute("SELECT COUNT(*) FROM posts WHERE channel='alpha'").fetchone()[0]
+        self.assertEqual(len(seen), total)
+        self.assertEqual(len(set(seen)), total)
+        self.assertEqual(seen, sorted(seen, key=lambda row: (-row[0], -row[1])))
 
 
     def test_login_checks_password_and_logout_expires_session(self):
