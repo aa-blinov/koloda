@@ -509,6 +509,11 @@ class MediaParseTest(unittest.TestCase):
         self.assertEqual(self.media(post), [])
         self.assertIn("привет", post["text"])
 
+    def test_same_video_twice_in_one_post_is_one_item(self):
+        video = '<video src="https://cdn4.telesco.pe/file/V.mp4?token=t" preload="none"></video>'
+        media = self.media(self.parse(video + video))
+        self.assertEqual(media, [{"k": "v", "u": "https://cdn4.telesco.pe/file/V.mp4?token=t"}])
+
     def test_photo_wins_over_emoji_and_keeps_extra_classes(self):
         media = self.media(self.parse('<div class="tgme_widget_message_photo_wrap 5215576584121683352 '
                            '1214346053_460000664" style="width:800px;'
