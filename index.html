@@ -274,6 +274,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-md);
   background:var(--raise);color:var(--dim);font-size:15px;font-weight:650}
 .channel-copy{display:grid;gap:3px;min-width:0;flex:1}
+.channel-fresh{font-size:12px;color:var(--dim)}
 .channel-name{font-size:15px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-preview-label{flex:0 0 auto;min-height:44px;display:flex;align-items:center;padding:8px 12px;
   border-radius:var(--r-sm);font-size:13px;font-weight:600}
@@ -406,6 +407,11 @@ body:has(.ov.open){overflow:hidden}
   .dlg .settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
   .dlg .settings h3{font-size:14px;margin:0 0 4px}
   .dlg .settings-hint{font-size:12.5px;color:var(--faint);margin:0 0 12px}
+.keys{display:grid;gap:6px;margin:0}
+.keys>div{display:flex;align-items:baseline;gap:10px}
+.keys dt{flex:0 0 auto;min-width:44px;text-align:center;padding:3px 8px;border-radius:var(--r-xs);
+  border:1px solid var(--line);background:var(--bg);color:var(--acc);font:inherit;font-size:12px;font-weight:600}
+.keys dd{margin:0;color:var(--dim);font-size:13px}
 .chan-action{display:flex;align-items:center;justify-content:space-between;gap:8px;
   width:100%;min-height:44px;padding:9px 11px;margin-bottom:6px;font:inherit;font-size:13.5px;
   text-align:left;cursor:pointer;background:var(--surf);border:1px solid var(--line);
@@ -639,6 +645,18 @@ body:has(.ov.open){overflow:hidden}
       <button class="btn" id="tgStart" type="button">Подключить Telegram</button>
     </div>
     <div class="settings">
+      <h3>Клавиши</h3>
+      <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
+      <dl class="keys">
+        <div><dt>j</dt><dd>следующий пост</dd></div>
+        <div><dt>k</dt><dd>предыдущий пост</dd></div>
+        <div><dt>n</dt><dd>к первому непрочитанному</dd></div>
+        <div><dt>u</dt><dd>снять или вернуть отметку</dd></div>
+        <div><dt>/</dt><dd>поиск</dd></div>
+        <div><dt>Esc</dt><dd>закрыть окно</dd></div>
+      </dl>
+    </div>
+    <div class="settings">
       <h3>Оформление</h3>
       <p class="settings-hint">Выбор сохраняется в профиле и переезжает на другое устройство.</p>
       <p class="seg-label">Цвета</p>
@@ -739,6 +757,10 @@ function paintSearchHint(q, count, append){
   const term=String(q||'').trim();
   if(!term){ el.textContent=''; el.hidden=true; return; }
   el.hidden=false;
+  if(term.length < 2){
+    el.textContent='Минимум два символа — так запрос не находит всю ленту сразу.';
+    return;
+  }
   if(!count){
     el.textContent='По запросу «'+term+'» ничего нет. Проверь раскладку или попробуй короче.';
     return;
@@ -1022,8 +1044,11 @@ async function load(append=false){
   if(append) feedController=controller;
   feedLoading=true;
   const q = feedQuery.trim();
+  // Один символ совпадает почти со всем: на «a» лента отдавала 57 постов из
+  // 60 и человек терял место. Ниже двух символов ищем без запроса.
+  const effectiveQ = q.length >= 2 ? q : '';
   try{
-    const params=new URLSearchParams({channels:list.join(','),q});
+    const params=new URLSearchParams({channels:list.join(','),q:effectiveQ});
     if(append && feedCursor){
       params.set('before_ts',feedCursor.ts); params.set('before_channel',feedCursor.channel);
       params.set('before_id',feedCursor.msg_id);
@@ -1186,7 +1211,13 @@ function render(posts,append=false){
   if(!list.length && feedHasMore){
     const note=$('#feedPageNote'); note.hidden=false; note.textContent='В этой части нет непрочитанных постов.';
   }
-  const READ_MARK = '<button type="button" class="read-status" aria-label="Вернуть в непрочитанные" title="Вернуть в непрочитанные">'+icon('check')+'<span class="sr-only">Прочитано</span></button>';
+  // Шесть одинаковых кнопок «Прочитано» подряд ни о чём не говорили: подписи
+  // различают только канал и дата, иначе экранный диктор читает шесть одинаковых.
+  const readMark = (who, when) => {
+    const what = 'Прочитано: '+(who||'пост')+(when?', '+when:'');
+    return '<button type="button" class="read-status" aria-label="Вернуть в непрочитанные: '+esc(what)+'" title="'+esc(what)+'">'
+      +icon('check')+'<span class="sr-only">'+esc(what)+'</span></button>';
+  };
   const NEW_MARK  = '<span class="read-toggle" title="Новое"><span class="dot" aria-hidden="true"></span></span>';
   // делегирование: авто-отметка подменяет точку на галочку через outerHTML,
   // и слушатель на каждый элемент повесить нельзя — пропадёт при подмене
@@ -1230,7 +1261,7 @@ function render(posts,append=false){
     el.dataset.post = key(p);
     el.innerHTML =
       '<div class="meta">'+
-        (read ? READ_MARK : NEW_MARK)+
+        (read ? readMark(titles[p.channel] || p.channel, when(p.ts)) : NEW_MARK)+
         '<button type="button" class="who" data-chan="'+esc(p.channel)+'" title="Показать только этот канал">'+
           monogramOf(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
@@ -1241,7 +1272,7 @@ function render(posts,append=false){
       markRead(p);
       el.classList.add('read');
       const dot = el.querySelector('.read-toggle');
-      if(dot) dot.outerHTML = READ_MARK;
+      if(dot) dot.outerHTML = readMark(titles[p.channel] || p.channel, when(p.ts));
     };
     // Пост засчитывается прочитанным, когда его видно целиком. Клик для этого
     // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
@@ -1364,7 +1395,8 @@ async function loadCatalog(){
       const open=document.createElement('button'); open.type='button'; open.className='channel-open';
       open.dataset.act='preview'; open.dataset.channel=c.username; open.setAttribute('aria-expanded',String(expandedChannel===c.username));
       open.innerHTML='<span class="channel-mark" aria-hidden="true">'+esc((c.name[0]||'@').toUpperCase())+'</span>'+ 
-        '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+ 
+        '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+
+        (c.last_ts?'<span class="channel-fresh">последний пост '+esc(dayLabel(c.last_ts))+'</span>':'')+ 
         '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(catRu(c.cat))+')':'')+'</span>'+ 
         (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+ 
         (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">'+(expandedChannel===c.username?'Скрыть':'Посмотреть')+'</span>'+
@@ -1540,6 +1572,53 @@ $('#unreadBtn').onclick = e => {
   load();
 };
 $('#unreadBtn').setAttribute('aria-pressed', String(onlyUnread));
+/* ---------- Клавиатура ленты ---------- */
+// Посты лежат во вложенном #postList, а не прямыми потомками #feed: искать
+// приходится именно там, иначе фокус никуда не двигается.
+const postNodes = () => [...($('#postList') || $('#feed')).children].filter(el => el.classList.contains('post'));
+const typing = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+
+function focusPost(post){
+  if(!post) return;
+  post.focus({preventScroll:true});
+  post.scrollIntoView({block:'center', behavior:'smooth'});
+}
+function stepPost(delta){
+  const list = postNodes();
+  if(!list.length) return;
+  const at = list.indexOf(focusedPost());
+  // фокуса ещё нет — начинаем с края, откуда пошли
+  const next = at < 0 ? (delta > 0 ? list[0] : list[list.length-1])
+                      : list[Math.min(list.length-1, Math.max(0, at + delta))];
+  focusPost(next);
+}
+function focusedPost(){ return postNodes().find(p => p === document.activeElement) || null; }
+function jumpUnread(){
+  const next = postNodes().find(p => !p.classList.contains('read'));
+  if(next){ focusPost(next); return true; }
+  return false;
+}
+function markFocused(){
+  const post = focusedPost();
+  if(!post) return;
+  const back = post.querySelector('.read-status');
+  if(back){ back.click(); return; }
+  // непрочитанный отмечается сам, когда пост целиком виден — просто показываем его
+  focusPost(post);
+}
+
+document.addEventListener('keydown', e => {
+  if(typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key === 'Escape') return;                       // закрытием оверлеев занят сам скрипт
+  const key = e.key.toLowerCase();
+  if(key === '/'){ e.preventDefault(); $('#q').focus(); return; }
+  if(key === '?'){ e.preventDefault(); openProfile(); return; }
+  if(key === 'j'){ e.preventDefault(); stepPost(1); return; }
+  if(key === 'k'){ e.preventDefault(); stepPost(-1); return; }
+  if(key === 'n'){ if(jumpUnread()) e.preventDefault(); return; }
+  if(key === 'u'){ markFocused(); e.preventDefault(); }
+});
+
 $('#q').oninput = () => {
   clearTimeout(timer); const cat=!$('#viewCat').hidden;
   if(cat) catalogQuery=$('#q').value; else feedQuery=$('#q').value;
