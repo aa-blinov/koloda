@@ -589,16 +589,33 @@ def _backfill_loop():
 
 
 def history_status(db, profile):
-    """Для ленты: догружается ли ещё история подписанных каналов."""
+    """Состояние догрузки истории по каждому подписанному публичному каналу.
+    waiting — ждёт очереди, loading — догружается, paused — t.me ответил ошибкой и
+    ждём повтора, done — история канала кончилась, capped — упёрлись в BACKFILL_CAP."""
     subs = public_channels([r[0] for r in db.execute(
-        "SELECT channel FROM user_subs WHERE profile=?", (profile,))]) if profile else []
+        "SELECT channel FROM user_subs WHERE profile=? ORDER BY channel", (profile,))]) if profile else []
     if not subs:
-        return {"loading": False, "fetched": 0}
-    rows = {c: (f, d) for c, f, d in db.execute(
-        "SELECT channel,fetched,done FROM backfill WHERE channel IN (%s)" % ",".join("?" * len(subs)),
-        subs)}
-    return {"loading": any(not rows.get(c, (0, 0))[1] for c in subs),
-            "fetched": sum(rows.get(c, (0, 0))[0] for c in subs)}
+        return {"loading": False, "fetched": 0, "cap": BACKFILL_CAP, "channels": []}
+    marks = ",".join("?" * len(subs))
+    rows = {c: (f, d, fa, ra) for c, f, d, fa, ra in db.execute(
+        "SELECT channel,fetched,done,failures,retry_at FROM backfill WHERE channel IN (%s)" % marks, subs)}
+    titles = dict(db.execute("SELECT channel,title FROM cache WHERE channel IN (%s)" % marks, subs))
+    now = int(time.time())
+    channels = []
+    for c in subs:
+        fetched, done, failures, retry_at = rows.get(c, (0, 0, 0, 0))
+        if done:
+            state = "capped" if fetched >= BACKFILL_CAP else "done"
+        elif failures and retry_at > now:
+            state = "paused"
+        elif c not in rows:
+            state = "waiting"
+        else:
+            state = "loading"
+        channels.append({"channel": c, "title": titles.get(c) or c, "state": state, "fetched": fetched})
+    return {"loading": any(ch["state"] in ("waiting", "loading", "paused") for ch in channels),
+            "fetched": sum(ch["fetched"] for ch in channels),
+            "cap": BACKFILL_CAP, "channels": channels}
 
 
 def public_channels(channels):
@@ -1459,6 +1476,15 @@ class Handler(BaseHTTPRequestHandler):
                     expired += "; Secure"
                 return self._send(200, json.dumps({"ok": True}), "application/json",
                                   [("Set-Cookie", expired)])
+
+            if path == "/api/history":
+                # Состояние догрузки истории по каналам профиля: для списка в профиле и строк в ленте
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                return self._send(200, json.dumps(history_status(db, cid), ensure_ascii=False),
+                                  "application/json; charset=utf-8")
 
             if path == "/api/saved":
                 # Сохранённые посты профиля: список для экрана «Сохранённое» и переключение
