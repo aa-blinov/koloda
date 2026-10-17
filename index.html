@@ -144,6 +144,13 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .ch-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .ch-actions .quiet-btn{text-decoration:none}
 @media(max-width:640px){.ch-page{padding:18px 14px 56px}}
+/* Список истории по каналам в профиле: название, состояние и полоска прогресса */
+.hist-row{padding:8px 0;border-bottom:1px solid var(--line)}
+.hist-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px}
+.hist-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.hist-state{flex:0 0 auto;color:var(--dim);font-size:12.5px}
+.hist-bar{height:4px;margin-top:6px;border-radius:var(--r-pill);background:var(--raise);overflow:hidden}
+.hist-bar i{display:block;height:100%;background:var(--acc)}
 .fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
@@ -729,6 +736,11 @@ body.view-solo .search{display:none}
       <button class="btn" id="emailSubmit" type="submit">Подтвердить почту</button>
     </form>
     <div class="settings">
+      <h3>История каналов</h3>
+      <p class="settings-hint">Старые публикации подгружаются в фоне, по одной странице в несколько секунд. Здесь видно, что уже есть и что ждёт очереди.</p>
+      <div id="historyList"></div>
+    </div>
+    <div class="settings">
       <h3>Клавиши</h3>
       <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
       <dl class="keys">
@@ -1168,31 +1180,75 @@ const skeleton = () => '<div class="sr-only" role="status">Загружаю да
 /* ---------- Лента ---------- */
 // Экран «Сохранённое» живёт внутри ленты: те же посты, отметки и поиск, другой источник
 let feedMode = 'feed';   // 'feed' — лента подписок, 'saved' — сохранённые посты
-// Догрузка истории: читатель видит, что старые посты ещё приходят, и не принимает
-// временный конец списка за конец канала
+// Догрузка истории: читатель видит состояние каждого канала, а не только общий итог.
+// Конец списка не выдаём за конец канала, пока история догружается.
 let historyLoading = false;
-function historyText(fetched, scope=''){
-  const what = 'Догружаем старые публикации' + (scope ? ' ' + scope : '');
-  return fetched ? what+': уже '+fetched+' '+plural(fetched,'публикация','публикации','публикаций') : what;
+let historyData = null;
+function historyDetail(ch, cap){
+  if(ch.state === 'loading') return 'догружаем: '+ch.fetched+' из '+cap;
+  if(ch.state === 'waiting') return 'в очереди';
+  if(ch.state === 'paused') return 't.me не отвечает, повторим позже';
+  if(ch.state === 'done') return 'вся история: '+ch.fetched+' '+plural(ch.fetched,'публикация','публикации','публикаций');
+  return 'загружено '+ch.fetched+', дальше только в Telegram';
 }
 function paintHistory(h){
-  historyLoading = Boolean(h && h.loading);
+  if(!h) return;
+  historyData = h;
+  historyLoading = Boolean(h.loading);
   const line = $('#historyStatus');
   line.hidden = !historyLoading;
-  if(historyLoading) line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+historyText(h.fetched);
+  if(historyLoading){
+    const total = h.channels.length;
+    const finished = h.channels.filter(c => c.state === 'done' || c.state === 'capped').length;
+    const paused = h.channels.filter(c => c.state === 'paused').length;
+    line.innerHTML = '<span class="dot" aria-hidden="true"></span> Догружаем историю: '+finished+' из '+total+
+      ' '+(total === 1 ? 'канала' : 'каналов')+(paused ? ', на паузе: '+paused : '');
+  }
   const end = $('#feedEnd');
   if(end) end.textContent = historyLoading
     ? 'Старые публикации ещё загружаются, они появятся здесь сами.'
     : 'Это все публикации ваших каналов. Более старые есть в Telegram.';
 }
-function paintChannelHistory(h){
-  const loading = Boolean(h && !h.done);
-  const line = $('#chHistory');
-  line.hidden = !loading;
-  if(loading) line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+historyText(h.fetched,'канала');
-  $('#chEndText').textContent = loading ? 'Старые публикации ещё загружаются, они появятся здесь сами.' : 'Сохранённые публикации канала закончились.';
-  $('#chEndLink').hidden = loading;
+function renderHistoryList(h){
+  const box = $('#historyList');
+  if(!h || !h.channels.length){
+    box.innerHTML = '<p class="settings-hint">Подпишись на каналы, и их история начнёт загружаться.</p>';
+    return;
+  }
+  box.innerHTML = h.channels.map(ch => {
+    const full = ch.state === 'done' || ch.state === 'capped';
+    const pct = full ? 100 : Math.min(100, Math.round(100 * ch.fetched / h.cap));
+    return '<div class="hist-row"><div class="hist-head"><span class="hist-name">'+esc(ch.title)+'</span>'+
+      '<span class="hist-state">'+esc(historyDetail(ch, h.cap))+'</span></div>'+
+      '<div class="hist-bar" aria-hidden="true"><i style="width:'+pct+'%"></i></div></div>';
+  }).join('');
 }
+function paintChannelHistory(h){
+  const ch = h && h.channels ? h.channels.find(c => c.channel === channelName) : null;
+  const line = $('#chHistory');
+  const pending = Boolean(ch && ch.state !== 'done' && ch.state !== 'capped');
+  line.hidden = !ch;
+  if(!ch) line.textContent = 'Канала нет в ленте: его история не догружается.';
+  else line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+(pending
+    ? 'Догружаем старые публикации канала: '+historyDetail(ch, h.cap)
+    : historyDetail(ch, h.cap));
+  $('#chEndText').textContent = pending ? 'Старые публикации ещё загружаются, они появятся здесь сами.' : 'Сохранённые публикации канала закончились.';
+  $('#chEndLink').hidden = pending;
+}
+// Состояние догрузки обновляем, пока открыт экран, который его показывает
+async function refreshHistory(){
+  if(document.visibilityState !== 'visible' || $('#appShell').hidden) return;
+  try{
+    const r = await fetch('/api/history');
+    if(!r.ok) return;
+    const h = await r.json();
+    historyData = h;
+    if(!$('#viewFeed').hidden) paintHistory(h);
+    if(!$('#viewChannel').hidden) paintChannelHistory(h);
+    if(!$('#viewMe').hidden) renderHistoryList(h);
+  }catch(e){ /* сеть пропала: покажем при следующем обновлении */ }
+}
+setInterval(refreshHistory, 10000);
 
 async function loadSaved(append=false){
   if(append && (feedLoading || !feedHasMore)) return;
@@ -1855,7 +1911,7 @@ async function loadChannel(append=false){
     state.textContent = !d.posts.length && !append ? 'Пока нет доступных публикаций.' : '';
     for(const p of d.posts) list.append(channelPost(p));
     watchGalleries(list);
-    paintChannelHistory(d.history);
+    refreshHistory();
     more.hidden = !d.has_more;
     end.hidden = d.has_more || !list.children.length;
   }catch(e){
@@ -2000,6 +2056,7 @@ function show(which, opts={}){
   if(channel) loadChannel();
   if(saved) loadSaved();
   else if(wasSaved) load();
+  refreshHistory();
 }
 window.addEventListener('popstate', () => {
   const v = viewFromHash();

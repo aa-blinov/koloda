@@ -252,13 +252,16 @@ class FeedAPITest(unittest.TestCase):
 
         with patch.object(app, "fetch_channel", side_effect=fake_fetch):
             self.assertTrue(app.backfill_step(self.db))
-            self.assertEqual(app.history_status(self.db, "prof_bf"), {"loading": True, "fetched": 3})
+            status = app.history_status(self.db, "prof_bf")
+            self.assertEqual((status["loading"], status["fetched"]), (True, 3))
             self.assertTrue(app.backfill_step(self.db))
         self.db.commit()
         self.assertEqual(self.db.execute("SELECT fetched FROM cache WHERE channel='alpha'").fetchone()[0], cached_before)
         stored = self.db.execute("SELECT COUNT(*) FROM posts WHERE channel='alpha' AND msg_id < ?", (lowest,)).fetchone()[0]
         self.assertEqual(stored, 3)
-        self.assertEqual(app.history_status(self.db, "prof_bf"), {"loading": False, "fetched": 3})
+        status = app.history_status(self.db, "prof_bf")
+        self.assertEqual((status["loading"], status["fetched"]), (False, 3))
+        self.assertEqual([c["state"] for c in status["channels"]], ["done"])
 
     def test_backfill_backs_off_after_an_error_and_keeps_its_place(self):
         self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('prof_bf2', 'alpha')")
@@ -271,6 +274,25 @@ class FeedAPITest(unittest.TestCase):
         self.assertIsNotNone(next_before)
         self.assertGreater(retry_at, int(time.time()))
         self.assertNotIn("alpha", app.backfill_candidates(self.db))
+
+    def test_history_status_names_the_state_of_every_channel(self):
+        now = int(time.time())
+        for channel in ("alpha", "beta", "gamma", "delta"):
+            self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('prof_h', ?)", (channel,))
+        self.db.execute("INSERT INTO backfill VALUES ('alpha', 900, 120, 0, 0, 0)")
+        self.db.execute("INSERT INTO backfill VALUES ('beta', 800, 40, 0, 2, ?)", (now + 600,))
+        self.db.execute("INSERT INTO backfill VALUES ('gamma', 700, 500, 1, 0, 0)")
+        self.db.commit()
+        status = app.history_status(self.db, "prof_h")
+        states = {c["channel"]: c["state"] for c in status["channels"]}
+        self.assertEqual(states, {"alpha": "loading", "beta": "paused", "gamma": "capped", "delta": "waiting"})
+        self.assertTrue(status["loading"])
+        self.assertEqual(status["fetched"], 660)
+        self.assertEqual(status["cap"], app.BACKFILL_CAP)
+
+    def test_history_endpoint_needs_a_profile(self):
+        self.cookie = ""
+        self.assertEqual(self.request("/api/history")[0], 401)
 
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
