@@ -217,10 +217,10 @@ Telegram, `tg.py` не ходит в сеть вовсе. Свои `api_id`/`api
 Сверяет медиа в базе с тем, что отдаёт t.me прямо сейчас:
 
 ```bash
-docker compose cp feed:/data/feed.db ./feed.db && python3 audit_media.py
+docker compose exec -T feed python3 -c "import sqlite3;s=sqlite3.connect('/data/feed.db');d=sqlite3.connect('/tmp/feed.db');s.backup(d);d.close();s.close()" && docker compose cp feed:/tmp/feed.db ./feed.db && docker compose exec -T feed rm /tmp/feed.db && python3 audit_media.py
 ```
 
-Скрипту нужен интернет. Он находит посты, где в базе остался эмодзи вместо фотографии, потерянные
+Копия делается средствами SQLite внутри контейнера: база в WAL, и обычное копирование одного файла `feed.db` могло бы потерять последние записи. Скрипту нужен интернет. Он находит посты, где в базе остался эмодзи вместо фотографии, потерянные
 кадры альбома и устаревшие адреса.
 
 ## Ограничения

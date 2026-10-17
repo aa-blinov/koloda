@@ -12,8 +12,7 @@
   без стилей. Аргументы не принимает, читает `index.html` рядом с собой.
 - Тот же набор команд гоняет GitHub Actions на каждом пуше, ещё с `docker build`: сборка ловит
   поломку с `COPY`, до которой тесты не доходят.
-- Аудит медиа на живых данных: `docker compose cp feed:/data/feed.db ./feed.db && python3
-  audit_media.py`. Нужен интернет, в тестах не участвует.
+- Аудит медиа на живых данных: `docker compose exec -T feed python3 -c "import sqlite3;s=sqlite3.connect('/data/feed.db');d=sqlite3.connect('/tmp/feed.db');s.backup(d);d.close();s.close()" && docker compose cp feed:/tmp/feed.db ./feed.db && docker compose exec -T feed rm /tmp/feed.db && python3 audit_media.py`. Нужен интернет, в тестах не участвует.
 - Без Docker: `python3 app.py 8090` — поднимется с пустой локальной базой `data/feed.db`.
 - Логи запросов: `LENTELE_LOG=1 docker compose up -d`.
 - Данные в том, что реально работает, лежат в volume `feed-data`. Смотреть:
