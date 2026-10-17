@@ -1,5 +1,7 @@
 """Регрессионные проверки личной ленты без обращения к Telegram."""
 import json
+import os
+import re
 import sqlite3
 import tempfile
 import threading
@@ -712,6 +714,52 @@ class PrivateChannelsTest(unittest.TestCase):
         status, payload = self.call("/api/tg/channels", cookie=other)
         self.assertEqual(status, 200)
         self.assertEqual(payload["channels"], [])
+
+
+def luminance(hex_color):
+    channels = [int(hex_color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast(a, b):
+    light, dark = sorted((luminance(a), luminance(b)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+class ThemeContrastTest(unittest.TestCase):
+    """Пары текста и фона в обеих темах держат 4.5:1, как записано в README."""
+
+    TEXT_ON_BG = [
+        ("fg", "bg"), ("fg", "surf"), ("fg", "raise"),
+        ("dim", "bg"), ("dim", "surf"), ("dim", "raise"),
+        ("faint", "bg"), ("faint", "surf"), ("faint", "raise"),
+        ("acc", "bg"), ("acc", "surf"), ("acc", "raise"),
+        ("error", "bg"), ("error", "surf"), ("paid", "raise"),
+        ("on-acc-cont", "acc-cont"), ("on-sec-cont", "sec-cont"), ("acc-ink", "acc"),
+        ("inv-fg", "inv-surf"), ("inv-acc", "inv-surf"),
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
+            html = page.read()
+        dark = re.search(r":root\{(.*?)\}", html, re.S).group(1)
+        light = re.search(r':root\[data-theme="light"\]\{(.*?)\}', html, re.S).group(1)
+        cls.themes = {
+            "dark": cls.tokens(dark),
+            "light": {**cls.tokens(dark), **cls.tokens(light)},
+        }
+
+    @staticmethod
+    def tokens(block):
+        return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", block))
+
+    def test_text_pairs_reach_4_5_in_both_themes(self):
+        for theme, tokens in self.themes.items():
+            for text, bg in self.TEXT_ON_BG:
+                with self.subTest(theme=theme, text=text, bg=bg):
+                    self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
 
 
 if __name__ == "__main__":
