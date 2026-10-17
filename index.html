@@ -411,6 +411,11 @@ body:has(.ov.open){overflow:hidden}
 .keys dt{flex:0 0 auto;min-width:44px;text-align:center;padding:3px 8px;border-radius:var(--r-xs);
   border:1px solid var(--line);background:var(--bg);color:var(--acc);font:inherit;font-size:12px;font-weight:600}
 .keys dd{margin:0;color:var(--dim);font-size:13px}
+.chan-head{padding:14px 2px 8px;border-top:1px solid var(--line);margin-top:8px}
+.chan-head:first-child{border-top:0;margin-top:0;padding-top:2px}
+.chan-head h3{margin:0;font-size:12px;letter-spacing:.02em;color:var(--dim)}
+.tg-row .chan-open{border:0;background:none;padding:9px 2px;color:var(--fg);
+  font:inherit;font-size:14.5px;min-height:44px;opacity:1;cursor:default}
 .chan-action{display:flex;align-items:center;justify-content:space-between;gap:8px;
   width:100%;min-height:44px;padding:9px 11px;margin-bottom:6px;font:inherit;font-size:13.5px;
   text-align:left;cursor:pointer;background:var(--surf);border:1px solid var(--line);
@@ -694,6 +699,7 @@ body:has(.ov.open){overflow:hidden}
   <div class="dlg dlg-channels">
     <h2 id="channelsTitle">Каналы</h2>
     <div class="chan-list" id="chanList"></div>
+    <div id="chanTg" hidden></div>
     <div class="account-actions">
       <button class="quiet-btn" id="chanCatalog" type="button">Каталог</button>
       <button class="btn" id="chanClose" type="button">Готово</button>
@@ -1341,7 +1347,58 @@ function renderTabs(){
   }
   $('#tabsToggleLabel').textContent = selected ? (titles[selected] || selected) : 'Все каналы';
   $('#feed').setAttribute('aria-label', selected ? 'Публикации канала ' + (titles[selected] || selected) : 'Публикации');
+  paintTelegramChannels();
 }
+
+// Подписки в Telegram и каналы ленты — разные множества, и их видно раздельно.
+// Подключение Telegram не тащит в ленту ничего: каналы из аккаунта лежат здесь
+// отдельным списком, пока человек сам не добавит нужные.
+async function paintTelegramChannels(){
+  const box = $('#chanTg');
+  if(!box) return;
+  box.innerHTML = ''; box.hidden = true;
+  try{
+    const status = await fetch('/api/tg/status').then(r => r.json());
+    if(!status || !status.installed || !status.linked) return;
+    const d = await fetch('/api/tg/channels').then(r => r.json());
+    const extra = (d.channels || []).filter(c => !c.subscribed);
+    if(!extra.length){ box.hidden = false; box.appendChild(heading('Подписаны в Telegram', 'Все они уже в ленте.')); return; }
+    box.hidden = false;
+    box.appendChild(heading('Подписаны в Telegram, но не в ленте',
+                             'Это другое множество: в ленту попадает только то, что ты отметишь.'));
+    extra.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'chan-row tg-row';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chan-open';
+      b.textContent = c.title || c.channel;
+      b.disabled = true;
+      const add = document.createElement('button');
+      add.type = 'button'; add.className = 'channel-action';
+      add.textContent = 'В ленту';
+      add.setAttribute('aria-label', 'Добавить '+c.title+' в ленту');
+      add.onclick = async () => {
+        add.disabled = true;
+        try{
+          await tgPost('/api/tg/subscribe',{channel:c.channel,subscribed:true});
+          renderTabs(); load();
+        }catch(e){ setSyncStatus(e.message,true); add.disabled=false; }
+      };
+      row.append(b, add);
+      box.appendChild(row);
+    });
+  }catch(e){ /* Telegram не подключён или недоступен — список просто не рисуем */ }
+}
+
+const heading = (title, hint) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'chan-head';
+  const h = document.createElement('h3');
+  h.textContent = title;
+  wrap.appendChild(h);
+  if(hint){ const p = document.createElement('p'); p.className = 'chan-hint'; p.textContent = hint; wrap.appendChild(p); }
+  return wrap;
+};
 
 /* Экран каналов: подложка, фокус и Escape — как у оверлея профиля. */
 let channelsFocus=null, channelsInert=[];
