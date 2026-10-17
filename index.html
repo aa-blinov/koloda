@@ -129,6 +129,13 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .new-posts{display:block;position:sticky;top:76px;z-index:5;margin:8px auto 0;padding:8px 18px;
   border:0;border-radius:var(--r-pill);background:var(--acc);color:var(--acc-ink);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--sh-1)}
+/* Действия под постом: сохранить для потом и поделиться */
+.post-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.act-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 14px;
+  border:1px solid var(--edge);border-radius:var(--r-pill);background:none;color:var(--fg);
+  font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.act-btn:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.act-save[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont);border-color:transparent}
 .fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
@@ -616,6 +623,8 @@ body.view-me .search{display:none}
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-9.5 9.5M21 3l-6.5 18-3.5-7-7-3.5Z"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17L12 16.6l-5.5 4z"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="m8.2 10.8 7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
 </svg>
 
 <header>
@@ -627,6 +636,7 @@ body.view-me .search{display:none}
     <div class="seg" role="tablist" aria-label="Разделы" id="sectionTabs">
       <button role="tab" id="tabFeed" aria-controls="viewFeed" aria-selected="true" tabindex="0"><svg class="i"><use href="#i-send"/></svg>Лента</button>
       <button role="tab" id="tabCat" aria-controls="viewCat" aria-selected="false" tabindex="-1"><svg class="i"><use href="#i-grid"/></svg>Каталог</button>
+      <button role="tab" id="tabSaved" aria-controls="viewFeed" aria-selected="false" tabindex="-1"><svg class="i"><use href="#i-bookmark"/></svg>Сохранённое</button>
     </div>
     <label class="search">
       <svg class="i"><use href="#i-search"/></svg>
@@ -830,8 +840,8 @@ body.view-me .search{display:none}
     <svg class="i"><use href="#i-send"/></svg><span>Лента</span></button>
   <button type="button" class="tabbar-item" id="tbCat">
     <svg class="i"><use href="#i-grid"/></svg><span>Каталог</span></button>
-  <button type="button" class="tabbar-item" id="tbChans">
-    <svg class="i"><use href="#i-list"/></svg><span>Каналы</span></button>
+  <button type="button" class="tabbar-item" id="tbSaved">
+    <svg class="i"><use href="#i-bookmark"/></svg><span>Сохранённое</span></button>
   <button type="button" class="tabbar-item" id="tbMe">
     <svg class="i"><use href="#i-user"/></svg><span>Профиль</span></button>
 </nav>
@@ -1065,8 +1075,9 @@ function showApp(account){
     : 'Добавь почту, чтобы восстановить пароль, если забудешь его.';
   $('#authScreen').hidden=true; $('#appShell').hidden=false;
   setSyncStatus(''); renderTabs();
-  const initialView=localStorage.getItem(LS.view)==='cat'?'cat':'feed';
-  show(initialView); load();
+  const initialView = HASH_VIEW[location.hash.slice(1)] || (localStorage.getItem(LS.view)==='cat'?'cat':'feed');
+  show(initialView, {replace:true});
+  if(feedMode !== 'saved') load();
   setInterval(pullState,15000);
   window.addEventListener('focus',pullState);
   document.addEventListener('visibilitychange',pullState);
@@ -1143,7 +1154,36 @@ const skeleton = () => '<div class="sr-only" role="status">Загружаю да
   '<div class="skel" aria-hidden="true"><i></i><i></i><i></i></div>'.repeat(3);
 
 /* ---------- Лента ---------- */
+// Экран «Сохранённое» живёт внутри ленты: те же посты, отметки и поиск, другой источник
+let feedMode = 'feed';   // 'feed' — лента подписок, 'saved' — сохранённые посты
+async function loadSaved(){
+  feedController?.abort(); feedController=new AbortController();
+  const requestId=++feedRequestId;
+  feedCursor=null; feedHasMore=false; feedErrors=[]; feedPageFailed=false;
+  $('#newPosts').hidden = true;
+  $('#feed').innerHTML = skeleton();
+  const q = feedQuery.trim();
+  try{
+    const r = await fetch('/api/saved?'+new URLSearchParams({q: q.length >= 2 ? q : ''}).toString(),
+                          {signal:feedController.signal});
+    if(!r.ok) throw new Error('request failed');
+    const d = await r.json();
+    if(requestId!==feedRequestId) return;
+    titles = d.titles || {};
+    render(d.posts, false);
+    if(!d.posts.length){
+      $('#feed').innerHTML = emptyState('bookmark', q.length >= 2
+        ? 'Среди сохранённых ничего не нашлось.'
+        : 'Здесь будут посты, которые ты сохранил. Нажми «Сохранить» под публикацией.');
+    }
+  }catch(e){
+    if(e.name==='AbortError' || requestId!==feedRequestId) return;
+    $('#feed').innerHTML = emptyState('alert', 'Не удалось загрузить сохранённое. Попробуй ещё раз.', ['retry','Попробовать снова']);
+  }
+}
+
 async function load(append=false, silent=false){
+  if(feedMode === 'saved') return loadSaved();
   const box = $('#feed');
   const list = tab ? subs().filter(c => c === tab) : subs();
   if(!list.length){
@@ -1210,6 +1250,53 @@ async function load(append=false, silent=false){
   }
 }
 
+// Под постом: сохранить для потом и поделиться ссылкой на публикацию
+const actionsRow = p => '<div class="post-actions">'+
+  '<button type="button" class="act-btn act-save" aria-pressed="'+(p.saved?'true':'false')+'">'+
+    icon('bookmark')+'<span>'+(p.saved?'Сохранено':'Сохранить')+'</span></button>'+
+  '<button type="button" class="act-btn act-share">'+icon('share')+'<span>Поделиться</span></button>'+
+'</div>';
+document.addEventListener('click', async e => {
+  const save = e.target.closest('.act-save');
+  const share = e.target.closest('.act-share');
+  if(!save && !share) return;
+  const post = e.target.closest('[data-post]');
+  if(!post) return;
+  if(save){
+    const cut = post.dataset.post.lastIndexOf('/');
+    const on = save.getAttribute('aria-pressed') !== 'true';
+    save.disabled = true;
+    try{
+      const r = await fetch('/api/saved', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({channel: post.dataset.post.slice(0, cut),
+                              msg_id: Number(post.dataset.post.slice(cut + 1)), on})});
+      if(!r.ok) throw new Error('save failed');
+      save.setAttribute('aria-pressed', String(on));
+      save.querySelector('span').textContent = on ? 'Сохранено' : 'Сохранить';
+      // В списке «Сохранённое» снятый пост уходит сразу, а пустой список показывает подсказку
+      if(!on && feedMode === 'saved') loadSaved();
+    }catch(err){
+      // состояние не меняем: кнопка остаётся как была
+    }finally{
+      save.disabled = false;
+    }
+    return;
+  }
+  const label = share.querySelector('span');
+  const url = post.dataset.url;
+  if(navigator.share){
+    try{ await navigator.share({url}); }catch(err){ /* отмена в системном окне — не ошибка */ }
+    return;
+  }
+  try{
+    await navigator.clipboard.writeText(url);
+    label.textContent = 'Ссылка скопирована';
+    setTimeout(() => { label.textContent = 'Поделиться'; }, 2000);
+  }catch(err){
+    window.open(url, '_blank', 'noopener');
+  }
+});
+
 // Опрос без перезагрузки: раз в минуту и когда вкладка снова видна спрашиваем первую
 // страницу. Если читающий наверху, новые посты встают сами. Иначе появляется кнопка,
 // и позиция в ленте не сбивается.
@@ -1217,6 +1304,7 @@ const POLL_MS = 60000;
 let pollStamp = 0;
 const pollContext = () => [tab, feedQuery, onlyUnread].join('|');
 async function pollFresh(){
+  if(feedMode === 'saved') return;
   if(document.visibilityState !== 'visible' || feedLoading || $('#viewFeed').hidden || $('#appShell').hidden) return;
   const list = tab ? subs().filter(c => c === tab) : subs();
   if(!list.length) return;
@@ -1361,7 +1449,7 @@ function watchGalleries(root){
 
 function render(posts,append=false){
   const box = $('#feed'), s = seen();
-  const list = onlyUnread ? posts.filter(p => !s.has(key(p))) : posts;
+  const list = onlyUnread && feedMode !== 'saved' ? posts.filter(p => !s.has(key(p))) : posts;
   if(!append){
     // старая разметка уходит вместе с целями наблюдателя: иначе он держит их
     postSeen.disconnect();
@@ -1435,6 +1523,7 @@ function render(posts,append=false){
     // фокус сюда, иначе он уходит в body и клавиатура теряет место
     el.tabIndex = -1;
     el.dataset.post = key(p);
+    el.dataset.url = p.url || ('https://t.me/' + key(p));
     el.innerHTML =
       '<div class="meta">'+
         (read ? readMark(titles[p.channel] || p.channel, when(p.ts)) : NEW_MARK)+
@@ -1442,7 +1531,7 @@ function render(posts,append=false){
           monogramOf(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
-      '</div>'+ extras(p);
+      '</div>'+ extras(p) + actionsRow(p);
     el.querySelectorAll('.gal video[poster]').forEach(sizeFromPoster);
     const setRead = () => {
       if(seen().has(key(p))) return;
@@ -1756,29 +1845,48 @@ $('#cats').addEventListener('scroll',updateFilterScroll,{passive:true});
 window.addEventListener('resize',updateFilterScroll);
 
 /* ---------- Навигация ---------- */
-function show(which){
+// Четыре экрана, у каждого свой адрес: кнопка «Назад» в браузере возвращает на предыдущий.
+// Выбор каналов — диалог внутри ленты, на экран он не выносится.
+const VIEW_HASH = {feed:'feed', cat:'catalog', saved:'saved', me:'profile'};
+const HASH_VIEW = {feed:'feed', catalog:'cat', saved:'saved', profile:'me'};
+function show(which, opts={}){
   const me = which === 'me';
   const cat = which === 'cat';
+  const saved = which === 'saved';
+  const wasSaved = feedMode === 'saved';
+  feedMode = saved ? 'saved' : 'feed';
   queueMicrotask(paintTabbar);
   document.body.classList.toggle('view-me', me);
   if(me) $('header').classList.toggle('search-open', false);
   $('#viewMe').hidden = !me;
-  $('#viewFeed').hidden = me || cat; $('#viewCat').hidden = me || !cat;
-  $('#tabFeed').setAttribute('aria-selected', String(!cat && !me));
+  $('#viewFeed').hidden = me || cat;
+  $('#viewCat').hidden = me || !cat;
+  $('#tabFeed').setAttribute('aria-selected', String(!cat && !me && !saved));
   $('#tabCat').setAttribute('aria-selected', String(cat));
-  $('#tabFeed').tabIndex = cat || me ? -1 : 0;
+  $('#tabSaved').setAttribute('aria-selected', String(saved));
+  $('#tabFeed').tabIndex = cat || me || saved ? -1 : 0;
   $('#tabCat').tabIndex = cat ? 0 : -1;
+  $('#tabSaved').tabIndex = saved ? 0 : -1;
   $('#meBtn').setAttribute('aria-pressed', String(me));
-  $('#unreadBtn').hidden = cat || me;
-  // Поиск относится к тому виду, где он уместен
-  $('#q').placeholder = cat ? 'Поиск по каталогу' : 'Поиск по постам';
-  $('#q').setAttribute('aria-label', cat ? 'Поиск по каталогу' : 'Поиск по постам');
+  $('#unreadBtn').hidden = cat || me || saved;
+  document.querySelector('.tabs-wrap').hidden = saved;
+  // Поиск относится к тому экрану, где он уместен
+  const placeholder = cat ? 'Поиск по каталогу' : saved ? 'Поиск по сохранённым' : 'Поиск по постам';
+  $('#q').placeholder = placeholder;
+  $('#q').setAttribute('aria-label', placeholder);
   $('#q').value = cat ? catalogQuery : feedQuery;
   const v = $(me ? '#viewMe' : cat ? '#viewCat' : '#viewFeed');
   v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
   if(!me) localStorage.setItem(LS.view, which);
+  if(!opts.fromHistory){
+    const hash = '#' + VIEW_HASH[which];
+    if(location.hash !== hash) history[opts.replace ? 'replaceState' : 'pushState'](null, '', hash);
+  }
   if(cat && !$('#catList').children.length){ loadCategories(); loadCatalog(); }
+  if(saved) loadSaved();
+  else if(wasSaved) load();
 }
+window.addEventListener('popstate', () => show(HASH_VIEW[location.hash.slice(1)] || 'feed', {fromHistory:true}));
 
 function enableTabKeyboard(tablist){
   tablist.addEventListener('keydown', e => {
@@ -1866,16 +1974,16 @@ function paintTabbar(){
     const b = $(id);
     if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
   };
-  mark('#tbFeed', !cat && !me && !anyOverlay);
+  const saved = feedMode === 'saved';
+  mark('#tbFeed', !cat && !me && !saved && !anyOverlay);
   mark('#tbCat', cat && !me && !anyOverlay);
-  mark('#tbChans', !!$('#channelsOvl').classList.contains('open'));
+  mark('#tbSaved', saved && !me && !anyOverlay);
   mark('#tbMe', me);
 }
 $('#tbFeed').onclick = () => { show('feed'); };
 $('#tbCat').onclick  = () => { show('cat'); };
-$('#tbChans').onclick = () => {
-  $('#channelsOvl').classList.contains('open') ? closeChannels() : openChannels();
-};
+$('#tbSaved').onclick = () => { show('saved'); };
+$('#tabSaved').onclick = () => show('saved');
 $('#tbMe').onclick = () => openProfile();
 
 $('#qToggle').onclick = () => {
@@ -1927,7 +2035,7 @@ function openProfile(){
 }
 function closeProfile(){
   if($('#viewMe').hidden) return;
-  show(profileReturnView);
+  show(profileReturnView, {replace:true});
   $(profileReturnView==='cat' ? '#tabCat' : '#tabFeed').focus({preventScroll:true});
 }
 // Просмотр кадра целиком: список собираем из самой ленты, отдельного состояния нет
