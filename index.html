@@ -348,6 +348,9 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-state:empty{display:none}
 .channel-state[data-error="true"]{color:var(--error)}
 .auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px}
+/* Заставка до ответа сервера о входе: экран входа под ней не мелькает */
+.boot-screen{min-height:100svh;display:flex;align-items:center;justify-content:center;gap:8px;
+  color:var(--dim);font-size:15px;font-weight:600}
 .auth-card{width:min(100%,440px);padding:32px;background:var(--surf);border-radius:var(--r-xl);box-shadow:var(--sh-2)}
 /* Название и знак: раньше продукт не называл себя нигде, и первые восемь
    секунд экрана входа не говорили ни слова о том, что это за вещь */
@@ -810,7 +813,8 @@ body.view-solo .search{display:none}
   </div>
 </div>
 
-<main class="auth-screen" id="authScreen">
+<div class="boot-screen" id="bootScreen" role="status"><svg class="i brand-mark" aria-hidden="true"><use href="#i-send"/></svg><span>Колода</span></div>
+<main class="auth-screen" id="authScreen" hidden>
   <section class="auth-card" aria-labelledby="authTitle">
     <div class="auth-brand"><svg class="i brand-mark" aria-hidden="true"><use href="#i-send"/></svg><span>Колода</span></div>
     <h1 id="authTitle">Своя лента</h1>
@@ -1063,7 +1067,7 @@ function setFormMessage(id,message,success=false){
   const node=$('#'+id); node.textContent=message; node.dataset.success=String(success);
 }
 function showAuth(message=''){
-  stateReady=false; $('#appShell').hidden=true; $('#authScreen').hidden=false;
+  stateReady=false; $('#bootScreen').hidden=true; $('#appShell').hidden=true; $('#authScreen').hidden=false;
   setFormMessage('authMessage',message);
   const focusTarget=$('#authEmail').hidden?($('#authUsername').hidden?$('#authSubmit'):$('#authUsername')):$('#authEmail');
   focusTarget.focus({preventScroll:true});
@@ -1077,7 +1081,7 @@ function showApp(account){
   $('#accountEmailState').textContent=accountEmail
     ? (account.email_verified?'Почта подтверждена. Её можно использовать для восстановления пароля.':'Подтверди почту по ссылке из письма.')
     : 'Добавь почту, чтобы восстановить пароль, если забудешь его.';
-  $('#authScreen').hidden=true; $('#appShell').hidden=false;
+  $('#bootScreen').hidden=true; $('#authScreen').hidden=true; $('#appShell').hidden=false;
   setSyncStatus(''); renderTabs();
   const start = location.hash ? viewFromHash() : {view: localStorage.getItem(LS.view)==='cat' ? 'cat' : 'feed'};
   show(start.view, {replace:true, channel: start.channel});
