@@ -157,6 +157,11 @@ FEED_PAGE_SIZE = 80
 
 def connect():
     db = sqlite3.connect(DB)
+    # WAL: чтение ленты не ждёт фоновой записи кэша. Режим хранится в самом файле базы,
+    # поэтому переключится один раз. synchronous=NORMAL — пара к WAL: быстрее, и при
+    # сбое питания теряются последние транзакции, а сама база не портится.
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("PRAGMA synchronous=NORMAL")
     db.executescript(SCHEMA)
     columns = {row[1] for row in db.execute("PRAGMA table_info(profiles)")}
     if "initialized" not in columns:
