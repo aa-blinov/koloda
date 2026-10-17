@@ -125,6 +125,10 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
    иначе кнопка упирается в края окна. */
 /* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
 .fresh{margin:6px 0 0;color:var(--faint);font-size:11.5px;min-height:0}
+/* Кнопка «Показать N новых публикаций»: заливка акцентом, липнет под шапкой */
+.new-posts{display:block;position:sticky;top:76px;z-index:5;margin:8px auto 0;padding:8px 18px;
+  border:0;border-radius:var(--r-pill);background:var(--acc);color:var(--acc-ink);
+  font:inherit;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--sh-1)}
 .fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
 .tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
@@ -650,6 +654,7 @@ body.view-me .search{display:none}
   </button>
   <p class="fresh" id="fresh" aria-live="polite"></p>
 </div>
+    <button id="newPosts" class="new-posts" type="button" hidden></button>
     <main id="feed" aria-label="Публикации канала" tabindex="0"></main>
 
 
@@ -1138,7 +1143,7 @@ const skeleton = () => '<div class="sr-only" role="status">Загружаю да
   '<div class="skel" aria-hidden="true"><i></i><i></i><i></i></div>'.repeat(3);
 
 /* ---------- Лента ---------- */
-async function load(append=false){
+async function load(append=false, silent=false){
   const box = $('#feed');
   const list = tab ? subs().filter(c => c === tab) : subs();
   if(!list.length){
@@ -1154,7 +1159,8 @@ async function load(append=false){
     feedController?.abort(); feedController=new AbortController();
     feedCursor=null; feedHasMore=false; feedErrors=[];
     feedPageFailed=false;
-    box.innerHTML = skeleton();
+    $('#newPosts').hidden = true;
+    if(!silent) box.innerHTML = skeleton();
   }else{
     const more=$('#loadMore'); if(more){ more.disabled=true; more.textContent='Загружаю…'; }
   }
@@ -1203,6 +1209,45 @@ async function load(append=false){
     }
   }
 }
+
+// Опрос без перезагрузки: раз в минуту и когда вкладка снова видна спрашиваем первую
+// страницу. Если читающий наверху, новые посты встают сами. Иначе появляется кнопка,
+// и позиция в ленте не сбивается.
+const POLL_MS = 60000;
+let pollStamp = 0;
+const pollContext = () => [tab, feedQuery, onlyUnread].join('|');
+async function pollFresh(){
+  if(document.visibilityState !== 'visible' || feedLoading || $('#viewFeed').hidden || $('#appShell').hidden) return;
+  const list = tab ? subs().filter(c => c === tab) : subs();
+  if(!list.length) return;
+  const q = feedQuery.trim();
+  const context = pollContext();
+  pollStamp = Date.now();
+  let d;
+  try{
+    const params=new URLSearchParams({channels:list.join(','),q:q.length >= 2 ? q : ''});
+    if(onlyUnread) params.set('unread','1');
+    const r = await fetch('/api/feed?'+params.toString());
+    if(!r.ok) return;
+    d = await r.json();
+  }catch(e){ return; }
+  if(context !== pollContext() || feedLoading) return;
+  const shown = new Set([...($('#postList')?.children || [])].map(el => el.dataset.post).filter(Boolean));
+  const fresh = (d.posts || []).filter(p => !shown.has(key(p)));
+  if(!fresh.length) return;
+  if(window.scrollY < 120 && !$('#feed').contains(document.activeElement)){
+    load(false, true);
+    return;
+  }
+  const btn = $('#newPosts');
+  btn.textContent = 'Показать ' + fresh.length + ' ' + plural(fresh.length, 'новую публикацию', 'новые публикации', 'новых публикаций');
+  btn.hidden = false;
+}
+setInterval(pollFresh, POLL_MS);
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && Date.now() - pollStamp > 30000) pollFresh();
+});
+$('#newPosts').onclick = () => { window.scrollTo({top:0}); load(false, true); };
 
 const DOC_ICON = {audio:'audio', voice:'audio', video:'video', roundvideo:'video',
                   gif:'file', sticker:'file', file:'file'};
