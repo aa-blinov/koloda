@@ -197,6 +197,13 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .post img:not(.sticker):not(.got){aspect-ratio:1;background:var(--raise)}
 .post img.got{aspect-ratio:auto;background:var(--media-bg)}
 .gal>video{max-width:100%}
+/* Счётчик кадров уезжает наверх, когда в альбоме есть видео: снизу он закрывал
+   громкость и полноэкранный режим панели управления */
+.galw:has(video) .gal-n{top:10px;bottom:auto}
+/* Недоступный кадр: ссылка на пост вместо пустой подложки */
+.gal-broken{flex:0 0 auto;display:grid;place-items:center;min-width:200px;min-height:160px;padding:12px;
+  border-radius:var(--r-md);background:var(--raise);color:var(--dim);font-size:13px;text-align:center;text-decoration:none}
+.gal-broken:hover{color:var(--acc)}
 .gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:var(--r-pill);
   background:color-mix(in srgb,var(--bg) 82%,transparent);color:var(--fg);font-size:12px;
   font-variant-numeric:tabular-nums;box-shadow:0 0 0 1px var(--line);
@@ -1903,6 +1910,19 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   openLightbox(media.closest('.gal'), media);
 });
+// Кадр, который t.me отдал ссылкой, а файл уже не отдаётся (404, 500): вместо
+// пустой подложки ставим ссылку на пост. Ошибка загрузки не всплывает, ловим в фазе захвата.
+document.addEventListener('error', e => {
+  const el = e.target;
+  if(!(el instanceof HTMLImageElement || el instanceof HTMLVideoElement) || !el.closest('.gal')) return;
+  const post = el.closest('[data-post]');
+  if(!post) return;
+  const a = document.createElement('a');
+  a.className = 'gal-broken'; a.href = 'https://t.me/' + post.dataset.post;
+  a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = 'Медиа недоступно, открыть в Telegram';
+  el.replaceWith(a);
+}, true);
 document.addEventListener('click', e => {
   const media = e.target.closest('.gal img, .gal video');
   if(!media) return;

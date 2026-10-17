@@ -391,7 +391,9 @@ def fetch_channel(channel):
         # Видео лежит в <video src> — прямая ссылка с токеном, отдаётся как mp4.
         videos = [unescape(u) for u in re.findall(r'<video[^>]+src="([^"]+)"', chunk)]
         videos += [unescape(u) for u in re.findall(r'<video[^>]+src=\'([^\']+)\'', chunk)]
-        media = [{"k": "i", "u": u} for u in photos] + [{"k": "v", "u": u} for u in videos]
+        # t.me отдаёт один и тот же файл в двух <video> поста: в альбоме он стоял дважды
+        videos = list(dict.fromkeys(videos))
+        media =[{"k": "i", "u": u} for u in photos] + [{"k": "v", "u": u} for u in videos]
         # Видео без src (круглое, с превью) отдаём обложкой.
         thumb = _bg(chunk, "tgme_widget_message_video_wrap")
         if not media and thumb:
