@@ -19,6 +19,14 @@ from unittest.mock import patch
 import app
 
 
+def fake_post(channel, msg_id, ts):
+    """Пост с полным набором колонок, как его отдаёт fetch_channel."""
+    post = {field: None for field in app.POST_FIELDS}
+    post.update(channel=channel, msg_id=msg_id, url=f"https://t.me/{channel}/{msg_id}",
+                text=f"post {msg_id}", ts=ts)
+    return post
+
+
 class FeedAPITest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="telegram-lenta-test-")
@@ -227,6 +235,42 @@ class FeedAPITest(unittest.TestCase):
         self.assertFalse(seen_first & {(p["channel"], p["msg_id"]) for p in second["posts"]})
         status, found = self.request("/api/saved?" + urlencode({"q": "уникальныйтекст"}))
         self.assertEqual([(p["channel"], p["msg_id"]) for p in found["posts"]], [posts[0]])
+
+    def test_backfill_pages_older_posts_without_touching_the_cache(self):
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('prof_bf', 'alpha')")
+        self.db.commit()
+        lowest = self.db.execute("SELECT MIN(msg_id) FROM posts WHERE channel='alpha'").fetchone()[0]
+        # Старая отметка обновления: если догрузка её перезапишет, это будет видно
+        self.db.execute("UPDATE cache SET fetched=1000 WHERE channel='alpha'")
+        self.db.commit()
+        cached_before = 1000
+
+        def fake_fetch(channel, before=None):
+            if before == lowest:
+                return "Alpha", [fake_post("alpha", m, 1_600_000_000 - m) for m in (lowest - 1, lowest - 2, lowest - 3)]
+            return "Alpha", []
+
+        with patch.object(app, "fetch_channel", side_effect=fake_fetch):
+            self.assertTrue(app.backfill_step(self.db))
+            self.assertEqual(app.history_status(self.db, "prof_bf"), {"loading": True, "fetched": 3})
+            self.assertTrue(app.backfill_step(self.db))
+        self.db.commit()
+        self.assertEqual(self.db.execute("SELECT fetched FROM cache WHERE channel='alpha'").fetchone()[0], cached_before)
+        stored = self.db.execute("SELECT COUNT(*) FROM posts WHERE channel='alpha' AND msg_id < ?", (lowest,)).fetchone()[0]
+        self.assertEqual(stored, 3)
+        self.assertEqual(app.history_status(self.db, "prof_bf"), {"loading": False, "fetched": 3})
+
+    def test_backfill_backs_off_after_an_error_and_keeps_its_place(self):
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('prof_bf2', 'alpha')")
+        self.db.commit()
+        with patch.object(app, "fetch_channel", side_effect=ValueError("t.me попросил подождать")):
+            self.assertTrue(app.backfill_step(self.db))
+        next_before, failures, retry_at, done = self.db.execute(
+            "SELECT next_before, failures, retry_at, done FROM backfill WHERE channel='alpha'").fetchone()
+        self.assertEqual((failures, done), (1, 0))
+        self.assertIsNotNone(next_before)
+        self.assertGreater(retry_at, int(time.time()))
+        self.assertNotIn("alpha", app.backfill_candidates(self.db))
 
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
