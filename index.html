@@ -1156,34 +1156,61 @@ const skeleton = () => '<div class="sr-only" role="status">Загружаю да
 /* ---------- Лента ---------- */
 // Экран «Сохранённое» живёт внутри ленты: те же посты, отметки и поиск, другой источник
 let feedMode = 'feed';   // 'feed' — лента подписок, 'saved' — сохранённые посты
-async function loadSaved(){
-  feedController?.abort(); feedController=new AbortController();
+async function loadSaved(append=false){
+  if(append && (feedLoading || !feedHasMore)) return;
+  if(!append){
+    feedController?.abort(); feedController=new AbortController();
+    feedCursor=null; feedHasMore=false; feedErrors=[]; feedPageFailed=false;
+    $('#newPosts').hidden = true;
+    $('#feed').innerHTML = skeleton();
+  }else{
+    const more=$('#loadMore'); if(more){ more.disabled=true; more.textContent='Загружаю…'; }
+  }
   const requestId=++feedRequestId;
-  feedCursor=null; feedHasMore=false; feedErrors=[]; feedPageFailed=false;
-  $('#newPosts').hidden = true;
-  $('#feed').innerHTML = skeleton();
+  const controller = append ? new AbortController() : feedController;
+  if(append) feedController=controller;
+  feedLoading=true;
   const q = feedQuery.trim();
   try{
-    const r = await fetch('/api/saved?'+new URLSearchParams({q: q.length >= 2 ? q : ''}).toString(),
-                          {signal:feedController.signal});
+    const params = new URLSearchParams({q: q.length >= 2 ? q : ''});
+    if(append && feedCursor){
+      params.set('before_saved', feedCursor.saved_at);
+      params.set('before_channel', feedCursor.channel);
+      params.set('before_id', feedCursor.msg_id);
+    }
+    const r = await fetch('/api/saved?'+params.toString(), {signal:controller.signal});
     if(!r.ok) throw new Error('request failed');
     const d = await r.json();
     if(requestId!==feedRequestId) return;
     titles = d.titles || {};
-    render(d.posts, false);
-    if(!d.posts.length){
+    feedCursor = d.next || null; feedHasMore = Boolean(d.has_more);
+    feedPageFailed = false;
+    render(d.posts, append);
+    if(!append && !d.posts.length){
       $('#feed').innerHTML = emptyState('bookmark', q.length >= 2
         ? 'Среди сохранённых ничего не нашлось.'
         : 'Здесь будут посты, которые ты сохранил. Нажми «Сохранить» под публикацией.');
     }
   }catch(e){
     if(e.name==='AbortError' || requestId!==feedRequestId) return;
-    $('#feed').innerHTML = emptyState('alert', 'Не удалось загрузить сохранённое. Попробуй ещё раз.', ['retry','Попробовать снова']);
+    if(append){
+      feedPageFailed=true;
+      feedErrors=[{channel:'',message:'ошибка загрузки'}];
+      showFeedWarning();
+    }else{
+      $('#feed').innerHTML = emptyState('alert', 'Не удалось загрузить сохранённое. Попробуй ещё раз.', ['retry','Попробовать снова']);
+    }
+  }finally{
+    if(requestId===feedRequestId){
+      feedLoading=false;
+      const more=$('#loadMore');
+      if(more){ more.disabled=false; more.hidden=!feedHasMore; more.textContent=feedPageFailed?'Повторить загрузку':'Загрузить ещё'; }
+    }
   }
 }
 
 async function load(append=false, silent=false){
-  if(feedMode === 'saved') return loadSaved();
+  if(feedMode === 'saved') return loadSaved(append);
   const box = $('#feed');
   const list = tab ? subs().filter(c => c === tab) : subs();
   if(!list.length){

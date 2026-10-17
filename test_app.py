@@ -199,6 +199,35 @@ class FeedAPITest(unittest.TestCase):
         status, _ = self.request("/api/saved", "POST", {"channel": "bad name!", "msg_id": 1, "on": True})
         self.assertEqual(status, 400)
 
+    def test_saving_an_unknown_post_is_refused(self):
+        self.cookie = ""
+        self.request("/api/auth/register", "POST", {"username": "saver3", "password": "long-password"})
+        status, _ = self.request("/api/saved", "POST", {"channel": "alpha", "msg_id": 999999, "on": True})
+        self.assertEqual(status, 404)
+
+    def test_saved_list_searches_text_and_pages_without_gaps(self):
+        self.cookie = ""
+        self.request("/api/auth/register", "POST", {"username": "saver4", "password": "long-password"})
+        posts = self.db.execute("SELECT channel,msg_id FROM posts ORDER BY ts DESC, msg_id DESC").fetchall()
+        self.assertGreaterEqual(len(posts), 81)
+        self.db.execute("UPDATE posts SET text=? WHERE channel=? AND msg_id=?", ("уникальныйтекст", *posts[0]))
+        self.db.commit()
+        for channel, msg_id in posts[:81]:
+            status, _ = self.request("/api/saved", "POST", {"channel": channel, "msg_id": msg_id, "on": True})
+            self.assertEqual(status, 200)
+        status, first = self.request("/api/saved")
+        self.assertEqual(len(first["posts"]), 80)
+        self.assertTrue(first["has_more"])
+        status, second = self.request("/api/saved?" + urlencode({
+            "before_saved": first["next"]["saved_at"], "before_channel": first["next"]["channel"],
+            "before_id": first["next"]["msg_id"]}))
+        self.assertEqual(len(second["posts"]), 1)
+        self.assertFalse(second["has_more"])
+        seen_first = {(p["channel"], p["msg_id"]) for p in first["posts"]}
+        self.assertFalse(seen_first & {(p["channel"], p["msg_id"]) for p in second["posts"]})
+        status, found = self.request("/api/saved?" + urlencode({"q": "уникальныйтекст"}))
+        self.assertEqual([(p["channel"], p["msg_id"]) for p in found["posts"]], [posts[0]])
+
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
         # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,
