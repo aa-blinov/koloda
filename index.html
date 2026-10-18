@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>Колода — своя лента каналов</title>
+<title>Колода: своя лента каналов</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21.9 2.1 2.6 9.3c-1 .4-1 1.9.1 2.2l4.6 1.4 1.7 5.2c.3 1 1.7 1.2 2.3.3l2.5-2.7 4.3 3.2c.8.6 2 .1 2.2-.9l3.6-14c.2-1-.8-1.9-1.9-1.9Z' fill='%235aa2ff'/%3E%3C/svg%3E">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -901,7 +901,7 @@ function paintSearchHint(q, count, append){
   if(!term){ el.textContent=''; el.hidden=true; return; }
   el.hidden=false;
   if(term.length < 2){
-    el.textContent='Минимум два символа — так запрос не находит всю ленту сразу.';
+    el.textContent='Минимум два символа: так запрос не находит всю ленту сразу.';
     return;
   }
   if(!count){
@@ -1187,7 +1187,7 @@ let feedMode = 'feed';   // 'feed' — лента подписок, 'saved' — 
 let historyLoading = false;
 let historyData = null;
 function historyDetail(ch, cap){
-  if(ch.state === 'loading') return 'догружаем: '+ch.fetched+' из '+cap;
+  if(ch.state === 'loading') return 'загружаем: '+ch.fetched+' из '+cap;
   if(ch.state === 'waiting') return 'в очереди';
   if(ch.state === 'paused') return 't.me не отвечает, повторим позже';
   if(ch.state === 'done') return 'вся история загружена';
@@ -1203,7 +1203,7 @@ function paintHistory(h){
     const total = h.channels.length;
     const finished = h.channels.filter(c => c.state === 'done' || c.state === 'capped').length;
     const paused = h.channels.filter(c => c.state === 'paused').length;
-    line.innerHTML = '<span class="dot" aria-hidden="true"></span> Догружаем историю: '+finished+' из '+total+
+    line.innerHTML = '<span class="dot" aria-hidden="true"></span> Загружаем историю: '+finished+' из '+total+
       ' '+(total === 1 ? 'канала' : 'каналов')+(paused ? ', на паузе: '+paused : '');
   }
   const end = $('#feedEnd');
@@ -1227,7 +1227,7 @@ function renderHistoryList(h){
 }
 // Строка догрузки для экрана канала: при догрузке число уже говорит, что идёт загрузка
 function channelHistoryText(ch, cap, pending){
-  if(ch.state === 'loading') return 'Догружаем старые публикации канала: '+ch.fetched+' из '+cap;
+  if(ch.state === 'loading') return 'Загружаем старые публикации канала: '+ch.fetched+' из '+cap;
   const detail = historyDetail(ch, cap);
   return pending ? 'Старые публикации канала: '+detail : detail;
 }
@@ -1318,7 +1318,7 @@ async function load(append=false, silent=false){
     feedCursor=null; feedHasMore=false; feedErrors=[];
     box.innerHTML = tab
       ? emptyState('rss', 'У канала @'+tab+' пока нет постов.')
-      : emptyState('grid', 'Подписок пока нет. Открой каталог и выбери каналы — они появятся в ленте.', ['cat','Открыть каталог']);
+      : emptyState('grid', 'Подписок пока нет. Открой каталог и выбери каналы, и они появятся в ленте.', ['cat','Открыть каталог']);
     return;
   }
   if(append && (feedLoading || !feedHasMore)) return;
@@ -1709,7 +1709,7 @@ function renderTabs(){
   if(!list.length){
     const hint = document.createElement('p');
     hint.className = 'chan-hint';
-    hint.textContent = 'Подписок пока нет. Открой каталог и выбери каналы — они появятся здесь.';
+    hint.textContent = 'Подписок пока нет. Открой каталог и выбери каналы, и они появятся здесь.';
     box.appendChild(hint);
   } else {
     const mk = (label, val) => {
@@ -2427,7 +2427,7 @@ async function loadTgStatus(){
       $('#tgStart').hidden=true; return;
     }
     if(!d.linked){
-      $('#tgHint').textContent='Публичные каналы работают и без этого. Подключишь Telegram — '+
+      $('#tgHint').textContent='Публичные каналы работают и без этого. Подключишь Telegram: '+
         'появятся ещё и приватные, где ты состоишь участником.';
       $('#tgStart').textContent='Подключить Telegram';
       return;
@@ -2584,6 +2584,8 @@ $('#importFile').onchange=async e=>{
 let authMode='login', authToken='';
 function setAuthMode(mode){
   authMode=mode;
+  // сообщения проверки от прошлого режима не должны блокировать отправку скрытых полей
+  document.querySelectorAll('#authScreen input').forEach(field => field.setCustomValidity(''));
   const register=mode==='register', login=mode==='login', forgot=mode==='forgot';
   const reset=mode==='reset', verify=mode==='verify';
   const sentVerify=mode==='sent_verify', sentReset=mode==='sent_reset';
@@ -2594,7 +2596,7 @@ function setAuthMode(mode){
   const showConfirm=register||reset;
   $('#authLoginMode').setAttribute('aria-pressed',String(!register)); $('#authRegisterMode').setAttribute('aria-pressed',String(register));
   $('#authModes').hidden=!login&&!register;
-  $('#authEmailLabel').hidden=!showEmail; $('#authEmail').hidden=!showEmail; $('#authEmail').required=showEmail;
+  $('#authEmailLabel').hidden=!showEmail; $('#authEmail').hidden=!showEmail; $('#authEmail').required=showEmail; $('#authEmail').disabled=!showEmail;
   $('#authUsernameLabel').hidden=!showUsername; $('#authUsername').hidden=!showUsername; $('#authUsername').required=showUsername;
   $('#authPasswordLabel').hidden=!showPassword; $('#authPassword').hidden=!showPassword; $('#authPassword').required=showPassword;
   $('#authConfirm').hidden=!showConfirm; $('#authConfirmLabel').hidden=!showConfirm; $('#authConfirm').required=showConfirm;
@@ -2606,7 +2608,7 @@ function setAuthMode(mode){
   $('#authSubmit').type=verify?'button':'submit';
   $('#authForgot').hidden=!login; $('#authResend').hidden=!sentVerify;
   $('#authBack').hidden=login||register;
-  $('#authHelp').textContent=register?'Укажи почту для подтверждения и восстановления пароля. Имя — 3–32 латинских знака. Пароль — от 8 символов.'
+  $('#authHelp').textContent=register?'Почта обязательна: по ней подтверждают профиль и восстанавливают пароль. Имя: 3–32 буквы, цифры, _ или -. Пароль: от 8 символов.'
     :forgot?'Введи подтверждённую почту профиля. Если адрес найден, мы отправим ссылку для сброса пароля.'
     :reset?'Придумай пароль длиной от 8 символов.'
     :verify?'Нажми кнопку, чтобы подтвердить адрес почты и войти в профиль.'
@@ -2618,6 +2620,18 @@ function setAuthMode(mode){
 }
 $('#authLoginMode').onclick=()=>setAuthMode('login'); $('#authRegisterMode').onclick=()=>setAuthMode('register');
 $('#authForgot').onclick=()=>{setAuthMode('forgot');$('#authEmail').focus();};
+// Сообщения проверки форм по-русски: браузер по умолчанию пишет по-английски
+for(const field of document.querySelectorAll('#authScreen input')){
+  field.addEventListener('invalid', () => {
+    const v = field.validity;
+    field.setCustomValidity(
+      v.valueMissing ? 'Заполни это поле' :
+      v.typeMismatch ? 'Нужна почта вида name@example.com' :
+      v.tooShort ? 'Слишком коротко: минимум '+field.minLength+' символов' :
+      v.tooLong ? 'Слишком длинно: максимум '+field.maxLength+' символов' : '');
+  });
+  field.addEventListener('input', () => field.setCustomValidity(''));
+}
 $('#authBack').onclick=()=>{authToken='';setAuthMode('login');setFormMessage('authMessage','');};
 $('#authResend').onclick=async()=>{
   const email=$('#authEmail').value.trim(); $('#authResend').disabled=true;

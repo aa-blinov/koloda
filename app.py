@@ -170,6 +170,7 @@ REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт кана
 BACKFILL_CAP = 500    # постов истории на канал; дальше только в Telegram
 BACKFILL_PAUSE = 4    # секунд между страницами истории: не дёргаем t.me
 BACKFILL_IDLE = 5     # секунд ждать, когда догружать нечего: новая подписка начнётся не позже
+UNREAD_DAYS = 14        # непрочитанное считаем за две недели: старый архив счётчик не раздувает
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 
@@ -515,9 +516,9 @@ def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, 
         sql += " AND text LIKE ?"
         args.append(f"%{q}%")
     if only_unread:
-        sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
+        sql += (" AND ts >= ? AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
-        args.append(only_unread)
+        args += [unread_floor(), only_unread]
     if before:
         ts, channel, msg_id = before
         sql += (" AND (ts < ? OR (ts = ? AND (channel > ? OR"
@@ -651,24 +652,29 @@ def public_channels(channels):
     return [c for c in channels if valid_channel(c)]
 
 
+def unread_floor():
+    """Самый ранний пост, который ещё считается непрочитанным."""
+    return int(time.time()) - UNREAD_DAYS * 86400
+
+
 def count_unread_private(db, channels, profile):
     """Непрочитанные в приватной корзине — по той же формуле, что и у публичных."""
     if not channels or not profile:
         return 0
-    sql = ("SELECT COUNT(*) FROM private_posts WHERE channel IN (%s) AND NOT EXISTS "
+    sql = ("SELECT COUNT(*) FROM private_posts WHERE channel IN (%s) AND ts >= ? AND NOT EXISTS "
            "(SELECT 1 FROM user_reads r WHERE r.profile=? "
            "AND r.post=private_posts.channel || '/' || private_posts.msg_id)") % ",".join("?" * len(channels))
-    return db.execute(sql, list(channels) + [profile]).fetchone()[0]
+    return db.execute(sql, list(channels) + [unread_floor(), profile]).fetchone()[0]
 
 
 def count_unread(db, channels, profile):
     """Сколько постов подписок ещё не прочитано: без числа фильтр включают вслепую."""
     if not channels or not profile:
         return 0
-    sql = ("SELECT COUNT(*) FROM posts WHERE channel IN (%s) AND NOT EXISTS "
+    sql = ("SELECT COUNT(*) FROM posts WHERE channel IN (%s) AND ts >= ? AND NOT EXISTS "
            "(SELECT 1 FROM user_reads r WHERE r.profile=? "
            "AND r.post=posts.channel || '/' || posts.msg_id)") % ",".join("?" * len(channels))
-    return db.execute(sql, list(channels) + [profile]).fetchone()[0]
+    return db.execute(sql, list(channels) + [unread_floor(), profile]).fetchone()[0]
 
 
 def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
@@ -682,9 +688,9 @@ def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
         sql += " AND text LIKE ?"
         args.append(f"%{q}%")
     if only_unread:
-        sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
+        sql += (" AND ts >= ? AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=posts.channel || '/' || posts.msg_id)")
-        args.append(only_unread)
+        args += [unread_floor(), only_unread]
     if before:
         ts, channel, msg_id = before
         sql += (" AND (ts < ? OR (ts = ? AND (channel > ? OR"
@@ -890,7 +896,7 @@ def catalog_categories():
     return sorted(out, key=lambda x: x["name"])
 
 
-ACCOUNT_RE = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
+ACCOUNT_RE = re.compile(r"^[A-Za-zА-Яа-яЁё0-9_-]{3,32}$")
 SESSION_COOKIE = "lenta_session"
 SESSION_TTL = 30 * 24 * 60 * 60
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
@@ -1245,7 +1251,7 @@ class Handler(BaseHTTPRequestHandler):
                 email = str(data.get("email", "")).strip().lower()
                 password = data.get("password", "")
                 if not ACCOUNT_RE.fullmatch(username):
-                    return self._send(400, json.dumps({"error": "Имя: 3–32 латинских буквы, цифры или _ -"}, ensure_ascii=False),
+                    return self._send(400, json.dumps({"error": "Имя: 3–32 буквы, цифры, _ или -"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 if not isinstance(password, str) or not 8 <= len(password) <= 128:
                     return self._send(400, json.dumps({"error": "Пароль должен быть от 8 до 128 символов"}, ensure_ascii=False),
