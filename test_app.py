@@ -3,7 +3,9 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import time
@@ -274,6 +276,29 @@ class FeedAPITest(unittest.TestCase):
         self.assertIsNotNone(next_before)
         self.assertGreater(retry_at, int(time.time()))
         self.assertNotIn("alpha", app.backfill_candidates(self.db))
+
+    def test_backfill_waits_for_the_posts_of_a_new_subscription(self):
+        # Подписка появилась раньше, чем лента записала посты: листать пока не от чего
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('prof_new', 'delta')")
+        self.db.commit()
+        self.assertNotIn("delta", app.backfill_candidates(self.db))
+        self.assertFalse(app.backfill_step(self.db))
+        self.assertIsNone(self.db.execute("SELECT done FROM backfill WHERE channel='delta'").fetchone())
+        self.assertEqual(app.history_status(self.db, "prof_new")["channels"][0]["state"], "waiting")
+        self.db.executemany(app.POST_INSERT, [fake_post("delta", 50, 1_600_000_000)])
+        self.db.commit()
+        self.assertIn("delta", app.backfill_candidates(self.db))
+
+    def test_backfill_marks_the_channel_done_on_an_empty_older_page(self):
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('prof_end', 'alpha')")
+        self.db.commit()
+        # Самый старый пост уже в базе: t.me за ним отдаёт пустую страницу, это конец истории
+        with patch.object(app, "fetch_channel", return_value=("Alpha", [])):
+            self.assertTrue(app.backfill_step(self.db))
+        self.db.commit()
+        status = app.history_status(self.db, "prof_end")
+        self.assertEqual([(c["state"], c["fetched"]) for c in status["channels"]], [("done", 0)])
+        self.assertFalse(status["loading"])
 
     def test_history_status_names_the_state_of_every_channel(self):
         now = int(time.time())
@@ -617,6 +642,64 @@ class FeedAPITest(unittest.TestCase):
         status, feed = self.request("/api/feed?" + query, client_id="shared-123")
         self.assertEqual(status, 200)
         self.assertNotIn(("alpha", 1), {(p["channel"], p["msg_id"]) for p in feed["posts"]})
+
+
+class FetchChannelTest(unittest.TestCase):
+    """Пустая страница значит разное: без before это канал без постов, с before — конец истории."""
+
+    PAGE = '<meta property="og:title" content="Канал"/>'.encode()
+
+    def test_empty_page_behind_the_first_post_is_the_end_of_history(self):
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = self.PAGE
+            self.assertEqual(app.fetch_channel("durov", before=1), ("Канал", []))
+
+    def test_empty_first_page_is_still_an_error(self):
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = self.PAGE
+            with self.assertRaises(ValueError):
+                app.fetch_channel("durov")
+
+
+class HistoryTextTest(unittest.TestCase):
+    """Строки догрузки собирает браузер: берём функции из index.html и считаем их в node."""
+
+    @unittest.skipUnless(shutil.which("node"), "нужен node")
+    def test_channel_line_says_loading_only_once(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+        with open(path, encoding="utf-8") as page:
+            html = page.read()
+        functions = "\n".join(re.search(r"^function %s\(.*?^}" % name, html, re.S | re.M).group(0)
+                              for name in ("historyDetail", "channelHistoryText"))
+        cases = [
+            ({"state": "loading", "fetched": 8}, "true", "Догружаем старые публикации канала: 8 из 500"),
+            ({"state": "waiting", "fetched": 0}, "true", "Старые публикации канала: в очереди"),
+            ({"state": "paused", "fetched": 40}, "true", "Старые публикации канала: t.me не отвечает, повторим позже"),
+            ({"state": "done", "fetched": 13}, "false", "вся история загружена"),
+        ]
+        script = functions + "\n" + "\n".join(
+            "console.log(channelHistoryText(%s, 500, %s));" % (json.dumps(ch), pending)
+            for ch, pending, _ in cases)
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(out.splitlines(), [expected for _, _, expected in cases])
+
+
+class BackfillLoopTest(unittest.TestCase):
+    """Пока догружать нечего, цикл ждёт недолго: новая подписка не должна ждать минуту."""
+
+    def test_idle_loop_rechecks_soon(self):
+        class Stop(Exception):
+            pass
+
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(app, "DB", temp + "/feed.db"), \
+                patch.object(app, "backfill_step", return_value=False), \
+                patch.object(app, "time") as clock:
+            clock.sleep.side_effect = Stop
+            with self.assertRaises(Stop):
+                app._backfill_loop()
+        clock.sleep.assert_called_once_with(app.BACKFILL_IDLE)
+        self.assertLessEqual(app.BACKFILL_IDLE, 5)
 
 
 class CatalogCategoryTest(unittest.TestCase):

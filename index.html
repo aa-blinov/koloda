@@ -489,7 +489,8 @@ body.view-solo .search{display:none}
   text-align:left;cursor:pointer;background:none;border:1px solid var(--edge);
   border-radius:var(--r-pill);color:var(--fg)}
 .chan-action .chan-count{color:var(--dim);font-size:12px;white-space:nowrap}
-  .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap}
+  /* при переносе на две строки пилюля-контейнер перекрывает кнопки по углам: радиус меньше */
+  .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap;border-radius:var(--r-xl)}
   /* кнопка занимает всю свободную ширину ряда, а текст внутри по центру:
      иначе одинокая кнопка в конце ряда выглядит пустой и перекошенной */
   .dlg .settings .seg button{flex:1 1 auto;justify-content:center}
@@ -1188,7 +1189,7 @@ function historyDetail(ch, cap){
   if(ch.state === 'loading') return 'догружаем: '+ch.fetched+' из '+cap;
   if(ch.state === 'waiting') return 'в очереди';
   if(ch.state === 'paused') return 't.me не отвечает, повторим позже';
-  if(ch.state === 'done') return 'вся история: '+ch.fetched+' '+plural(ch.fetched,'публикация','публикации','публикаций');
+  if(ch.state === 'done') return 'вся история загружена';
   return 'загружено '+ch.fetched+', дальше только в Telegram';
 }
 function paintHistory(h){
@@ -1223,15 +1224,19 @@ function renderHistoryList(h){
       '<div class="hist-bar" aria-hidden="true"><i style="width:'+pct+'%"></i></div></div>';
   }).join('');
 }
+// Строка догрузки для экрана канала: при догрузке число уже говорит, что идёт загрузка
+function channelHistoryText(ch, cap, pending){
+  if(ch.state === 'loading') return 'Догружаем старые публикации канала: '+ch.fetched+' из '+cap;
+  const detail = historyDetail(ch, cap);
+  return pending ? 'Старые публикации канала: '+detail : detail;
+}
 function paintChannelHistory(h){
   const ch = h && h.channels ? h.channels.find(c => c.channel === channelName) : null;
   const line = $('#chHistory');
   const pending = Boolean(ch && ch.state !== 'done' && ch.state !== 'capped');
   line.hidden = !ch;
   if(!ch) line.textContent = 'Канала нет в ленте: его история не догружается.';
-  else line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+(pending
-    ? 'Догружаем старые публикации канала: '+historyDetail(ch, h.cap)
-    : historyDetail(ch, h.cap));
+  else line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+channelHistoryText(ch, h.cap, pending);
   $('#chEndText').textContent = pending ? 'Старые публикации ещё загружаются, они появятся здесь сами.' : 'Сохранённые публикации канала закончились.';
   $('#chEndLink').hidden = pending;
 }
