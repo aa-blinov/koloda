@@ -574,6 +574,34 @@ def backfill_step(db):
     return True
 
 
+# t.me меняет адреса файлов в ссылках, старые дают 404, а лента перезаписывает пост
+# только когда канал загружен заново. Поэтому битый кадр просит свежие ссылки на пост.
+MEDIA_RECHECK = 600     # секунд: один пост в t.me чаще не ходим
+_media_checked = {}     # (канал, msg_id) -> когда последний раз ходили в t.me
+
+
+def refresh_media(db, channel, msg_id):
+    """Свежий список медиа одного поста или None, если поста нет в базе. Страница
+    до msg_id + 1 захватывает сам пост и более старые, поэтому работает и для постов,
+    которых нет на первой странице канала."""
+    row = db.execute("SELECT media FROM posts WHERE channel=? AND msg_id=?", (channel, msg_id)).fetchone()
+    if row is None:
+        return None
+    key = (channel, msg_id)
+    if time.time() - _media_checked.get(key, 0) < MEDIA_RECHECK:
+        return json.loads(row[0] or "[]")
+    if len(_media_checked) > 5000:
+        _media_checked.clear()
+    _media_checked[key] = time.time()
+    _, posts = fetch_channel(channel, before=msg_id + 1)
+    fresh = next((p for p in posts if p["msg_id"] == msg_id), None)
+    if fresh is None:  # пост удалили или t.me не отдал его на этой странице
+        return json.loads(row[0] or "[]")
+    db.execute("UPDATE posts SET media=? WHERE channel=? AND msg_id=?", (fresh["media"], channel, msg_id))
+    db.commit()
+    return json.loads(fresh["media"] or "[]")
+
+
 def _backfill_loop():
     while True:
         worked = False
@@ -2041,6 +2069,31 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(502, json.dumps({"error": str(e)}),
                                       "application/json")
 
+            if path == "/api/media":
+                # Свежие ссылки на кадры поста, когда старые не открываются. Ходит в t.me,
+                # поэтому только для подписчика канала: иначе сайт снова станет чужим обходом.
+                channel, _, msg = (self._query("post") or "").partition("/")
+                if not valid_channel(channel) or not msg.isdigit():
+                    return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                profile = client_id(self, db)
+                if not profile:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if not db.execute("SELECT 1 FROM user_subs WHERE profile=? AND channel=?",
+                                  (profile, channel)).fetchone():
+                    return self._send(404, json.dumps({"error": "канала нет в подписках"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                try:
+                    media = refresh_media(db, channel, int(msg))
+                except Exception:  # t.me не ответил или попросил подождать
+                    return self._send(502, json.dumps({"error": "t.me не отдал пост"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if media is None:
+                    return self._send(404, json.dumps({"error": "поста нет в ленте"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                return self._send(200, json.dumps({"media": media}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
             if path == "/api/check":
                 # Проверка канала для каталога: 200 если живой.
                 c = self._query("c")
