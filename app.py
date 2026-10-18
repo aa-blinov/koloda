@@ -832,6 +832,7 @@ def store_channel_cache(db, channel, title, posts):
 # TGMania — открытый каталог каналов (без ключа). Сортировку на их стороне
 # приходится переделывать: ответ приходит не по subscriber_count.
 TGMANIA = "https://tgmania.com/api/channels"
+CATALOG_PAGE = 40     # каналов на страницу каталога; TGMania отдаёт до 50
 
 
 def last_post_times(db):
@@ -839,9 +840,11 @@ def last_post_times(db):
     return dict(db.execute("SELECT channel, MAX(ts) FROM posts GROUP BY channel"))
 
 
-def search_catalog(q="", category="", limit=40, last_posts=None):
+def search_catalog(q="", category="", limit=CATALOG_PAGE, last_posts=None, offset=0):
     """Каталог каналов из TGMania. Возвращает [{username,name,desc,subs,q,cat,last_ts}]."""
     params = {"limit": min(limit, 50), "type": "channel"}
+    if offset:
+        params["offset"] = offset
     if q:
         params["q"] = q
     if category and category != "all":
@@ -1999,11 +2002,17 @@ class Handler(BaseHTTPRequestHandler):
                                   "application/json; charset=utf-8")
 
             if path == "/api/catalog":
+                offset = self._query("offset", "0")
+                if not offset.isdigit() or int(offset) > 5000:
+                    return self._send(400, json.dumps({"error": "неверная страница каталога"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 try:
                     q = self._query("q")
                     cat = self._query("category", "all")
+                    found = search_catalog(q, cat, last_posts=last_post_times(db), offset=int(offset))
+                    # полная страница означает, что дальше могут быть ещё каналы
                     return self._send(200, json.dumps(
-                        {"channels": search_catalog(q, cat, last_posts=last_post_times(db))},
+                        {"channels": found, "has_more": len(found) >= CATALOG_PAGE},
                         ensure_ascii=False),
                         "application/json; charset=utf-8")
                 except Exception as e:
