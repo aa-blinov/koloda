@@ -169,6 +169,7 @@ FETCH_TIMEOUT = 8     # сколько ждём ответа t.me на один 
 REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт канал, которого ещё нет в кэше
 BACKFILL_CAP = 500    # постов истории на канал; дальше только в Telegram
 BACKFILL_PAUSE = 4    # секунд между страницами истории: не дёргаем t.me
+BACKFILL_IDLE = 5     # секунд ждать, когда догружать нечего: новая подписка начнётся не позже
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 
@@ -476,8 +477,9 @@ def fetch_channel(channel, before=None):
         })
 
     # t.me на несуществующий канал отдаёт свою заглушку с чужим og:title.
-    # Единственный честный признак канала — посты в его ленте.
-    if not posts:
+    # Единственный честный признак канала — посты в его ленте. Пустая страница с before
+    # — не ошибка, а конец истории: догрузка по ней помечает канал полным.
+    if not posts and before is None:
         raise ValueError(f"канал «{channel}» не найден, закрыт или без постов")
     return title, posts
 
@@ -529,13 +531,15 @@ def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, 
 # История канала догружается в фоне: подписанные публичные каналы листаются вглубь
 # страницами по BACKFILL_PAUSE секунд. Позиция хранится в таблице backfill, поэтому
 # перезапуск её не сбрасывает. Посты пишутся без изменения cache: иначе догрузка
-# сбрасывала бы отсчёт обычного обновления канала.
+# сбрасывала бы отсчёт обычного обновления канала. Без постов в базе листать не от чего:
+# канал, подписанный раньше первой записи ленты, закрылся бы полным с нулём навсегда.
 def backfill_candidates(db):
     now = int(time.time())
     rows = db.execute(
         "SELECT DISTINCT s.channel FROM user_subs s "
         "LEFT JOIN backfill b ON b.channel = s.channel "
         "WHERE COALESCE(b.done, 0) = 0 AND COALESCE(b.retry_at, 0) <= ? "
+        "AND EXISTS (SELECT 1 FROM posts p WHERE p.channel = s.channel) "
         "ORDER BY COALESCE(b.fetched, 0), s.channel", (now,)).fetchall()
     return public_channels([r[0] for r in rows])
 
@@ -553,9 +557,6 @@ def backfill_step(db):
     if next_before is None:
         next_before = db.execute("SELECT MIN(msg_id) FROM posts WHERE channel=?",
                                  (channel,)).fetchone()[0]
-        if next_before is None:  # в базе ни одного поста: догружать нечего
-            db.execute("INSERT OR REPLACE INTO backfill VALUES (?,?,?,1,0,0)", (channel, None, 0))
-            return True
     try:
         _, posts = fetch_channel(channel, before=next_before)
     except Exception:
@@ -585,7 +586,7 @@ def _backfill_loop():
                 db.close()
         except Exception:
             pass
-        time.sleep(BACKFILL_PAUSE if worked else 60)
+        time.sleep(BACKFILL_PAUSE if worked else BACKFILL_IDLE)
 
 
 def history_status(db, profile):
