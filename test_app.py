@@ -319,6 +319,64 @@ class FeedAPITest(unittest.TestCase):
         self.cookie = ""
         self.assertEqual(self.request("/api/history")[0], 401)
 
+    def login(self, name):
+        self.cookie = ""
+        status, _ = self.request("/api/auth/register", method="POST",
+                                 data={"username": name, "password": "password123"})
+        self.assertEqual(status, 201)
+        return self.db.execute("SELECT profile FROM accounts WHERE username=?", (name,)).fetchone()[0]
+
+    def subscribe(self, profile, channel="alpha"):
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES (?, ?)", (profile, channel))
+        self.db.commit()
+
+    def last_msg_id(self, channel="alpha"):
+        return self.db.execute("SELECT MAX(msg_id) FROM posts WHERE channel=?", (channel,)).fetchone()[0]
+
+    def test_dead_frame_gets_fresh_links_from_telegram(self):
+        # t.me сменил адреса файлов: старая ссылка 404, свежая со страницы канала открывается
+        msg = self.last_msg_id()
+        self.subscribe(self.login("media_fan"))
+        self.db.execute("UPDATE posts SET media=? WHERE channel='alpha' AND msg_id=?",
+                        (json.dumps([{"k": "i", "u": "https://cdn.example/old.jpg"}]), msg))
+        self.db.commit()
+        fresh = fake_post("alpha", msg, 1_600_000_000)
+        fresh["media"] = json.dumps([{"k": "i", "u": "https://cdn.example/new.jpg"}])
+        with patch.dict(app._media_checked, clear=True), \
+                patch.object(app, "fetch_channel", return_value=("Alpha", [fresh])) as fetch:
+            status, payload = self.request(f"/api/media?post=alpha/{msg}")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["media"][0]["u"], "https://cdn.example/new.jpg")
+        # страница до msg + 1 захватывает сам пост, даже если он не на первой странице канала
+        fetch.assert_called_once_with("alpha", before=msg + 1)
+        stored = self.db.execute("SELECT media FROM posts WHERE channel='alpha' AND msg_id=?", (msg,)).fetchone()[0]
+        self.assertEqual(json.loads(stored)[0]["u"], "https://cdn.example/new.jpg")
+
+    def test_fresh_links_are_only_for_subscribers(self):
+        msg = self.last_msg_id()
+        self.login("media_stranger")  # без подписки на alpha
+        with patch.dict(app._media_checked, clear=True), patch.object(app, "fetch_channel") as fetch:
+            self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 404)
+            self.cookie = ""
+            self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 401)
+        fetch.assert_not_called()
+
+    def test_fresh_links_wait_between_checks_of_one_post(self):
+        msg = self.last_msg_id()
+        self.subscribe(self.login("media_busy"))
+        with patch.dict(app._media_checked, clear=True), \
+                patch.object(app, "fetch_channel", return_value=("Alpha", [])) as fetch:
+            self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 200)
+            self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 200)
+        fetch.assert_called_once()
+
+    def test_fresh_links_report_telegram_errors_as_bad_gateway(self):
+        msg = self.last_msg_id()
+        self.subscribe(self.login("media_unlucky"))
+        with patch.dict(app._media_checked, clear=True), \
+                patch.object(app, "fetch_channel", side_effect=TimeoutError("timed out")):
+            self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 502)
+
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
         # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,

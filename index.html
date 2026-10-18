@@ -2271,18 +2271,37 @@ document.addEventListener('loadedmetadata', e => {
   if(v instanceof HTMLVideoElement && v.closest('.gal') && v.videoWidth)
     v.style.setProperty('--ar', v.videoWidth+'/'+v.videoHeight);
 }, true);
-// Кадр, который t.me отдал ссылкой, а файл уже не отдаётся (404, 500): вместо
-// пустой подложки ставим ссылку на пост. Ошибка загрузки не всплывает, ловим в фазе захвата.
+// Кадр, который t.me отдал ссылкой, а файл уже не отдаётся (404, 500). t.me меняет
+// адреса файлов, поэтому сначала просим у сервера свежие ссылки на этот пост и ставим
+// кадр заново. Если и они не открылись, вместо подложки ставим ссылку на пост.
+// Ошибка загрузки не всплывает, ловим в фазе захвата.
+const freshMediaByPost = new Map();
+function freshMedia(post){
+  if(!freshMediaByPost.has(post)) freshMediaByPost.set(post,
+    fetch('/api/media?post='+encodeURIComponent(post)).then(r => r.ok ? r.json() : null)
+      .then(j => (j && j.media) || null).catch(() => null));
+  return freshMediaByPost.get(post);
+}
+function brokenFrame(el, post){
+  const a = document.createElement('a');
+  a.className = 'gal-broken'; a.href = 'https://t.me/' + post;
+  a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = 'Медиа недоступно, открыть в Telegram';
+  el.replaceWith(a);
+}
 document.addEventListener('error', e => {
   const el = e.target;
   if(!(el instanceof HTMLImageElement || el instanceof HTMLVideoElement) || !el.closest('.gal')) return;
   const post = el.closest('[data-post]');
   if(!post) return;
-  const a = document.createElement('a');
-  a.className = 'gal-broken'; a.href = 'https://t.me/' + post.dataset.post;
-  a.target = '_blank'; a.rel = 'noopener';
-  a.textContent = 'Медиа недоступно, открыть в Telegram';
-  el.replaceWith(a);
+  if(el.dataset.fresh) return brokenFrame(el, post.dataset.post);
+  el.dataset.fresh = '1';
+  const i = [...el.parentElement.children].indexOf(el);
+  freshMedia(post.dataset.post).then(media => {
+    const m = media && media[i];
+    if(!m || !m.u) return brokenFrame(el, post.dataset.post);
+    el.src = m.u;
+  });
 }, true);
 document.addEventListener('click', e => {
   const media = e.target.closest('.gal img, .gal video');
