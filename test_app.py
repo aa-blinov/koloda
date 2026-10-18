@@ -389,6 +389,26 @@ class FeedAPITest(unittest.TestCase):
             self.assertFalse(self.request("/api/catalog")[1]["has_more"])
         self.assertEqual(self.request("/api/catalog?offset=abc")[0], 400)
 
+    def test_profile_names_accept_both_alphabets(self):
+        self.cookie = ""
+        self.assertEqual(self.request("/api/auth/register", method="POST",
+                                      data={"username": "Иван_2", "password": "password123"})[0], 201)
+        self.cookie = ""
+        self.assertEqual(self.request("/api/auth/register", method="POST",
+                                      data={"username": "a b", "password": "password123"})[0], 400)
+
+    def test_unread_counts_only_the_last_two_weeks(self):
+        # Старый архив догрузки не должен раздувать счётчик непрочитанного
+        profile = self.login("unread_window")
+        self.subscribe(profile)
+        before = self.request("/api/feed?channels=alpha")[1]["unread"]
+        now = int(time.time())
+        self.db.executemany(app.POST_INSERT, [fake_post("alpha", 90001, now - 30 * 86400),
+                                             fake_post("alpha", 90002, now)])
+        self.db.commit()
+        after = self.request("/api/feed?channels=alpha")[1]["unread"]
+        self.assertEqual(after - before, 1)
+
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
         # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,
@@ -742,7 +762,7 @@ class HistoryTextTest(unittest.TestCase):
         functions = "\n".join(re.search(r"^function %s\(.*?^}" % name, html, re.S | re.M).group(0)
                               for name in ("historyDetail", "channelHistoryText"))
         cases = [
-            ({"state": "loading", "fetched": 8}, "true", "Догружаем старые публикации канала: 8 из 500"),
+            ({"state": "loading", "fetched": 8}, "true", "Загружаем старые публикации канала: 8 из 500"),
             ({"state": "waiting", "fetched": 0}, "true", "Старые публикации канала: в очереди"),
             ({"state": "paused", "fetched": 40}, "true", "Старые публикации канала: t.me не отвечает, повторим позже"),
             ({"state": "done", "fetched": 13}, "false", "вся история загружена"),
