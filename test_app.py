@@ -377,6 +377,18 @@ class FeedAPITest(unittest.TestCase):
                 patch.object(app, "fetch_channel", side_effect=TimeoutError("timed out")):
             self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 502)
 
+    def test_catalog_reports_whether_more_pages_follow(self):
+        # Каталог листается страницами: полная страница значит, что дальше могут быть ещё каналы
+        full = [{"username": f"chan{i}", "name": f"Chan {i}"} for i in range(app.CATALOG_PAGE)]
+        with patch.object(app, "search_catalog", return_value=full) as search:
+            status, payload = self.request("/api/catalog?offset=40")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["has_more"])
+        self.assertEqual(search.call_args.kwargs["offset"], 40)
+        with patch.object(app, "search_catalog", return_value=full[:3]):
+            self.assertFalse(self.request("/api/catalog")[1]["has_more"])
+        self.assertEqual(self.request("/api/catalog?offset=abc")[0], 400)
+
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
         # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,
@@ -790,6 +802,12 @@ class CatalogSearchTest(unittest.TestCase):
             net.return_value.read.return_value = payload
             channels = app.search_catalog(last_posts={})
         self.assertEqual(channels[0]["last_ts"], 0)
+
+    def test_next_catalog_page_asks_telegram_for_the_offset(self):
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = json.dumps({"channels": []}).encode()
+            app.search_catalog(offset=40)
+        self.assertIn("offset=40", net.call_args[0][0].full_url)
 
     def test_last_post_times_reads_the_newest_post_per_channel(self):
         # База в памяти: app.connect() берёт путь из настроек, а в CI папки data нет.

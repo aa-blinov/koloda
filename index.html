@@ -177,7 +177,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 
 .post:not(:has(.gal,.doc,.preview,.photo)){max-width:calc(34em + 42px)}
 /* Карточка M3 «filled»: поверхность тоном, без рамки и подъёма. Наведение: слой 8% */
-.post{position:relative;scroll-margin-top:80px;background:var(--surf);border-radius:var(--r-md);
+.post{position:relative;scroll-margin-top:80px;content-visibility:auto;contain-intrinsic-size:auto 480px;background:var(--surf);border-radius:var(--r-md);
   padding:18px 20px;margin-bottom:12px;
   transition:background .2s var(--ease), opacity .18s}
 .post:hover{background:color-mix(in srgb,var(--fg) 8%,var(--surf))}
@@ -664,6 +664,7 @@ body.view-solo .search{display:none}
     <span id="tabsToggleLabel">Все каналы</span>
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
+  <button id="unsubBtn" class="quiet-btn" type="button" hidden>Убрать из ленты</button>
   <p class="fresh" id="fresh" aria-live="polite"></p>
   <p class="fresh" id="historyStatus" aria-live="polite" hidden></p>
 </div>
@@ -1560,18 +1561,23 @@ const GAL_MIN = 200, GAL_AHEAD = 3;
 function watchGalleries(root){
   for(const gal of root.querySelectorAll('.gal')){
     let next = gal.querySelectorAll('img[data-src]').length ? 1 : 0;
+    let scrolled = false;
+    // Первый показ идёт без прокрутки, и читать scrollLeft тогда незачем: каждое чтение
+    // после смены src заставляет браузер заново считать вёрстку. Читаем только после
+    // настоящей прокрутки.
     const grant = () => {
+      const want = GAL_AHEAD + (scrolled ? Math.ceil(gal.scrollLeft / GAL_MIN) : 0);
       let img;
-      while(next < GAL_AHEAD + Math.ceil(gal.scrollLeft / GAL_MIN) &&
-            (img = gal.querySelector('img[data-src]'))){
+      while(next < want && (img = gal.querySelector('img[data-src]'))){
         img.src = img.dataset.src;
         delete img.dataset.src;
         next++;
       }
-      if(!gal.querySelector('img[data-src]')) gal.removeEventListener('scroll', grant);
+      if(!gal.querySelector('img[data-src]')) gal.removeEventListener('scroll', onScroll);
     };
+    const onScroll = () => { scrolled = true; grant(); };
     if(!next) continue;
-    gal.addEventListener('scroll', grant, {passive:true});
+    gal.addEventListener('scroll', onScroll, {passive:true});
     requestAnimationFrame(grant);
   }
 }
@@ -1718,6 +1724,7 @@ function renderTabs(){
     list.forEach(c => mk(titles[c] || c, c));
   }
   $('#tabsToggleLabel').textContent = selected ? (titles[selected] || selected) : 'Все каналы';
+  $('#unsubBtn').hidden = !selected;
   $('#feed').setAttribute('aria-label', selected ? 'Публикации канала ' + (titles[selected] || selected) : 'Публикации');
   paintTelegramChannels();
 }
@@ -1823,20 +1830,30 @@ sortButtons.forEach(b => b.onclick = () => {
   sortButtons.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   loadCatalog();
 });
-async function loadCatalog(){
+// Каталог листается страницами: TGMania отдаёт не больше 50 каналов за запрос.
+// Кнопка «Показать ещё каналы» дописывает следующую страницу под список.
+let catalogOffset = 0, catalogMore = null;
+async function loadCatalog(append=false){
   const box = $('#catList'), q = catalogQuery.trim();
-  box.innerHTML = skeleton();
+  if(!append){ catalogOffset = 0; box.innerHTML = skeleton(); }
   try{
-    const r=await fetch('/api/catalog?q='+encodeURIComponent(q)+'&category='+encodeURIComponent(catalogCat));
+    const r=await fetch('/api/catalog?q='+encodeURIComponent(q)+'&category='+encodeURIComponent(catalogCat)+'&offset='+catalogOffset);
     if(!r.ok) throw new Error('catalog unavailable');
-    const {channels:found=[]}=await r.json();
-    catalogItems=new Map(found.map(channel=>[channel.username,channel]));
-    if(!found.length){
+    const {channels:found=[], has_more:hasMore=false}=await r.json();
+    // TGMania иногда повторяет канал на соседних страницах: каждый показываем один раз,
+    // а смещение считаем по всему ответу, иначе следующая страница начнётся не там
+    const known=new Set(append ? catalogItems.keys() : []), shown=[];
+    for(const channel of found){
+      if(!known.has(channel.username)){ known.add(channel.username); shown.push(channel); }
+    }
+    catalogItems=new Map([...(append ? catalogItems : []), ...shown.map(channel=>[channel.username,channel])]);
+    if(!found.length && !append){
       box.innerHTML=emptyState('search','Ничего не нашлось. Измени запрос или выбери категорию.',['clearCatalog','Сбросить поиск']);
       return;
     }
-    const channels=[...found].sort(CATALOG_SORTS[catalogSort] || CATALOG_SORTS.subs);
-    box.className='channel-list'; box.replaceChildren();
+    const channels=[...shown].sort(CATALOG_SORTS[catalogSort] || CATALOG_SORTS.subs);
+    if(!append){ box.className='channel-list'; box.replaceChildren(); }
+    catalogMore?.remove();
     const have=new Set(subs());
     for(const c of channels){
       const entry=document.createElement('article'); entry.className='channel-entry';
@@ -1861,10 +1878,30 @@ async function loadCatalog(){
       row.append(open,action);
       entry.append(row); box.append(entry);
     }
+    catalogOffset += found.length;
+    catalogMore = null;
+    if(hasMore){
+      catalogMore = document.createElement('button');
+      catalogMore.type = 'button'; catalogMore.className = 'btn load-more';
+      catalogMore.textContent = 'Показать ещё каналы';
+      catalogMore.onclick = () => { catalogMore.disabled = true; loadCatalog(true); };
+      box.append(catalogMore);
+    }
   }catch(e){
+    if(append && catalogMore){ catalogMore.disabled = false; catalogMore.textContent = 'Повторить'; return; }
     box.innerHTML=emptyState('alert','Каталог временно недоступен. Проверь соединение и попробуй ещё раз.',['retry','Повторить']);
   }
 }
+// Отписка прямо из ленты: открыт один канал, и его можно убрать одной кнопкой с отменой
+$('#unsubBtn').onclick = () => {
+  const name = tab || subs()[0];
+  setSubscription(name, false);
+  tab = '';
+  renderTabs(); loadCatalog(); load();
+  showUndo('Канал «'+(titles[name]||name)+'» убран из ленты.', () => {
+    setSubscription(name, true); tab = name; renderTabs(); loadCatalog(); load();
+  });
+};
 // Экран канала: последние публикации и подписка. Адрес экрана — #channel/<имя>
 let channelName = '';
 function openChannel(name){ show('channel', {channel: name}); }
