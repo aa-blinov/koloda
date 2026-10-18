@@ -739,7 +739,7 @@ body.view-solo .search{display:none}
     </form>
     <div class="settings">
       <h3>История каналов</h3>
-      <p class="settings-hint">Старые публикации подгружаются в фоне, по одной странице в несколько секунд. Здесь видно, что уже есть и что ждёт очереди.</p>
+      <p class="settings-hint">Старые публикации загружаются в фоне, по одной странице в несколько секунд. Здесь видно, что уже есть и что ждёт очереди.</p>
       <div id="historyList"></div>
     </div>
     <div class="settings">
@@ -761,7 +761,7 @@ body.view-solo .search{display:none}
     </div>
     <div class="settings">
       <h3>Приватные каналы</h3>
-      <p class="settings-hint" id="tgHint">Видны только те, где ты состоишь участником.
+      <p class="settings-hint" id="tgHint">Видны только те, где ты участник.
         Читаются через твой вход в Telegram; публичные каналы работают и без него.</p>
       <p class="auth-message" id="tgState" role="status" aria-live="polite"></p>
       <div id="tgLink" hidden>
@@ -1209,7 +1209,7 @@ function paintHistory(h){
   const end = $('#feedEnd');
   if(end) end.textContent = historyLoading
     ? 'Старые публикации ещё загружаются, они появятся здесь сами.'
-    : 'Это все публикации ваших каналов. Более старые есть в Telegram.';
+    : 'Это все публикации твоих каналов. Более старые есть в Telegram.';
 }
 function renderHistoryList(h){
   const box = $('#historyList');
@@ -1236,7 +1236,7 @@ function paintChannelHistory(h){
   const line = $('#chHistory');
   const pending = Boolean(ch && ch.state !== 'done' && ch.state !== 'capped');
   line.hidden = !ch;
-  if(!ch) line.textContent = 'Канала нет в ленте: его история не догружается.';
+  if(!ch) line.textContent = 'Канала нет в ленте, его история не загружается.';
   else line.innerHTML = '<span class="dot" aria-hidden="true"></span> '+channelHistoryText(ch, h.cap, pending);
   $('#chEndText').textContent = pending ? 'Старые публикации ещё загружаются, они появятся здесь сами.' : 'Сохранённые публикации канала закончились.';
   $('#chEndLink').hidden = pending;
@@ -1318,7 +1318,7 @@ async function load(append=false, silent=false){
     feedCursor=null; feedHasMore=false; feedErrors=[];
     box.innerHTML = tab
       ? emptyState('rss', 'У канала @'+tab+' пока нет постов.')
-      : emptyState('grid', 'Подписок пока нет. Открой каталог и выбери каналы, и они появятся в ленте.', ['cat','Открыть каталог']);
+      : emptyState('grid', 'Каналов пока нет. Открой каталог, выбери нужные, и они появятся в ленте.', ['cat','Открыть каталог']);
     return;
   }
   if(append && (feedLoading || !feedHasMore)) return;
@@ -1598,7 +1598,7 @@ function render(posts,append=false){
         onlyUnread ? 'Непрочитанных постов пока нет.'
           : posts.length ? 'Всё прочитано. Новые посты появятся здесь.'
           : feedQuery ? 'Ничего не нашлось. Попробуй другой запрос.'
-          : 'Подписок пока нет. Загляни в каталог и добавь нужные каналы.',
+          : 'Каналов пока нет. Загляни в каталог и добавь нужные.',
         (!onlyUnread && feedQuery ? ['clearFeed','Сбросить поиск'] : null));
       return;
     }
@@ -1709,7 +1709,7 @@ function renderTabs(){
   if(!list.length){
     const hint = document.createElement('p');
     hint.className = 'chan-hint';
-    hint.textContent = 'Подписок пока нет. Открой каталог и выбери каналы, и они появятся здесь.';
+    hint.textContent = 'Каналов пока нет. Открой каталог, выбери нужные, и они появятся здесь.';
     box.appendChild(hint);
   } else {
     const mk = (label, val) => {
@@ -1744,7 +1744,7 @@ async function paintTelegramChannels(){
     if(!extra.length){ box.hidden = false; box.appendChild(heading('Подписаны в Telegram', 'Все они уже в ленте.')); return; }
     box.hidden = false;
     box.appendChild(heading('Подписаны в Telegram, но не в ленте',
-                             'Это другое множество: в ленту попадает только то, что ты отметишь.'));
+                             'Это другой список: в ленту попадает только то, что ты отметишь.'));
     extra.forEach(c => {
       const row = document.createElement('div');
       row.className = 'chan-row tg-row';
@@ -2423,12 +2423,12 @@ async function loadTgStatus(){
     if(r.status===401){ $('#tgHint').textContent='Нужен вход в профиль.'; return; }
     const d=await r.json();
     if(!d.installed){
-      $('#tgHint').textContent='Telethon не установлен в образе: приватные каналы недоступны.';
+      $('#tgHint').textContent='Приватные каналы сейчас недоступны.';
       $('#tgStart').hidden=true; return;
     }
     if(!d.linked){
       $('#tgHint').textContent='Публичные каналы работают и без этого. Подключишь Telegram: '+
-        'появятся ещё и приватные, где ты состоишь участником.';
+        'появятся ещё и приватные, где ты участник.';
       $('#tgStart').textContent='Подключить Telegram';
       return;
     }
@@ -2636,7 +2636,7 @@ $('#authBack').onclick=()=>{authToken='';setAuthMode('login');setFormMessage('au
 $('#authResend').onclick=async()=>{
   const email=$('#authEmail').value.trim(); $('#authResend').disabled=true;
   try{await fetch('/api/auth/resend-verification',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
-    setFormMessage('authMessage','Если для этой почты ждёт подтверждения профиль, мы отправили письмо.',true);
+    setFormMessage('authMessage','Если профиль с этой почтой ждёт подтверждения, письмо уже отправлено.',true);
   }catch(e){setFormMessage('authMessage','Не удалось отправить письмо. Попробуй ещё раз позже.');}
   finally{setTimeout(()=>$('#authResend').disabled=false,60000);}
 };
