@@ -465,7 +465,10 @@ def fetch_channel(channel, before=None):
             except ValueError:
                 ts = 0
 
-        sticker = _bg(chunk, "tgme_widget_message_sticker_wrap")
+        # Стикер: настоящая картинка лежит в data-webp, а background-image у того же элемента
+        # это заглушка-анимация в base64
+        sticker_m = re.search(r'class="tgme_widget_message_sticker[ "][^>]*data-webp="([^"]+)"', chunk)
+        sticker = sticker_m.group(1) if sticker_m else None
         posts.append({
             "channel": channel,
             "msg_id": int(msg_id),
@@ -505,7 +508,7 @@ PRIVATE_FIELDS = ("channel", "msg_id", "url", "text", "media", "views", "ts",
                   "reactions", "preview", "doc", "fwd", "quote", "sticker")
 
 
-def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, before=None):
+def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, before=None, hide_read=None):
     """То же, что search_posts, но из приватной корзины и только своего профиля.
 
     Отдельная таблица и обязательный profile: общий запрос по постам отдавал бы
@@ -525,6 +528,10 @@ def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, 
         sql += (" AND ts >= ? AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
         args += [unread_floor(), only_unread]
+    if hide_read:
+        sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
+                " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
+        args.append(hide_read)
     if before:
         ts, channel, msg_id = before
         sql += (" AND (ts < ? OR (ts = ? AND (channel > ? OR"
@@ -588,25 +595,31 @@ _media_checked = {}     # (канал, msg_id) -> когда последний 
 
 
 def refresh_media(db, channel, msg_id):
-    """Свежий список медиа одного поста или None, если поста нет в базе. Страница
-    до msg_id + 1 захватывает сам пост и более старые, поэтому работает и для постов,
-    которых нет на первой странице канала."""
-    row = db.execute("SELECT media FROM posts WHERE channel=? AND msg_id=?", (channel, msg_id)).fetchone()
+    """Свежие медиа и карточка ссылки одного поста или None, если поста нет в базе.
+    Страница до msg_id + 1 захватывает сам пост и более старые, поэтому работает и для
+    постов, которых нет на первой странице канала. Картинка карточки ссылки мёртвая
+    по тем же причинам, что и кадры, поэтому обновляется в той же записи."""
+    row = db.execute("SELECT media, preview, sticker FROM posts WHERE channel=? AND msg_id=?",
+                     (channel, msg_id)).fetchone()
     if row is None:
         return None
+    stored = {"media": json.loads(row[0] or "[]"), "preview": json.loads(row[1] or "null"),
+              "sticker": row[2]}
     key = (channel, msg_id)
     if time.time() - _media_checked.get(key, 0) < MEDIA_RECHECK:
-        return json.loads(row[0] or "[]")
+        return stored
     if len(_media_checked) > 5000:
         _media_checked.clear()
     _media_checked[key] = time.time()
     _, posts = fetch_channel(channel, before=msg_id + 1)
     fresh = next((p for p in posts if p["msg_id"] == msg_id), None)
     if fresh is None:  # пост удалили или t.me не отдал его на этой странице
-        return json.loads(row[0] or "[]")
-    db.execute("UPDATE posts SET media=? WHERE channel=? AND msg_id=?", (fresh["media"], channel, msg_id))
+        return stored
+    db.execute("UPDATE posts SET media=?, preview=?, sticker=? WHERE channel=? AND msg_id=?",
+               (fresh["media"], fresh["preview"], fresh["sticker"], channel, msg_id))
     db.commit()
-    return json.loads(fresh["media"] or "[]")
+    return {"media": json.loads(fresh["media"] or "[]"), "preview": json.loads(fresh["preview"] or "null"),
+            "sticker": fresh["sticker"]}
 
 
 def _backfill_loop():
@@ -683,7 +696,7 @@ def count_unread(db, channels, profile):
     return db.execute(sql, list(channels) + [unread_floor(), profile]).fetchone()[0]
 
 
-def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
+def search_posts(db, q, channels, only_unread=None, limit=120, before=None, hide_read=None):
     """Простой LIKE поверх SQLite — FTS5 тут оверинжиниринг."""
     sql = "SELECT " + ",".join(POST_FIELDS) + " FROM posts WHERE 1=1"
     args = []
@@ -697,6 +710,10 @@ def search_posts(db, q, channels, only_unread=None, limit=120, before=None):
         sql += (" AND ts >= ? AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=posts.channel || '/' || posts.msg_id)")
         args += [unread_floor(), only_unread]
+    if hide_read:
+        sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
+                " WHERE r.profile=? AND r.post=posts.channel || '/' || posts.msg_id)")
+        args.append(hide_read)
     if before:
         ts, channel, msg_id = before
         sql += (" AND (ts < ? OR (ts = ? AND (channel > ? OR"
@@ -1679,6 +1696,9 @@ class Handler(BaseHTTPRequestHandler):
 
                 unread_profile = client_id(self, db)
                 only_unread = unread_profile if self._query("unread") == "1" else None
+                # прочитанное по умолчанию не показываем: фильтр в запросе, а не на клиенте,
+                # чтобы страница не приходила полупустой
+                hide_read = unread_profile if self._query("hide_read") == "1" else None
                 # Публичные каналы идут как раньше. Приватные — из своей таблицы и
                 # только когда запрос пришёл от профиля со своим входом в Telegram;
                 # иначе ключ private:-100… в подписках просто ничего не вернёт.
@@ -1687,11 +1707,11 @@ class Handler(BaseHTTPRequestHandler):
                 # search_posts на пустом списке каналов отдаёт весь кэш — так он
                 # был написан для выгрузки. В ленте это значило бы, что подписчик
                 # одних лишь приватных каналов увидит все публичные подряд.
-                rows = search_posts(db, q, public, only_unread=only_unread,
+                rows = search_posts(db, q, public, only_unread=only_unread, hide_read=hide_read,
                                     limit=FEED_PAGE_SIZE + 1, before=before) if public else []
                 if unread_profile and want_private:
                     rows += search_private_posts(db, q, want_private, unread_profile,
-                                                only_unread=only_unread,
+                                                only_unread=only_unread, hide_read=hide_read,
                                                 limit=FEED_PAGE_SIZE + 1, before=before)
                     # Порядок ленты общий для обеих корзин, иначе посты одного
                     # времени шли бы двумя кусками: сначала публичные, потом приватные.
@@ -2152,14 +2172,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, json.dumps({"error": "канала нет в подписках"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 try:
-                    media = refresh_media(db, channel, int(msg))
+                    fresh = refresh_media(db, channel, int(msg))
                 except Exception:  # t.me не ответил или попросил подождать
                     return self._send(502, json.dumps({"error": "t.me не отдал пост"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if media is None:
+                if fresh is None:
                     return self._send(404, json.dumps({"error": "поста нет в ленте"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                return self._send(200, json.dumps({"media": media}, ensure_ascii=False),
+                return self._send(200, json.dumps(fresh, ensure_ascii=False),
                                   "application/json; charset=utf-8")
             if path == "/api/check":
                 # Проверка канала для каталога: 200 если живой.
