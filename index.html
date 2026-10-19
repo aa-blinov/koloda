@@ -385,7 +385,12 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .account-actions{display:flex;gap:8px;margin-top:12px}
 .account-actions button{flex:1}
 .feed-warning{margin:0 0 12px;padding:10px 12px;border-radius:var(--r-sm);
-  background:color-mix(in srgb,var(--error) 10%,var(--surf));color:var(--fg);font-size:13px}
+  background:color-mix(in srgb,var(--error) 10%,var(--surf));color:var(--fg);font-size:13px;
+  display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.feed-warning-x{flex:none;width:26px;height:26px;margin:-4px -4px 0 0;padding:0;border:0;
+  border-radius:var(--r-xs);background:transparent;color:var(--dim);font-size:18px;line-height:1;
+  cursor:pointer}
+.feed-warning-x:hover{background:var(--raise);color:var(--fg)}
 .load-more{display:block;margin:16px auto 28px}
 .feed-empty-more{padding:20px 16px;text-align:center;color:var(--dim)}
 
@@ -1086,11 +1091,17 @@ function setFormMessage(id,message,success=false){
 }
 function showAuth(message=''){
   stateReady=false; $('#bootScreen').hidden=true; $('#appShell').hidden=true; $('#authScreen').hidden=false;
+  // Выход из профиля: без этого опрос состояния продолжал бы ходить на сервер
+  // от имени сессии, которой уже нет.
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=0; }
+  if(offFocus){ window.removeEventListener('focus',offFocus); offFocus=0; }
+  if(offVisibility){ document.removeEventListener('visibilitychange',offVisibility); offVisibility=0; }
   setFormMessage('authMessage',message);
   const focusTarget=$('#authEmail').hidden?($('#authUsername').hidden?$('#authSubmit'):$('#authUsername')):$('#authEmail');
   focusTarget.focus({preventScroll:true});
 }
 let accountEmail='';
+let pollTimer=0, offFocus=0, offVisibility=0;
 function showApp(account){
   accountName=account.username; accountEmail=account.email||'';
   $('#accountName').textContent='@'+accountName;
@@ -1104,7 +1115,15 @@ function showApp(account){
   const start = location.hash ? viewFromHash() : {view: localStorage.getItem(LS.view)==='cat' ? 'cat' : 'feed'};
   show(start.view, {replace:true, channel: start.channel});
   if(feedMode !== 'saved') load();
-  setInterval(pullState,15000);
+  // showApp зовут и при повторном входе, поэтому прошлый таймер и слушатели
+  // снимаются: иначе каждый вход добавляет ещё один опрос состояния, и они
+  // копятся до конца сессии.
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=0; }
+  if(offFocus){ window.removeEventListener('focus',offFocus); offFocus=0; }
+  if(offVisibility){ document.removeEventListener('visibilitychange',offVisibility); offVisibility=0; }
+  pollTimer = setInterval(pullState,15000);
+  offFocus = pullState;
+  offVisibility = pullState;
   window.addEventListener('focus',pullState);
   document.addEventListener('visibilitychange',pullState);
 }
@@ -1359,7 +1378,11 @@ async function load(append=false, silent=false){
       unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
-    $('#feedEnd').hidden = feedHasMore || !$('#postList')?.querySelector('.post');
+    // В пустом состоянии render() уходит раньше и #feedEnd в разметке нет.
+    // Обращение к нему бросало TypeError, и человек вместо «Ничего не нашлось»
+    // видел «Не удалось загрузить ленту».
+    const feedEnd = $('#feedEnd');
+    if(feedEnd) feedEnd.hidden = feedHasMore || !$('#postList')?.querySelector('.post');
     paintHistory(d.history);
     paintFreshness();
     paintSearchHint(q, d.posts.length, append);
@@ -1548,9 +1571,12 @@ function showFeedWarning(){
   if(!feedErrors.length){ warning.hidden=true; warning.textContent=''; return; }
   const channels=feedErrors.map(e=>e.channel).filter(Boolean);
   warning.hidden=false;
-  warning.textContent=channels.length
+  // Каналов, которых нет в Telegram, не станет и после повтора: без кнопки
+  // закрытия баннер занимал место над постами при каждой загрузке ленты.
+  warning.innerHTML='<span>'+esc(channels.length
     ? 'Не удалось обновить '+channels.length+' '+(channels.length===1?'канал':'канала')+': '+channels.join(', ')+'. Показаны доступные посты.'
-    : 'Не удалось загрузить следующую часть ленты. Попробуй ещё раз.';
+    : 'Не удалось загрузить следующую часть ленты. Попробуй ещё раз.')+'</span>'+
+    '<button class="feed-warning-x" type="button" data-act="hideFeedWarning" aria-label="Скрыть сообщение">&times;</button>';
 }
 
 // Кадры альбома подгружаются по мере свайпа. Через IntersectionObserver и по
@@ -2141,7 +2167,10 @@ const typing = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' 
 function focusPost(post){
   if(!post) return;
   post.focus({preventScroll:true});
-  post.scrollIntoView({block:'center', behavior:'smooth'});
+  // behavior:'smooth' задаётся из скрипта, и правило prefers-reduced-motion
+  // на него не действует: уважаем просьбу браузера прямо здесь.
+  post.scrollIntoView({block:'center',
+    behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
 }
 function stepPost(delta){
   const list = postNodes();
@@ -2218,6 +2247,11 @@ $('#feed').onclick = e => {
   if(e.target.dataset?.act === 'cat')  show('cat');
   if(e.target.dataset?.act === 'clearFeed'){ feedQuery=''; $('#q').value=''; load(); }
   if(e.target.dataset?.act === 'retry') load();
+  if(e.target.dataset?.act === 'hideFeedWarning'){
+    const w=$('#feedWarning'); if(w){ w.hidden=true; w.textContent=''; }
+    // до следующей неудачной загрузки ленты, а не до перезагрузки страницы
+    feedErrors=[]; renderTabs();
+  }
   if(e.target.dataset?.act === 'loadmore') load(true);
 };
 $('#catList').onclick = e => {
