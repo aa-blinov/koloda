@@ -381,6 +381,24 @@ class FeedAPITest(unittest.TestCase):
         stored = self.db.execute("SELECT media FROM posts WHERE channel='alpha' AND msg_id=?", (msg,)).fetchone()[0]
         self.assertEqual(json.loads(stored)[0]["u"], "https://cdn.example/new.jpg")
 
+    def test_dead_preview_image_gets_a_fresh_link(self):
+        # Картинка карточки ссылки мертва так же, как кадр: свежая приходит в том же ответе
+        msg = self.last_msg_id()
+        self.subscribe(self.login("preview_fan"))
+        stored = {"url": "https://example.com/a", "site": "Example", "title": "Old", "desc": "",
+                  "image": "https://cdn.example/old.jpg"}
+        self.db.execute("UPDATE posts SET preview=? WHERE channel='alpha' AND msg_id=?", (json.dumps(stored), msg))
+        self.db.commit()
+        fresh = fake_post("alpha", msg, 1_600_000_000)
+        fresh["preview"] = json.dumps({**stored, "image": "https://cdn.example/new.jpg"})
+        with patch.dict(app._media_checked, clear=True), \
+                patch.object(app, "fetch_channel", return_value=("Alpha", [fresh])):
+            status, payload = self.request(f"/api/media?post=alpha/{msg}")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["preview"]["image"], "https://cdn.example/new.jpg")
+        saved = self.db.execute("SELECT preview FROM posts WHERE channel='alpha' AND msg_id=?", (msg,)).fetchone()[0]
+        self.assertEqual(json.loads(saved)["image"], "https://cdn.example/new.jpg")
+
     def test_fresh_links_are_only_for_subscribers(self):
         msg = self.last_msg_id()
         self.login("media_stranger")  # без подписки на alpha
@@ -437,6 +455,20 @@ class FeedAPITest(unittest.TestCase):
         self.db.commit()
         after = self.request("/api/feed?channels=alpha")[1]["unread"]
         self.assertEqual(after - before, 1)
+
+    def test_read_posts_can_be_left_out_of_the_feed(self):
+        # прочитанное без hide_read возвращается как раньше, а с hide_read страница
+        # приходит без него целиком, а не полупустой после фильтрации на клиенте
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "hide_read", "password": "long-password"})
+        query = urlencode({"channels": "alpha"})
+        status, full = self.request("/api/feed?" + query)
+        keys = ["%s/%d" % (p["channel"], p["msg_id"]) for p in full["posts"]]
+        self.request("/api/state/read", method="POST", data={"posts": keys[:2]})
+        status, shown = self.request("/api/feed?" + query + "&hide_read=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(["%s/%d" % (p["channel"], p["msg_id"]) for p in shown["posts"]], keys[2:])
+        self.assertEqual(len(self.request("/api/feed?" + query)[1]["posts"]), len(keys))
 
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
@@ -875,6 +907,13 @@ class CatalogSearchTest(unittest.TestCase):
 
 class MediaParseTest(unittest.TestCase):
     """Пост без медиа не должен получать эмодзи из текста вместо картинки."""
+
+    def test_sticker_comes_from_its_webp_attribute(self):
+        # background-image у стикера заглушка в base64, настоящая картинка в data-webp
+        post = self.parse('<div class="tgme_widget_message_sticker_wrap"><i class="tgme_widget_message_sticker '
+                          'js-sticker_image" style="background-image:url(\'data:image/svg+xml;base64,AAAA\')" '
+                          'data-webp="https://cdn.example/s.webp?token=t&amp;x=1"></i></div>')
+        self.assertEqual(post["sticker"], "https://cdn.example/s.webp?token=t&x=1")
 
     HTML = ('<div class="tgme_widget_message" data-post="durov/1">'
             '<div class="tgme_widget_message_text" dir="auto"><span class="emoji" '
