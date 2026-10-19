@@ -109,6 +109,29 @@ Telegram.
 где каждое имя канала и каждая отметка проходят проверку. Мусор в файле молча
 отбрасывается, а не ломает страницу.
 
+### Бэкап
+
+База лежит в томе `feed-data` и работает в режиме WAL: рядом с `feed.db` появляются
+`feed.db-wal` и `feed.db-shm`. Копировать один `feed.db` нельзя — в момент копирования
+последние закоммиченные изменения могут лежать в `-wal` и в копию не попадут.
+
+Правильный способ — снимать копию средствами SQLite, она сама делает корректный снимок:
+
+```
+docker compose exec -T feed python3 -c \
+  "import sqlite3;s=sqlite3.connect('/data/feed.db');d=sqlite3.connect('/tmp/feed.db');s.backup(d);d.close();s.close()"
+docker compose cp feed:/tmp/feed.db ./feed.db
+docker compose exec -T feed rm /tmp/feed.db
+```
+
+Второй путь — снять том целиком: `docker run --rm -v koloda_feed-data:/data -v "$PWD":/backup
+alpine tar czf /backup/koloda-$(date +%F).tgz -C /data .` Это сохраняет и файлы сессий
+Telegram, но права на них после распаковки слетают: восстановленный каталог `tg` нужно
+вернуть в 0700, а файлы внутри в 0600.
+
+Проверять восстановление надо на копии, а не на живой базе: распакованный архив открыть
+`sqlite3 feed.db "select count(*) from posts"` и убедиться, что число постов совпадает.
+
 ### Если ставишь сайт в интернет
 
 Регистрация открыта, любой посетитель заводит свой профиль.
