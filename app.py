@@ -8,6 +8,7 @@
 Открыть: http://127.0.0.1:8000
 """
 import json
+import gzip
 import hashlib
 import http.cookies
 import smtplib
@@ -173,6 +174,7 @@ BACKFILL_IDLE = 5     # секунд ждать, когда догружать �
 UNREAD_DAYS = 14        # непрочитанное считаем за две недели: старый архив счётчик не раздувает
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
+MIN_GZIP = 1024        # меньше килобайта сжатие не окупает служебных байт заголовка
 
 
 def connect():
@@ -182,6 +184,10 @@ def connect():
     # сбое питания теряются последние транзакции, а сама база не портится.
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
+    # Без этого SQLite ждёт блокировку записи 5 секунд и потом отдаёт
+    # "database is locked": фоновый писатель кэша держит её дольше. Таймаут
+    # ожидания блокировки отделён от таймаута соединения, поэтому задаётся явно.
+    db.execute("PRAGMA busy_timeout=15000")
     db.executescript(SCHEMA)
     columns = {row[1] for row in db.execute("PRAGMA table_info(profiles)")}
     if "initialized" not in columns:
@@ -987,6 +993,19 @@ def mail_request_allowed(key, cooldown=60):
     return True
 
 
+# Позиция списка приходит строкой. Число вне 64-битного диапазона рвёт
+# соединение: sqlite3 не может положить такое в INTEGER, и OverflowError
+# уходит из обработчика. Поэтому граница проверяется до int() на сервере.
+SQLITE_MAX_INT = 2 ** 63 - 1
+
+
+def cursor_int(value, minimum=0):
+    number = int(value)
+    if not minimum <= number <= SQLITE_MAX_INT:
+        raise ValueError("позиция вне диапазона")
+    return number
+
+
 def login_key(username, client=""):
     # ключ по адресу и имени: при ключе только по имени любой, кто знает имя,
     # мог закрыть чужой вход на четверть часа
@@ -1192,15 +1211,31 @@ def mark_posts_read(db, cid, post_keys, unread=False):
 
 
 class Handler(BaseHTTPRequestHandler):
+    # По умолчанию BaseHTTPRequestHandler отвечает HTTP/1.0 и закрывает
+    # соединение после каждого запроса: на первой загрузке страницы это
+    # несколько лишних подключений. HTTP/1.1 держит соединение, а
+    # Content-Length в _send уже всегда проставлен.
+    protocol_version = "HTTP/1.1"
+
     def version_string(self):
         # по умолчанию BaseHTTPRequestHandler отдаёт точную версию Python
         return "koloda"
 
     def _send(self, code, body, ctype, headers=None):
         b = body.encode() if isinstance(body, str) else body
+        # Раздаваемый файл весит 167 КБ, а лента и каталог — заметно меньше
+        # сжатого размера. Сжимаем всё, кроме мелких ответов, где выигрыш
+        # меньше служебных байт заголовка.
+        encoding = ""
+        if len(b) >= MIN_GZIP and "gzip" in self.headers.get("Accept-Encoding", ""):
+            b = gzip.compress(b, 6)
+            encoding = "gzip"
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(b)))
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
+            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
@@ -1228,12 +1263,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route(self):
         path = self.path.split("?")[0]
+        # Проверка живости для healthcheck в compose. Без профиля и без
+        # обращения к t.me: только база, поэтому отвечает быстро и всегда.
+        if path == "/api/health":
+            connect().close()
+            return self._send(200, json.dumps({"ok": True}), "application/json")
         db = connect()
         try:
             if path in ("/", "/verify", "/reset"):
                 html = open(os.path.join(BASE, "index.html"), encoding="utf-8").read()
                 return self._send(200, html, "text/html; charset=utf-8")
 
+            # /api/auth/me отвечает всегда: иначе гость не отличит «сессии нет»
+            # от «сервис сломан». Публичное чтение ленты и каталога тоже
+            # анонимное — это данные из общедоступных каналов; все личные
+            # маршруты (/api/state, /api/preview, /api/tg/*) требуют профиль.
             if path == "/api/auth/me":
                 account = account_for_request(db, self)
                 return self._send(200, json.dumps({"account": account}, ensure_ascii=False),
@@ -1560,9 +1604,9 @@ class Handler(BaseHTTPRequestHandler):
                     args.append(f"%{q}%")
                 if any(self._query(k) for k in ("before_saved", "before_channel", "before_id")):
                     try:
-                        before_saved = int(self._query("before_saved"))
+                        before_saved = cursor_int(self._query("before_saved"))
                         before_channel = self._query("before_channel")
-                        before_id = int(self._query("before_id"))
+                        before_id = cursor_int(self._query("before_id"))
                     except (TypeError, ValueError):
                         return self._send(400, json.dumps({"error": "неверная позиция списка"}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
@@ -1624,7 +1668,8 @@ class Handler(BaseHTTPRequestHandler):
                                  self._query("before_id"))
                 if any(cursor_values):
                     try:
-                        before = (int(cursor_values[0]), cursor_values[1], int(cursor_values[2]))
+                        before = (cursor_int(cursor_values[0]), cursor_values[1],
+                                  cursor_int(cursor_values[2]))
                     except (TypeError, ValueError):
                         return self._send(400, json.dumps({"error": "неверная позиция ленты"}),
                                           "application/json")
@@ -1725,7 +1770,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(503, json.dumps({"error": str(exc)}, ensure_ascii=False),
                                       "application/json")
                 except Exception as exc:
-                    return self._send(502, json.dumps({"error": ("не удалось начать вход: " + str(exc))[:180]}),
+                    return self._send(502, json.dumps({"error": "не удалось начать вход"}, ensure_ascii=False),
                                       "application/json")
                 if state.get("state") == "done":
                     db.execute("INSERT OR REPLACE INTO tg_accounts VALUES (?,?,?,1)",
@@ -1749,7 +1794,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     result = tg.poll_link(token)
                 except Exception as exc:
-                    return self._send(502, json.dumps({"error": ("вход не удался: " + str(exc))[:180]},
+                    return self._send(502, json.dumps({"error": "вход не удался"},
                                                       ensure_ascii=False),
                                       "application/json")
                 if result.get("state") == "done":
@@ -1814,7 +1859,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False),
                                       "application/json")
                 except Exception as exc:
-                    return self._send(502, json.dumps({"error": ("Telegram не ответил: " + str(exc))[:180]},
+                    return self._send(502, json.dumps({"error": "Telegram не ответил"},
                                                       ensure_ascii=False),
                                       "application/json")
                 # уже известные каналы не теряем: перезаписываем те же строки
@@ -1840,7 +1885,7 @@ class Handler(BaseHTTPRequestHandler):
                     try:
                         rows = tg.fetch(cid, channel)
                     except Exception as exc:
-                        errors.append({"channel": channel, "message": str(exc)[:180]})
+                        errors.append({"channel": channel, "message": "не удалось прочитать канал"})
                         continue
                     db.executemany(
                         "INSERT OR REPLACE INTO private_posts "
@@ -2026,6 +2071,13 @@ class Handler(BaseHTTPRequestHandler):
                                       "application/json")
 
             if path == "/api/preview":
+                # Без профиля этот маршрут превращал сервис в чужим прокси
+                # в t.me: посторонний мог заставить обходить Telegram для
+                # любого имени канала и подставиться под блокировку адреса.
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 channel = self._query("c")
                 if not valid_channel(channel):
                     return self._send(400, json.dumps({"error": "неверное имя канала"}),
@@ -2034,7 +2086,7 @@ class Handler(BaseHTTPRequestHandler):
                 cursor_ts, cursor_id = self._query("before_ts"), self._query("before_id")
                 paging = bool(cursor_ts or cursor_id)
                 try:
-                    before = (int(cursor_ts), int(cursor_id)) if paging else None
+                    before = (cursor_int(cursor_ts), cursor_int(cursor_id)) if paging else None
                 except ValueError:
                     return self._send(400, json.dumps({"error": "неверная позиция списка"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
@@ -2172,6 +2224,12 @@ if __name__ == "__main__":
         print("ВНИМАНИЕ: ссылки из писем ведут на " + APP_BASE_URL +
               " — они откроются только на этом компьютере. Для сайта в интернете "
               "укажи в APP_BASE_URL публичный адрес с HTTPS.")
+    # Cookie без Secure по HTTPS утекает при перехвате и видна в инструментах
+    # разработчика. Забытый COOKIE_SECURE=1 — самая частая ошибка при выставлении
+    # сайта в интернет.
+    if APP_BASE_URL.startswith("https://") and not COOKIE_SECURE:
+        print("ВНИМАНИЕ: COOKIE_SECURE=0, а APP_BASE_URL с HTTPS. "
+              "Укажи COOKIE_SECURE=1 в .env.")
     # Каждый HTTP-запрос обслуживается отдельным потоком; сетевое ожидание t.me
     # не блокирует другие вкладки.
     # История подписанных каналов догружается в фоне. В тестах фон не запускается:
