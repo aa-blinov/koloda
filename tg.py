@@ -20,6 +20,7 @@ import secrets
 import threading
 import time
 from datetime import datetime, timezone
+from html import escape
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 TG_DIR = os.path.join(DATA_DIR, "tg")
@@ -127,6 +128,13 @@ def start_link(profile):
     """Начинает вход и отдаёт ссылку, которую надо открыть в Telegram."""
     if not installed():
         raise TelegramMissing("Telethon не установлен в образе")
+
+    # Второе устройство того же человека не должно запускать второй вход в тот
+    # же профиль поверх первого: ключ по токену, а не по профилю, так что
+    # без этой проверки оба висяли бы с отдельными QR.
+    for token, entry in list(_pending.items()):
+        if entry.get("profile") == profile:
+            return {"state": "waiting", "token": token, "url": entry["qr"].url}
 
     async def go():
         return await _start(profile)
@@ -254,7 +262,11 @@ async def _fetch(profile, channel, limit):
             # у приватного канала нет имени в адресе, ссылка работает только
             # для участников — ровно то, что нужно
             "url": f"https://t.me/c/{str(entity.id).removeprefix('-100')}/{m.id}",
-            "text": m.message,
+            # Текст из Telegram приходит без разметки и вставляется в страницу
+            # как есть, поэтому экранируем: иначе любой участник приватного
+            # канала выполнит свой код у всех, кто его читает. Публичные посты
+            # идут через rich_text() в app.py, там та же гарантия.
+            "text": escape(m.message),
             "media": None,
             "views": views,
             "ts": int(m.date.timestamp()),
