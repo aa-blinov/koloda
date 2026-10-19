@@ -1,5 +1,7 @@
 """Регрессионные проверки личной ленты без обращения к Telegram."""
 import asyncio
+import contextlib
+import gzip
 import json
 import os
 import re
@@ -9,6 +11,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import types
 import unittest
 from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
@@ -27,6 +30,32 @@ def fake_post(channel, msg_id, ts):
     post.update(channel=channel, msg_id=msg_id, url=f"https://t.me/{channel}/{msg_id}",
                 text=f"post {msg_id}", ts=ts)
     return post
+
+
+@contextlib.contextmanager
+def feed_server():
+    """Поднимает сервис на случайном порту с пустой базой и гасит его потом."""
+    with tempfile.TemporaryDirectory(prefix="koloda-test-") as folder:
+        previous = app.DB
+        app.DB = folder + "/feed.db"
+        db = app.connect()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        server.base = "http://127.0.0.1:%d" % server.server_address[1]
+        server.cookie = ""
+        server.request = types.MethodType(FeedAPITest.request, server)
+        server.request_raw = types.MethodType(FeedAPITest.request_raw, server)
+        try:
+            yield server
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            app.wait_refresh_idle()
+            app._failed.clear()
+            db.close()
+            app.DB = previous
 
 
 class FeedAPITest(unittest.TestCase):
@@ -421,6 +450,11 @@ class FeedAPITest(unittest.TestCase):
         fetch.assert_not_called()
 
     def test_channel_preview_pages_through_every_cached_post(self):
+        # предпросмотр читает канал и обновляет его: с 19 октября только
+        # с профилем, иначе сервис становился чужим прокси в t.me
+        self.assertEqual(self.request("/api/preview?c=alpha")[0], 401)
+        self.request("/api/auth/register", method="POST",
+                     data={"username": "preview_user", "password": "long-password"})
         status, first = self.request("/api/preview?c=alpha")
         self.assertEqual(status, 200)
         self.assertEqual(first["title"], "Alpha")
@@ -1149,6 +1183,138 @@ class DatabaseModeTest(unittest.TestCase):
             finally:
                 app.DB = previous
         self.assertEqual(mode, "wal")
+
+    def test_connect_sets_lock_wait_so_writers_dont_get_locked_out(self):
+        """Без busy_timeout фоновый писатель кэша рвёт соединение читателю."""
+        with tempfile.TemporaryDirectory(prefix="busy-test-") as folder:
+            previous = app.DB
+            app.DB = folder + "/feed.db"
+            try:
+                db = app.connect()
+                timeout = db.execute("PRAGMA busy_timeout").fetchone()[0]
+                db.close()
+            finally:
+                app.DB = previous
+        self.assertGreaterEqual(timeout, 5000)
+
+    def test_old_schema_gains_new_columns_without_losing_data(self):
+        """Миграция на базе из-под прежней версии: колонки добавляются, данные целы."""
+        with tempfile.TemporaryDirectory(prefix="migrate-test-") as folder:
+            previous = app.DB
+            app.DB = folder + "/feed.db"
+            try:
+                legacy = sqlite3.connect(app.DB)
+                legacy.executescript(
+                    "CREATE TABLE posts (channel TEXT, msg_id INTEGER, url TEXT,"
+                    " text TEXT, image TEXT, video TEXT, views TEXT, ts INTEGER,"
+                    " PRIMARY KEY (channel, msg_id));"
+                    "CREATE TABLE profiles (code TEXT PRIMARY KEY, name TEXT);"
+                    "CREATE TABLE accounts (username TEXT PRIMARY KEY COLLATE NOCASE,"
+                    " profile TEXT, salt TEXT, digest TEXT);")
+                legacy.execute("INSERT INTO posts VALUES ('alpha', 7, 'u', 'текст',"
+                               " 'img', NULL, NULL, 1800000000)")
+                legacy.execute("INSERT INTO profiles VALUES ('code-1', 'Друг')")
+                legacy.execute("INSERT INTO accounts VALUES ('friend', 'code-1', 's', 'd')")
+                legacy.commit()
+                legacy.close()
+
+                db = app.connect()
+                columns = {row[1] for row in db.execute("PRAGMA table_info(accounts)")}
+                self.assertIn("email", columns)
+                post_columns = {row[1] for row in db.execute("PRAGMA table_info(posts)")}
+                self.assertIn("media", post_columns)
+                self.assertEqual(db.execute("SELECT text FROM posts").fetchone()[0], "текст")
+                self.assertEqual(db.execute("SELECT name FROM profiles").fetchone()[0], "Друг")
+                db.close()
+            finally:
+                app.DB = previous
+
+
+class CursorIntTest(unittest.TestCase):
+    """Позиция списка приходит строкой: число вне 64 бит рвало соединение."""
+
+    def test_rejects_values_outside_the_sqlite_range(self):
+        self.assertEqual(app.cursor_int("1800000000"), 1800000000)
+        self.assertRaises(ValueError, app.cursor_int, "99999999999999999999999")
+        self.assertRaises(ValueError, app.cursor_int, "-1")
+
+    def test_oversized_cursor_gives_an_answer_instead_of_a_broken_connection(self):
+        with feed_server() as server:
+            status, payload = server.request("/api/feed?channels=alpha"
+                                            "&before_ts=99999999999999999999999"
+                                            "&before_channel=alpha&before_id=1")
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"], "неверная позиция ленты")
+
+
+class PreviewAuthTest(unittest.TestCase):
+    """/api/preview без профиля заставлял сервер ходить в Telegram для любого канала."""
+
+    def test_anonymous_preview_is_refused(self):
+        with feed_server() as server:
+            status, payload = server.request("/api/preview?c=durov")
+        self.assertEqual(status, 401)
+        self.assertEqual(payload["error"], "нужно войти в профиль")
+
+    def test_healthcheck_answers_without_a_profile(self):
+        with feed_server() as server:
+            status, payload = server.request("/api/health")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+
+
+class ResponseCompressionTest(unittest.TestCase):
+    """Раздаваемый файл весит 167 КБ и раньше уходил без сжатия."""
+
+    def test_html_is_gzipped_when_the_client_accepts_it(self):
+        with feed_server() as server:
+            req = Request(server.base + "/", headers={"Accept-Encoding": "gzip, br"})
+            with urlopen(req, timeout=5) as response:
+                encoding = response.headers.get("Content-Encoding")
+                body = response.read()
+        self.assertEqual(encoding, "gzip")
+        self.assertIn(b"<!doctype html>", gzip.decompress(body).lower())
+
+    def test_plain_client_still_gets_usable_html(self):
+        with feed_server() as server:
+            status, headers, body = server.request_raw("/")
+        self.assertEqual(status, 200)
+        self.assertIsNone(headers.get("Content-Encoding"))
+        self.assertIn(b"<!doctype html>", body.lower())
+
+
+class StartLinkProfileTest(unittest.TestCase):
+    """Второе устройство того же человека не должно запускать второй вход."""
+
+    def setUp(self):
+        # installed() ложно вне контейнера: без этой подмены start_link
+        # выходит с TelegramMissing раньше, чем до проверки профиля.
+        patcher = patch.object(app.tg, "installed", lambda: True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(app.tg._pending.clear)
+
+    def test_second_start_reuses_the_pending_login_of_the_same_profile(self):
+        qr = types.SimpleNamespace(url="tg://login?token=0")
+        app.tg._pending["tok"] = {"profile": "code-1", "client": None, "qr": qr,
+                                  "started": time.time(), "task": None}
+        state = app.tg.start_link("code-1")
+        self.assertEqual(state["token"], "tok")
+        self.assertEqual(state["url"], qr.url)
+        self.assertEqual(len(app.tg._pending), 1)
+
+    def test_other_profile_starts_its_own_login(self):
+        qr = types.SimpleNamespace(url="tg://login?token=9")
+        # run() уводит корутину в отдельный поток с настоящим Telethon,
+        # поэтому подменяется он: проверяем только решение по профилю.
+        with patch.object(app.tg, "run", lambda coro, timeout=None: (coro.close(),
+                                                                     {"state": "waiting",
+                                                                      "client": None,
+                                                                      "qr": qr})[1]):
+            state = app.tg.start_link("code-2")
+        self.assertNotEqual(state["token"], "tok")
+        self.assertEqual(state["url"], qr.url)
+        self.assertEqual(len(app.tg._pending), 1)
 
 
 class TgLinkRenewTest(unittest.TestCase):
