@@ -192,7 +192,7 @@ travel to the other device. The server checks both against a list and answers
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `theme` | `dark` | `dark`, `light` or `auto`. `auto` follows `prefers-color-scheme`. |
-| `font` | `mono` | `mono` (JetBrains Mono), `sans` or `serif`. |
+| `font` | `mono` | `mono` (JetBrains Mono), `sans`, `serif` or `grotesk`. |
 
 `config.example.json` holds an optional `api_id`, `api_hash` and
 `limit_per_channel`. `sync.py` reads that file; the current service takes the
