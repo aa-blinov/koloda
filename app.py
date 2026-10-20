@@ -29,6 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from html import escape, unescape
 from urllib.parse import parse_qs, urlparse
 
+import qrsvg  # QR-код ссылки входа для сканирования с компьютера
 import tg  # слой Telegram. Без входа профиля он ничего не делает и не ходит в сеть.
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -1892,7 +1893,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, json.dumps({"linked": True}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 return self._send(200, json.dumps({"state": "waiting", "token": state["token"],
-                                                   "url": state["url"]}, ensure_ascii=False),
+                                                   "url": state["url"],
+                                                   "qr": qrsvg.svg(state["url"])}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/tg/link/poll":
@@ -1914,6 +1916,8 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute("INSERT OR REPLACE INTO tg_accounts VALUES (?,?,?,1)",
                                (cid, result["account"]["phone"], result["account"]["title"]))
                     db.commit()
+                if result.get("url"):
+                    result["qr"] = qrsvg.svg(result["url"])
                 return self._send(200, json.dumps(result, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
