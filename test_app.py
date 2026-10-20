@@ -425,7 +425,18 @@ class FeedAPITest(unittest.TestCase):
                 patch.object(app, "fetch_channel", side_effect=TimeoutError("timed out")):
             self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 502)
 
+    def test_catalog_is_for_signed_in_profiles_only(self):
+        # Каталог и категории отдают список каналов, поэтому без входа их не получают
+        self.assertEqual(self.request("/api/catalog")[0], 401)
+        self.assertEqual(self.request("/api/categories")[0], 401)
+        self.login("catalogcheck")
+        with patch.object(app, "search_catalog", return_value=[]):
+            self.assertEqual(self.request("/api/catalog")[0], 200)
+        with patch.object(app, "catalog_categories", return_value=[]):
+            self.assertEqual(self.request("/api/categories")[0], 200)
+
     def test_catalog_reports_whether_more_pages_follow(self):
+        self.login("catalogpages")
         # Каталог листается страницами: полная страница значит, что дальше могут быть ещё каналы
         full = [{"username": f"chan{i}", "name": f"Chan {i}"} for i in range(app.CATALOG_PAGE)]
         with patch.object(app, "search_catalog", return_value=full) as search:

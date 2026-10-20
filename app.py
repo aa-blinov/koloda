@@ -2188,6 +2188,9 @@ class Handler(BaseHTTPRequestHandler):
                                   "application/json; charset=utf-8")
 
             if path == "/api/catalog":
+                if not client_id(self, db):
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 offset = self._query("offset", "0")
                 if not offset.isdigit() or int(offset) > 5000:
                     return self._send(400, json.dumps({"error": "неверная страница каталога"}, ensure_ascii=False),
@@ -2264,6 +2267,9 @@ class Handler(BaseHTTPRequestHandler):
                                   "application/json; charset=utf-8")
 
             if path == "/api/categories":
+                if not client_id(self, db):
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 try:
                     return self._send(200, json.dumps({"categories": catalog_categories()}),
                                       "application/json; charset=utf-8")
