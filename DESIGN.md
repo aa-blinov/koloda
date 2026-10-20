@@ -1,7 +1,7 @@
 <!-- house-style: template — fill this file in, then delete this line -->
 
 ---
-name: repo
+name: koloda
 description: One line that says what this does.
 colors:
   primary: "#2b3a55"
@@ -25,7 +25,7 @@ spacing:
   md: "16px"
 ---
 
-# Design System: repo
+# Design System: koloda
 
 <!--
   A stub. Fill it in when the project has a visual system, or delete the
