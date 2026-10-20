@@ -2042,11 +2042,11 @@ async function loadCatalog(append=false){
       const row=document.createElement('div'); row.className='channel-row';
       const open=document.createElement('button'); open.type='button'; open.className='channel-open';
       open.dataset.act='preview'; open.dataset.channel=c.username;
-      open.innerHTML=chanMark(c.username,c.name,'channel-mark')+ 
+      open.innerHTML=chanMark(c.username,c.name,'channel-mark')+
         '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+
-        (c.last_ts?'<span class="channel-fresh">последний пост '+esc(dayLabel(c.last_ts))+'</span>':'')+ 
-        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(catRu(c.cat))+')':'')+'</span>'+ 
-        (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+ 
+        (c.last_ts?'<span class="channel-fresh">последний пост '+esc(dayLabel(c.last_ts))+'</span>':'')+
+        '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(catRu(c.cat))+')':'')+'</span>'+
+        (c.description?'<span class="channel-desc">'+esc(c.description)+'</span>':'')+'</span>'+
         (c.subs?'<span class="channel-count">'+kfmt(c.subs)+'<small>подписчиков</small></span>':'')+        '<span class="channel-preview-label">Посмотреть</span>'+
         '<svg class="i channel-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>';
       const action=document.createElement('button'); action.type='button'; action.className='channel-action'+(have.has(c.username)?' is-on':'');

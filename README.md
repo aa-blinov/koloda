@@ -1,336 +1,252 @@
-# Колода
+# Koloda
 
-Собирай публичные Telegram-каналы в одну ленту и читай её в своём ридере.
-Аккаунт Telegram не нужен: сервис читает публичные превью-страницы.
+Collect public Telegram channels into one feed and read it in your own reader.
+No Telegram account is needed: the service reads the public preview pages that
+Telegram serves to anyone. Every profile keeps its own subscriptions, its own
+read marks and its own theme.
 
-![Лента](docs/lenta.png)
+![The feed](docs/lenta.png)
 
-## Быстрый старт
+[![CI](https://github.com/aa-blinov/koloda/actions/workflows/ci.yml/badge.svg)](https://github.com/aa-blinov/koloda/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.12-blue)](Dockerfile)
+
+---
+
+## Quick start
 
 ```bash
 git clone https://github.com/aa-blinov/koloda.git && cd koloda
-cp .env.example .env     # впиши данные SMTP-почты
+cp .env.example .env     # fill in the SMTP settings
 docker compose up -d
 ```
 
-Открой **http://127.0.0.1:8090**, создай профиль и зайди в **Каталог**: там видно
-последние публикации каждого канала, а кнопка добавляет его в ленту.
+Open http://127.0.0.1:8090, create a profile, and open the **Catalog**: it shows
+the latest posts of every channel, and the button adds that channel to your
+feed.
 
-Почта нужна для регистрации: профиль активируется после перехода по ссылке из письма.
+Mail is needed for the registration: a profile is activated after you follow the
+link in the letter. The feed itself reads without a profile, and the catalog and
+the preview of a single channel ask for one.
 
-С телефона в той же сети открой `http://<ip-компьютера>:8090`.
+From a phone on the same network, open `http://<the-computer's-ip>:8090`.
 
-![Вход в профиль](docs/vhod.png)
+![Signing in to a profile](docs/vhod.png)
 
-## Что внутри
+Python 3.12 and Docker. Without Docker:
 
-- **Аватарки**: фото каналов берётся с публичной страницы t.me (`og:image`) и кэшируется на
-  семь дней. Нет фото, показываем первую букву названия.
-- **Каталог**: список каналов TGMania с категориями и поиском, только для вошедшего профиля. Канал можно
-  раскрыть и посмотреть публикации до того, как добавлять. Справа от поиска три сортировки:
-  по подписчикам, по названию и по постам (свежесть последнего поста из ленты; каналы, от
-  которых постов ещё нет, уходят в конец). Порядок задаёт клиент, потому что TGMania отдаёт
-  каналы как попало, а сортировку по свежести постов считает сервер по своей базе.
-- **Свой канал**: добавить по имени или ссылке `t.me/username`, доступность проверяется.
-- **Лента**: посты из выбранных каналов вперемешку, по времени публикации. На странице
-  80 записей, кнопка «Загрузить ещё» продолжает ту же хронологию. Каналов в ленте может
-  быть до 200.
-- **Непрочитанные**: пост засчитывается прочитанным, когда видна большая его часть, кликать
-  не нужно. Галочка у прочитанного поста возвращает его обратно, если ты его перечитал.
-  Прочитанное не показывается в ленте при следующем открытии: кнопка «Показать прочитанное»
-  возвращает его. Новые посты сами ленту не меняют: обновляет её кнопка «Показать новые» или
-  жест «потянуть вниз» у верха ленты. Тогда прочитанное уходит с экрана. До обновления то, что
-  прочитано в этом сеансе, остаётся на месте.
-  Один фильтр на все каналы: кнопка «Непрочитанные» над лентой, рядом с «Показать прочитанное»,
-  показывает, сколько непрочитанного осталось.
-  Считаются посты не старше двух недель (`UNREAD_DAYS`): архив догрузки не раздувает счётчик.
-- **Поиск**: по постам в ленте и по названиям в каталоге, с задержкой ввода.
-- **Вкладки каналов**: быстрый переход к одному каналу.
-- **Медиа**: фото и видео грузятся напрямую с CDN Telegram, сервер ничего не проксирует.
-  Альбом листается свайпом, счётчик кадров в углу; кадры подгружаются по мере прокрутки,
-  а не все сразу. Клик по кадру открывает его целиком, листается стрелками. Видео не
-  тянется, пока не нажат play.
-- **Профили**: вход по имени и паролю, у каждого профиля своя лента. Сброс пароля идёт
-  по ссылке на подтверждённую почту.
-
-![Каталог](docs/katalog.png)
-
-Лента и каталог равноправны, переключатель стоит в шапке. Модального окна нет: выбор
-каналов это основная задача, и прерывать её незачем. Выбранный раздел запоминается.
-
-![Поиск](docs/poisk.png)
-
-![Альбом с несколькими кадрами](docs/galereya.png)
-
-![Просмотр кадра целиком](docs/prosmotr.png)
-
-Просмотр кадра целиком на телефоне: стрелки листают, крестик в углу закрывает.
-
-![Просмотр кадра на телефоне](docs/prosmotr-mobil.png)
-
-![Мобильный вид](docs/mobile.png)
-
-## Как читаются каналы
-
-Посты берутся из публичной превью-страницы `t.me/s/<username>`. Telegram отдаёт её без
-логина, поэтому сервису не нужны ни `api_id`, ни телефон, ни сессия Telethon.
-
-Приватные каналы так не читаются: у них нет публичной превью-страницы. Для них нужна
-авторизация по QR, она осталась в `sync.py` и `serve.py`, но текущий сервис её не
-использует.
-
-Всё складывается в SQLite (`feed.db`): посты, заголовки, профили, подписки и отметки
-прочитанного. Канал обновляется не чаще раза в 5 минут, чтобы не дёргать t.me на каждый
-перезапуск.
-
-## Профили и состояние
-
-Подписки и прочитанные публикации хранятся на сервере и привязаны к профилю. Пароль лежит
-только в виде PBKDF2-отпечатка с солью. После входа браузер получает cookie сессии на
-30 дней. Имя профиля видно другим посетителям сайта, но оно никак не связано с аккаунтом
-Telegram.
-
-Первый профиль в браузере может перенести прежний список каналов и отметки прочитанного в
-новый аккаунт.
-
-### Резервная копия
-
-В профиле есть «Скачать файл» и «Загрузить файл». Файл называется `koloda-lenta.jsonl`
-и содержит по записи на строку, без обёртки:
-
-```
-{"type": "channel", "channel": "durov"}
-{"type": "read", "post": "durov/552"}
+```bash
+python3 app.py 8090
 ```
 
-Каналы и отметки прочитанного — всё, что попадает в файл. Тема и шрифт остаются на
-устройстве, на них это не влияет.
+The service then starts on an empty local database at `data/feed.db`.
 
-Загрузка **дополняет** текущую ленту, а не заменяет её: свой канал из файла не пропадёт,
-а вложенный канал просто добавится. Если нужна именно замена, сначала убери лишние
-каналы вручную и потом загрузи файл. Файл из другого профиля сработает так же: друг
-может скачать свою ленту, отдать тебе файл, а ты загрузишь его себе.
+## What it does
 
-Файл читается на клиенте, построчно, и уходит в уже существующий `/api/state/merge`,
-где каждое имя канала и каждая отметка проходят проверку. Мусор в файле молча
-отбрасывается, а не ломает страницу.
+The interface is in Russian; the labels quoted here are translated.
 
-### Бэкап
+- **Avatars.** The photo of a channel is taken from the public page on t.me
+  (`og:image`) and kept for seven days. A channel with no photo shows the first
+  letter of its name.
+- **Catalog.** The channel list of TGMania, with categories and search, for a
+  signed-in profile. A channel can be opened and read before it is added. Next
+  to the search are three sorts: by subscribers, by name and by posts (the
+  freshness of the last post in the feed, and the channels with no posts yet go
+  to the end). The order is set by the client, because TGMania returns the
+  channels in no order at all, and the sort by post freshness is counted by the
+  server from its own database.
+- **Your own channel.** Add one by name or by a `t.me/username` link; the
+  service checks that it exists before it adds it.
+- **The feed.** The posts of the chosen channels mixed together, in the order of
+  publication. 80 entries on a page, and "Load more" continues the same
+  chronology. Up to 200 channels in one feed.
+- **Unread.** A post counts as read when most of it is visible, so nothing has to
+  be clicked. The check on a read post takes the mark back if you read it again.
+  Read posts stay out of the feed on the next open: the "Show read" button
+  brings them back. New posts do not change the feed by themselves, the "Show
+  new" button or the pull-down gesture at the top of the feed refreshes it, and
+  the read posts leave the screen. Until the refresh, what you read in this
+  session stays in place. One filter for all the channels: the "Unread" button
+  above the feed, next to "Show read", shows how much is left. Only posts of the
+  last two weeks (`UNREAD_DAYS`) count, so the archive does not inflate the
+  counter.
+- **Search.** Over the posts of the feed and over the names in the catalog. The
+  search waits 320 ms after the last keystroke.
+- **Channel tabs.** A quick jump to one channel.
+- **Media.** Photos and videos load straight from the CDN of Telegram, and the
+  server proxies nothing. An album is swiped through, with a counter of the
+  frames in the corner; the frames load as you scroll, not all at once. A click
+  on a frame opens it whole, and the arrows page through it. Video does not load
+  until play is pressed.
+- **Profiles.** You sign in with a name and a password, and every profile has
+  its own feed. The password is reset by a link to a confirmed address.
 
-База лежит в томе `feed-data` и работает в режиме WAL: рядом с `feed.db` появляются
-`feed.db-wal` и `feed.db-shm`. Копировать один `feed.db` нельзя — в момент копирования
-последние закоммиченные изменения могут лежать в `-wal` и в копию не попадут.
+## Screenshots
 
-Правильный способ — снимать копию средствами SQLite, она сама делает корректный снимок:
+| The feed | The catalog |
+| :---: | :---: |
+| ![The feed](docs/lenta.png) | ![The catalog](docs/katalog.png) |
+
+| Search | An album with several frames |
+| :---: | :---: |
+| ![Search](docs/poisk.png) | ![An album with several frames](docs/galereya.png) |
+
+| A frame opened whole | The light theme |
+| :---: | :---: |
+| ![A frame opened whole](docs/prosmotr.png) | ![The light theme](docs/svetlaya.png) |
+
+| The mobile view | The light theme on a phone |
+| :---: | :---: |
+| ![The mobile view](docs/mobile.png) | ![The light theme on a phone](docs/mobile-svetlaya.png) |
+
+A frame opened whole on a phone: the arrows page through it, the cross in the
+corner closes it.
+
+![A frame opened whole on a phone](docs/prosmotr-mobil.png)
+
+## How it works
 
 ```
-docker compose exec -T feed python3 -c \
-  "import sqlite3;s=sqlite3.connect('/data/feed.db');d=sqlite3.connect('/tmp/feed.db');s.backup(d);d.close();s.close()"
-docker compose cp feed:/tmp/feed.db ./feed.db
-docker compose exec -T feed rm /tmp/feed.db
+browser -> app.py (ThreadingHTTPServer) -> SQLite (feed.db)
+                                  \-> t.me/s/<channel>          public preview pages
+                                  \-> tgmania.com/api/channels  the catalog
+                                  \-> tg.py -> Telegram          private channels, by QR login
 ```
 
-Второй путь — снять том целиком: `docker run --rm -v koloda_feed-data:/data -v "$PWD":/backup
-alpine tar czf /backup/koloda-$(date +%F).tgz -C /data .` Это сохраняет и файлы сессий
-Telegram, но права на них после распаковки слетают: восстановленный каталог `tg` нужно
-вернуть в 0700, а файлы внутри в 0600.
+The service is one Python process on the standard library alone, and the whole
+interface is one `index.html`: markup, styles and script in a single file, with
+no build step and no script from outside. The only dependency in the image is
+`telethon==1.45.0`, and it is imported only when a profile connects Telegram.
 
-Проверять восстановление надо на копии, а не на живой базе: распакованный архив открыть
-`sqlite3 feed.db "select count(*) from posts"` и убедиться, что число постов совпадает.
+Posts come from the public preview page `t.me/s/<username>`. Telegram serves it
+without a login, so no `api_id`, no phone number and no Telethon session are
+needed for the public channels. Everything lands in SQLite (`feed.db`): the
+posts, the titles, the profiles, the subscriptions and the read marks.
 
-### Список для переноса
+A channel is refreshed at most once every five minutes. The lifetime of the
+cache is 300 seconds with a spread of 60, so the channels fetched together do
+not go stale at the same moment. The feed is answered from the cache at once, a
+channel that is not in the cache yet is waited for (8 seconds at the most), and
+the stale ones are reloaded in the background, up to eight at a time. When one
+source fails, the other channels are still shown and the failure comes with the
+answer.
 
-В профиле есть «Скачать список» и «Загрузить список». Список — обычный текст: одна ссылка
-на канал в строке, `https://t.me/имя`. Его можно открыть в блокноте, переслать или загрузить
-в другой профиль. Отметок о прочитанном в нём нет: для них есть файл ленты выше. При загрузке
-принимаются ссылки `t.me/имя` и `@имя`, остальные строки пропускаются и считаются в сообщении.
+The history of a subscribed channel is loaded in the background, one page of
+older posts every 4 seconds, up to 500 posts per channel. The position is kept
+in the `backfill` table, so a restart does not lose it, and the writes of the
+history do not touch the cache of the channel.
 
-### Если ставишь сайт в интернет
+The catalog comes from the open API of TGMania. Its own order is unusable, so
+the client sorts, and the freshness of the last post is counted by the server
+from its own database.
 
-Регистрация открыта, любой посетитель заводит свой профиль.
+A private channel is read through the login of the profile: a `tg://login`
+link, shown as a QR code that `qrsvg.py` draws on top of `qrcodegen.py`. The
+private posts live in a table of their own with a `profile` column, and their
+media is pulled over MTProto when it is opened and handed to the subscribers of
+that channel alone.
 
-Прокси ставишь сам, но две вещи в `.env` пропустить нельзя, иначе друзья не смогут
-войти, а ты не заметишь почему:
+## Configuration
+
+The service reads its settings from the environment. The ones below are the
+whole list.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `SMTP_ENABLED` | `false` | Sends the letters. With it on, a profile asks for a mail address. |
+| `SMTP_HOST` | none | The mail server. |
+| `SMTP_PORT` | `465` | Port 465 uses implicit TLS, any other port uses STARTTLS. |
+| `SMTP_USER` | none | The login for the mail server. |
+| `SMTP_PASSWORD` | none | The password for the mail server. |
+| `SMTP_FROM` | `SMTP_USER` | The sender address. |
+| `APP_BASE_URL` | `http://127.0.0.1:8090` | The base of the links in the letters: the confirmation of the address and the reset of the password. |
+| `COOKIE_SECURE` | `0` | `1` adds the Secure flag to the session cookie. |
+| `LOG` | `0` | `1` writes the request log. `compose.yaml` takes it from `LENTELE_LOG`. |
+| `DATA_DIR` | `<the app>/data`, `/data` in the image | Where `feed.db` and the files of the Telegram sessions live. |
+| `PORT` | `8000` | The port to listen on. The argument of the command line wins over it. |
+| `TG_API_ID` | `2040` | The Telegram API id. The default is the official one of Telegram Desktop. |
+| `TG_API_HASH` | the official Telegram Desktop hash | The Telegram API hash. |
+
+Two of them cannot be left out when the site is on the internet, and the
+service prints a warning at startup when they are wrong:
 
 ```
 COOKIE_SECURE=1
-APP_BASE_URL=https://твой-домен
+APP_BASE_URL=https://your-domain
 ```
 
-`COOKIE_SECURE=1` добавляет флаг Secure к куке сессии. Пока он выключен, пароль и
-кука идут через интернет открытым текстом, и этого не видно ни на странице, ни в
-логах. Для локального запуска по `http://127.0.0.1:8090` оставь `0`.
+`COOKIE_SECURE=1` adds the Secure flag to the session cookie. While it is off,
+the password and the cookie travel in plain text, and neither the page nor the
+log shows it. `APP_BASE_URL` goes into the links in the letters: while it still
+says `http://127.0.0.1:8090`, the letter to a friend carries a link that opens
+only on your own computer, and the password cannot be recovered. On
+`http://127.0.0.1:8090` leave `COOKIE_SECURE` at `0`.
 
-`APP_BASE_URL` подставляется в ссылки из писем: подтверждение почты и восстановление
-пароля. Если там останется `http://127.0.0.1:8090`, письмо другу придёт со ссылкой,
-которая откроется только на твоём компьютере, и пароль он не восстановит. При старте
-контейнер печатает предупреждение, если почта включена, а адрес остался http.
+`docker-compose.override.yml` can take the `ports` line away and put the
+container on a shared network with Caddy. That file belongs to one machine and
+is not in the repository.
 
-Проверь перед тем, как звать друзей: открой сайт по публичному адресу, заведи
-профиль, попроси у друга вставить присланный код на его устройстве и убедись, что
-лента у него та же.
+The theme and the font are stored in the profile, so they survive a reload and
+travel to the other device. The server checks both against a list and answers
+400 to an unknown value.
 
-На машине, где сайт стоит за общим Caddy (`~/infra/caddy`), он живёт на
-`koloda-tg.duckdns.org`. Порт на хосте не публикуется: `docker-compose.override.yml`
-(файл только для этой машины, в репозиторий не входит) снимает `ports` и сажает
-контейнер в общую сеть `edge` на адрес `172.40.0.50`. Поэтому `http://127.0.0.1:8090`
-на этой машине не отвечает, зато домен всегда по HTTPS.
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `theme` | `dark` | `dark`, `light` or `auto`. `auto` follows `prefers-color-scheme`. |
+| `font` | `mono` | `mono` (JetBrains Mono), `sans`, `serif` or `grotesk`. |
 
-### Приватные каналы
+`config.example.json` holds an optional `api_id`, `api_hash` and
+`limit_per_channel`. `sync.py` reads that file; the current service takes the
+same values from `TG_API_ID` and `TG_API_HASH`.
 
-Публичные каналы читаются как раньше, через `t.me/s/<имя>`, и вход в Telegram для них
-не нужен. Приватные так не читаются: там нужен вход под аккаунтом, поэтому появляется
-кнопка «Подключить Telegram» в окне профиля. После неё открывается ссылка
-`tg://login?token=…`: её надо открыть в своём Telegram и подтвердить вход, потом
-нажать «Я подтвердил вход». С компьютера страница показывает QR-код с этой же ссылкой:
-телефон сканирует его в Telegram через Настройки → Устройства → Подключить настольное
-устройство. QR-код нужен только тогда, когда страница открыта не на том телефоне, где Telegram.
-Код строит `qrsvg.py` поверх `qrcodegen.py` (MIT, Project Nayuki), новой зависимости нет. Приложение читает из аккаунта только те каналы, где
-ты участник, и показывает их в общем списке ленты.
+## Development
 
-Три вещи, о которых стоит знать заранее.
+```bash
+docker compose up -d --build    # rebuild after a change to the code
+docker compose logs -f           # the log
+docker compose down              # stop
+```
 
-**Сессия — это готовый вход в аккаунт, а не пароль.** Из файла сессии можно войти как
-ты, поэтому он лежит в томе данных под правами 0600 и в базу не пишется: в бэкап
-SQLite он не попадает. По той же причине «Отключить Telegram» стирает файл, а не
-просто забывает его. Случайно этот файл утечёт — смени пароль от Telegram.
+The tests and the check of the markup run on every push in GitHub Actions:
 
-**Приватные посты привязаны к профилю.** Они лежат в отдельной таблице `private_posts`
-с колонкой `profile`, и запрос ленты достаёт их только по профилю, который их принёс.
-Класть их в общую таблицу `posts` нельзя: регистрация на сайте открыта, и тогда чужий
-профиль увидел бы чужую приватную ленту, назвав её ключ.
+```bash
+python3 -m unittest -v           # 112 tests: no network, no Telegram, a temporary database
+python3 check_ui.py              # the integrity of index.html, without a browser
+docker build -t koloda:ci .      # the image builds
+```
 
-**Медиа тянется по запросу.** Telegram не отдаёт для приватных каналов публичную ссылку
-на файл. Поэтому картинка или короткое видео скачивается через MTProto, когда её открывают,
-и отдаётся через `/api/tg/media` только подписчику канала. Файлы до 15 МБ, из типов
-JPEG, PNG, WebP, GIF и MP4. Скачанное лежит на диске в кэше до 500 МБ. Альбом приходит
-одним постом со всеми кадрами, видео перематывается (Range).
+The build is part of the checks because the `Dockerfile` copies the files by
+name: a new module without a line in `COPY` builds and then fails at the first
+request.
 
-**Обновление в фоне.** Приватные каналы из ленты обновляются сами: раз в 15 минут, не чаще.
-Кнопка «Обновить посты» обновляет сразу. Ошибка Telegram (нет входа, лимит запросов)
-не повторяется чаще, чем раз в 10 минут. Берётся до 40 последних сообщений на канал,
-глубже история не грузится.
-
-Все обращения к Telegram одного профиля идут по одному: файл сессии не выносит двух
-клиентов сразу.
-
-Telethon стоит в образе, но импортируется лениво: пока нет профиля с подключённым
-Telegram, `tg.py` не ходит в сеть вовсе. Свои `api_id`/`api_hash`, если понадобятся,
-задаются переменными `TG_API_ID` и `TG_API_HASH`; по умолчанию берутся официальные
-ключи Telegram Desktop, и этого хватает для входа по ссылке.
-
-## Оформление
-
-Интерфейс собран по дизайн-системе Monos (палитра Gruvbox, спецификация в `DESIGN.md` репозитория
-`aa-blinov/monos`): тёплая бумага и тёмный камень вместо белого и чёрного, один шрифт JetBrains Mono,
-один радиус на все прямоугольники, плоские карточки без теней в покое. Цвета, радиусы и тени заданы
-токенами в `:root`, в разметке своих значений нет.
-
-Тёмная тема по умолчанию: фон `#282828`, текст `#ebdbb2`, второй слой `#3c3836`, третий `#504945`.
-Светлая: фон `#fbf1c7`, текст `#3c3836`. Четыре тона сдвинуты относительно оригинала, чтобы держать
-4.5:1 на своём фоне: ссылки и ошибки в тёмной теме (`--acc` `#9ec5b8`, `--error` `#ff7b6b`), ссылки,
-ошибки и предупреждение в светлой (`--acc` `#05525e`, `--error` `#9d0006`, `--paid` `#5c3f00`).
-Приглушённый текст (`--dim`, `--faint`) подобран по контрасту на третьем слое в обеих темах.
-
-Радиус один, `--radius` 6px: карточки, диалоги, поля, кнопки, чипы и переключатели. Пилюля
-(`--r-pill`) осталась у поиска и полосы прокрутки, круг (`--r-round`) у точек и аватаров.
-
-Шрифт JetBrains Mono (лицензия SIL OFL, `fonts/LICENSE-JetBrainsMono.txt`) отдаётся с нашего адреса
-по `/fonts/`, внешних серверов нет. Текст 14px, заголовки 700 с плотной разрядкой, подписи
-прописными 12px с разрядкой.
-
-Отступы идут по шкале `--sp-1` … `--sp-8`: 4, 8, 12, 16, 24, 32, 48 и 64 px. Литералов вне шкалы
-в стилях нет, двухпиксельные зазоры не в счёт. Это проверяет `SpacingScaleTest`. Колонка
-контента (лента, каталог, канал, профиль) одна, 748 px с полями 24 px на компьютере и 16 px
-на телефоне. Шапка шире, 1120 px: в ней поиск и кнопки.
-На телефоне кнопки и сегменты не ниже 44 px, нижняя панель ровно 64 px.
-
-Контраст текста минимум 4.5:1 на всех подложках в обеих темах. Это проверяет `ThemeContrastTest`
-в `test_app.py`: он читает токены из `index.html`. Самые тесные пары: в тёмной `--error` 4.58:1 на
-`--surf` и `--acc` 4.68:1 на `--raise`; в светлой `--dim` и `--faint` 5.14:1 на `--raise` и `--acc`
-5.15:1 на `--raise`.
-
-Кнопок три вида. Текстовые действия прописными, без рамки и заливки (`.quiet-btn`, `.act-btn`).
-Одна заливка на экран, главная (`.btn`): `--acc-ink` на `--acc` даёт 7.82:1 в тёмной и 7.79:1 в
-светлой. Переключатели (сегменты, фильтры, «Непрочитанные») обведены, а выбранный вариант заливается
-`--sec-cont` с текстом `--on-sec-cont`: 6.43:1 в тёмной и 6.76:1 в светлой. Наведение и нажатие дают
-слой `--acc` поверх фона, 8% и 12%.
-
-Снэкбар отмены лежит на инверсной поверхности (`--inv-surf`), на телефоне стоит над нижней панелью.
-Выбранный пункт нижней панели на телефоне набран жирным, без пилюли.
-
-Тема и шрифт выбираются в профиле, сохраняются на сервере и переживают перезагрузку. Вариант «как
-в системе» следит за `prefers-color-scheme`. Шрифтов четыре: «Моноширинный» (JetBrains Mono, по
-умолчанию), «Системный», «Классический» и «Гротеск». Значения приходят из браузера, поэтому сервер
-сверяет их со списком и отвечает 400 на неизвестное.
-
-![Светлая тема](docs/svetlaya.png)
-
-![Светлая тема на телефоне](docs/mobile-svetlaya.png)
-
-Иконки набраны инлайновым SVG в начале документа, одним штрихом и весом. Символы юникода
-(`👁`, `✕`, `✓`) как иконки не используются. Выделение текста, скроллбары и фокусные кольца
-переопределены явно, иначе страница выглядит собранной из готовых блоков.
-
-## Проверки
-
-Тесты и проверка разметки гоняются на каждом пуше в GitHub Actions: `python3 -m unittest`,
-`python3 check_ui.py` и `docker build`. Последняя нужна потому, что `Dockerfile` копирует файлы
-поимённо, и новый модуль без строки в `COPY` собирается, но падает при первом обращении.
-
-Сверяет медиа в базе с тем, что отдаёт t.me прямо сейчас:
+The audit of the media compares the database with what t.me serves right now.
+It needs the internet, and it is not part of the tests:
 
 ```bash
 docker compose exec -T feed python3 -c "import sqlite3;s=sqlite3.connect('/data/feed.db');d=sqlite3.connect('/tmp/feed.db');s.backup(d);d.close();s.close()" && docker compose cp feed:/tmp/feed.db ./feed.db && docker compose exec -T feed rm /tmp/feed.db && python3 audit_media.py
 ```
 
-Копия делается средствами SQLite внутри контейнера: база в WAL, и обычное копирование одного файла `feed.db` могло бы потерять последние записи. Скрипту нужен интернет. Он находит посты, где в базе остался эмодзи вместо фотографии, потерянные
-кадры альбома и устаревшие адреса.
+The copy is made with SQLite inside the container: the database runs in WAL, so
+copying the single file `feed.db` could lose the last records. The script finds
+the posts where an emoji stayed in the database instead of a photo, the lost
+frames of an album and the stale addresses.
 
-## Ограничения
+| Path | What it holds |
+| --- | --- |
+| `app.py` | The server: the parsing of t.me, the API, the profiles, the sessions, the letters, the serving of the interface. |
+| `index.html` | The interface: markup, styles and script in one file, no build. |
+| `tg.py` | The Telegram layer: the login by link and the reading of the private channels. |
+| `qrsvg.py`, `qrcodegen.py` | The QR code of the login link. `qrcodegen.py` is the encoder from Project Nayuki, unchanged. |
+| `test_app.py` | The tests. |
+| `check_ui.py` | The integrity of the markup, without a browser. |
+| `audit_media.py` | The audit of the media against t.me. A service script: it is not in the image and it is not in the tests. |
+| `sync.py`, `serve.py` | The old variant with Telethon and RSS. The current service does not call them. |
+| `fonts/` | JetBrains Mono, served from the address of the service itself. |
+| `docs/` | The screenshots of this file. |
 
-- Только публичные каналы. Приватные через `t.me/s` не читаются.
-- Превью `t.me` отдаёт около 20 последних постов за один запрос. История подписанных каналов
-  догружается в фоне страницами, не больше 500 постов на канал. Дальше история только в Telegram.
-- Каналы обновляются параллельно, до 8 за раз. Если один источник недоступен, остальные
-  показываются с предупреждением.
-- В ленте может быть не больше 200 каналов.
+## License
 
-## Разработка
-
-```bash
-docker compose up -d --build    # пересобрать после правок кода
-docker compose logs -f          # журнал
-docker compose down             # остановить
-```
-
-Контейнер поднимается сам после перезагрузки (`restart: unless-stopped`). В macOS автозапуск
-делает Docker Desktop или LaunchDaemon.
-
-Логи запросов выключены, чтобы не засорять вывод. Включаются переменной:
-
-```bash
-LENTELE_LOG=1 docker compose up -d
-```
-
-### Проверки
-
-```bash
-python3 check_ui.py
-python3 -m unittest -v test_app.py
-```
-
-`check_ui.py` сверяет, что все `id`, на которые ссылается скрипт, есть в разметке, что у
-оверлеев есть `position:fixed` и что внешних скриптов нет. Он ловит тот класс поломок,
-который не даёт ошибок в консоли: интерфейс просто молча перестаёт работать.
-
-## Файлы
-
-| Файл | Что делает |
-|---|---|
-| `app.py` | Сервер: разбор t.me, API `/api/feed` и `/api/check`, отдача интерфейса |
-| `index.html` | Интерфейс, без сборки и зависимостей |
-| `test_app.py` | Проверки порядка, страниц, частичных ошибок и синхронизации |
-| `check_ui.py` | Сверка целостности интерфейса без браузера |
-| `feed.db` | SQLite: посты, заголовки, профили, подписки, прочитанное |
-| `sync.py`, `serve.py` | Вариант с авторизацией по QR, сейчас не используется |
+The repository carries no licence file, so the terms of the service itself are
+not set. `qrcodegen.py` is under the MIT licence of Project Nayuki, and the
+bundled fonts are under the SIL Open Font License 1.1
+([`fonts/LICENSE-JetBrainsMono.txt`](fonts/LICENSE-JetBrainsMono.txt)). The
+owner has to add a licence file before the service is handed to anybody else.
