@@ -8,19 +8,24 @@
 Sessия — это готовый вход в аккаунт, а не пароль. Поэтому она лежит файлом в томе
 данных с правами 0600 и в базу не пишется: в бэкап SQLite она не попадает.
 
-Чего модуль пока не умеет: медиа из приватных каналов. Telegram не отдаёт для них
-публичную ссылку на файл — картинку надо тянуть через MTProto и отдавать самому
-через отдельный эндпоинт с проверкой профиля. Пока приходят только текстовые посты
-со ссылкой на оригинал.
+Медиа из приватных каналов Telegram не отдаёт публичной ссылкой. Поэтому картинка
+или короткое видео тянется через MTProto, когда её просят, и отдаётся через эндпоинт
+/api/tg/media с проверкой профиля. Скачанное кэшируется на диске в пределах лимита.
+
+Один файл сессии нельзя открывать двумя клиентами сразу: сервер многопоточный, а
+фоновое обновление работает параллельно. Поэтому все обращения к Telegram одного
+профиля идут под его замком.
 """
 import asyncio
 import hashlib
+import json
 import os
 import secrets
 import threading
 import time
 from datetime import datetime, timezone
 from html import escape
+from urllib.parse import quote
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 TG_DIR = os.path.join(DATA_DIR, "tg")
@@ -33,10 +38,17 @@ API_HASH = os.environ.get("TG_API_HASH", "b18441a1ff607e10a989891a5462e627")
 
 POSTS_PER_CHANNEL = 40
 PREFIX = "private:"
+MAX_MEDIA = 15 * 1024 * 1024          # больше не тянем: картинка или короткое видео
+MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"}
+CACHE_LIMIT = 500 * 1024 * 1024       # весь кэш медиа на диске
 
 
 class TelegramMissing(Exception):
     """Telethon не установлен в образе."""
+
+
+class MediaUnavailable(Exception):
+    """Файла нет, он слишком большой или его тип не отдаём."""
 
 
 def installed():
@@ -63,6 +75,16 @@ def _client(profile):
     path = session_path(profile)
     client = TelegramClient(path, API_ID, API_HASH)
     return client
+
+
+# Замок на профиль: Telethon держит сессию в одном файле, и два клиента сразу его портят.
+_locks = {}
+_locks_guard = threading.Lock()
+
+
+def _lock(profile):
+    with _locks_guard:
+        return _locks.setdefault(profile, threading.Lock())
 
 
 def _tighten(path):
@@ -237,7 +259,17 @@ async def _discover(profile):
 
 
 def discover(profile):
-    return run(_discover(profile), timeout=180)
+    with _lock(profile):
+        return run(_discover(profile), timeout=180)
+
+
+def _media_kind(m):
+    """i — картинка, v — видео, None — остального не берём."""
+    if getattr(m, "photo", None):
+        return "i"
+    if getattr(m, "video", None):
+        return "v"
+    return None
 
 
 async def _fetch(profile, channel, limit):
@@ -249,27 +281,38 @@ async def _fetch(profile, channel, limit):
         raise TelegramMissing("профиль не подключён к Telegram")
     entity = await client.get_entity(int(channel.removeprefix(PREFIX)))
     messages = await client.get_messages(entity, limit=limit)
-    rows = []
+    # Альбом Telegram — это несколько сообщений с одним grouped_id. В ленте он один пост,
+    # поэтому сообщения сводим в группы, сохраняя порядок от новых к старым.
+    groups = {}
     for m in messages:
-        if not m.message:
+        key = ("album", m.grouped_id) if getattr(m, "grouped_id", None) else ("one", m.id)
+        groups.setdefault(key, []).append(m)
+    rows = []
+    for items in groups.values():
+        items.sort(key=lambda x: x.id)
+        media = [{"k": _media_kind(m), "u": f"/api/tg/media?channel={quote(channel, safe='')}&msg={m.id}"}
+                 for m in items if _media_kind(m)]
+        text = next((m.message for m in items if m.message), "")
+        if not text and not media:
             continue
+        first = items[0]
         views = None
-        if getattr(m, "views", None):
-            views = str(getattr(m.views, "count", m.views))
+        if getattr(first, "views", None):
+            views = str(getattr(first.views, "count", first.views))
         rows.append({
             "channel": channel,
-            "msg_id": m.id,
+            "msg_id": first.id,
             # у приватного канала нет имени в адресе, ссылка работает только
             # для участников — ровно то, что нужно
-            "url": f"https://t.me/c/{str(entity.id).removeprefix('-100')}/{m.id}",
+            "url": f"https://t.me/c/{str(entity.id).removeprefix('-100')}/{first.id}",
             # Текст из Telegram приходит без разметки и вставляется в страницу
             # как есть, поэтому экранируем: иначе любой участник приватного
             # канала выполнит свой код у всех, кто его читает. Публичные посты
             # идут через rich_text() в app.py, там та же гарантия.
-            "text": escape(m.message),
-            "media": None,
+            "text": escape(text),
+            "media": json.dumps(media, ensure_ascii=False) if media else None,
             "views": views,
-            "ts": int(m.date.timestamp()),
+            "ts": int(first.date.timestamp()),
             "reactions": None, "preview": None, "doc": None,
             "fwd": None, "quote": None, "sticker": None,
         })
@@ -278,7 +321,66 @@ async def _fetch(profile, channel, limit):
 
 
 def fetch(profile, channel, limit=POSTS_PER_CHANNEL):
-    return run(_fetch(profile, channel, limit), timeout=180)
+    with _lock(profile):
+        return run(_fetch(profile, channel, limit), timeout=180)
+
+
+async def _download(profile, channel, msg_id):
+    """Скачивает картинку или видео одного сообщения и отдаёт байты с типом."""
+    client = _client(profile)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise TelegramMissing("профиль не подключён к Telegram")
+        entity = await client.get_entity(int(channel.removeprefix(PREFIX)))
+        msg = await client.get_messages(entity, ids=msg_id)
+        if not msg or not (msg.photo or msg.video):
+            raise MediaUnavailable("в сообщении нет картинки или видео")
+        mime = (msg.file.mime_type if msg.file else "") or ("image/jpeg" if msg.photo else "video/mp4")
+        size = (msg.file.size if msg.file else 0) or 0
+        if mime not in MEDIA_TYPES or size > MAX_MEDIA:
+            raise MediaUnavailable("файл не отдаём: тип или размер")
+        data = await client.download_media(msg, file=bytes)
+        if not data or len(data) > MAX_MEDIA:
+            raise MediaUnavailable("файл не скачался")
+        return data, mime
+    finally:
+        await client.disconnect()
+
+
+def _media_path(profile, channel, msg_id):
+    base = os.path.join(TG_DIR, "media", hashlib.sha256(profile.encode()).hexdigest()[:24])
+    return os.path.join(base, hashlib.sha256(f"{channel}/{msg_id}".encode()).hexdigest()[:32])
+
+
+def _cache_size():
+    total = 0
+    for root, _dirs, files in os.walk(os.path.join(TG_DIR, "media")):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    return total
+
+
+def media(profile, channel, msg_id):
+    """Картинка или видео из приватного поста: с диска, если уже скачивали, иначе через MTProto."""
+    path = _media_path(profile, channel, msg_id)
+    if os.path.exists(path + ".bin"):
+        with open(path + ".mime", encoding="utf-8") as f:
+            mime = f.read().strip()
+        with open(path + ".bin", "rb") as f:
+            return f.read(), mime
+    with _lock(profile):
+        data, mime = run(_download(profile, channel, msg_id), timeout=120)
+    if _cache_size() + len(data) <= CACHE_LIMIT:
+        os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+        for suffix, content in ((".bin", data), (".mime", mime.encode())):
+            with open(path + suffix, "wb") as f:
+                f.write(content)
+            os.chmod(path + suffix, 0o600)
+    return data, mime
 
 
 def linked(profile):
@@ -288,8 +390,11 @@ def linked(profile):
 
 
 def drop_session(profile):
-    """Выход: стираем файл сессии, иначе вход в аккаунт остаётся жить."""
+    """Выход: стираем файл сессии, иначе вход в аккаунт остаётся жить. Кэш медиа тоже."""
     _tighten  # noqa: B018
+    import shutil
+    shutil.rmtree(os.path.join(TG_DIR, "media", hashlib.sha256(profile.encode()).hexdigest()[:24]),
+                  ignore_errors=True)
     path = session_path(profile)
     removed = False
     for suffix in ("", "-journal", "-shm", "-wal"):

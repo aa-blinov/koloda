@@ -470,6 +470,92 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(["%s/%d" % (p["channel"], p["msg_id"]) for p in shown["posts"]], keys[2:])
         self.assertEqual(len(self.request("/api/feed?" + query)[1]["posts"]), len(keys))
 
+    def test_private_media_goes_only_to_subscribers(self):
+        profile = self.login("tg_media_fan")
+        signed_in = self.cookie
+        key = "private:-1001234567"
+        path = "/api/tg/media?channel=%s&msg=5" % quote(key, safe="")
+        with patch.object(app.tg, "media", return_value=(b"\x89PNG\r\n", "image/png")) as media:
+            self.assertEqual(self.request_raw(path)[0], 404)  # канала нет в подписках
+            self.subscribe(profile, key)
+            status, headers, body = self.request_raw(path)
+            self.assertEqual((status, body), (200, b"\x89PNG\r\n"))
+            self.assertEqual(headers["Content-Type"], "image/png")
+            self.assertEqual(headers["Cache-Control"], "private, max-age=86400")
+            self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+            media.assert_called_once_with(profile, key, 5)
+            self.assertEqual(self.request_raw("/api/tg/media?channel=%s&msg=abc" % quote(key, safe=""))[0], 400)
+            self.cookie = ""
+            self.assertEqual(self.request_raw(path)[0], 401)
+            self.cookie = signed_in
+        with patch.object(app.tg, "media", side_effect=app.tg.MediaUnavailable("нет")):
+            self.assertEqual(self.request_raw(path)[0], 404)
+        with patch.object(app.tg, "media", side_effect=TimeoutError("timed out")):
+            self.assertEqual(self.request_raw(path)[0], 502)
+
+    def test_private_video_can_be_scrubbed_with_range_requests(self):
+        profile = self.login("tg_range_fan")
+        key = "private:-1001234567"
+        self.subscribe(profile, key)
+        url = "%s/api/tg/media?channel=%s&msg=5" % (self.base, quote(key, safe=""))
+
+        def get(range_header=None):
+            headers = {"Cookie": self.cookie}
+            if range_header:
+                headers["Range"] = range_header
+            try:
+                with urlopen(Request(url, headers=headers), timeout=5) as response:
+                    return response.status, response.headers, response.read()
+            except HTTPError as exc:
+                return exc.code, exc.headers, exc.read()
+
+        with patch.object(app.tg, "media", return_value=(b"0123456789", "video/mp4")):
+            status, headers, body = get()
+            self.assertEqual((status, body), (200, b"0123456789"))
+            self.assertEqual(headers["Accept-Ranges"], "bytes")
+            status, headers, body = get("bytes=2-4")
+            self.assertEqual((status, body), (206, b"234"))
+            self.assertEqual(headers["Content-Range"], "bytes 2-4/10")
+            self.assertEqual(get("bytes=-3")[2], b"789")
+            self.assertEqual(get("bytes=7-")[2], b"789")
+            status, headers, _ = get("bytes=20-")
+            self.assertEqual(status, 416)
+            self.assertEqual(headers["Content-Range"], "bytes */10")
+
+    def test_private_channels_in_the_feed_refresh_in_the_background(self):
+        profile = self.login("tg_sync_fan")
+        key = "private:-1001234567"
+        self.subscribe(profile, key)
+        self.db.execute("INSERT INTO tg_channels (profile, channel, entity_id, title, updated) "
+                        "VALUES (?,?,?,?,NULL)", (profile, key, 1234567, "Закрытый"))
+        self.db.commit()
+        fresh = [{"channel": key, "msg_id": 3, "url": "https://t.me/c/1234567/3", "text": "новое",
+                  "media": None, "views": None, "ts": 1700000000, "reactions": None, "preview": None,
+                  "doc": None, "fwd": None, "quote": None, "sticker": None}]
+        with patch.dict(app._private_retry, clear=True), \
+                patch.object(app.tg, "linked", return_value=True), \
+                patch.object(app.tg, "fetch", return_value=fresh) as fetch:
+            self.assertTrue(app.private_sync_step(self.db))
+            self.assertFalse(app.private_sync_step(self.db))  # уже свежий, второй раз не тянем
+        fetch.assert_called_once_with(profile, key)
+        stored = self.db.execute("SELECT text FROM private_posts WHERE profile=? AND channel=? AND msg_id=3",
+                                 (profile, key)).fetchone()
+        self.assertEqual(stored[0], "новое")
+
+    def test_private_channel_backs_off_after_a_telegram_error(self):
+        profile = self.login("tg_retry_fan")
+        key = "private:-1001234567"
+        self.subscribe(profile, key)
+        self.db.execute("INSERT INTO tg_channels (profile, channel, entity_id, title, updated) "
+                        "VALUES (?,?,?,?,NULL)", (profile, key, 1234567, "Закрытый"))
+        self.db.commit()
+        with patch.dict(app._private_retry, clear=True), \
+                patch.object(app.tg, "linked", return_value=True), \
+                patch.object(app.tg, "fetch", side_effect=RuntimeError("flood wait")) as fetch:
+            self.assertTrue(app.private_sync_step(self.db))
+            self.assertFalse(app.private_sync_step(self.db))  # ждём, не долбим Telegram
+        fetch.assert_called_once()
+
     def test_telegram_is_not_fetched_on_behalf_of_a_stranger(self):
         # Сайт в интернете: без профиля нельзя ни проверить канал, ни заставить
         # сервер обойти t.me. Иначе посторонний проксирует обход через наш адрес,
@@ -903,6 +989,74 @@ class CatalogSearchTest(unittest.TestCase):
                 ("other", 1, 1700005555)]
         db.executemany("INSERT INTO posts (channel,msg_id,ts) VALUES (?,?,?)", rows)
         self.assertEqual(app.last_post_times(db), {"fresh": 1700009999, "other": 1700005555})
+
+
+class PrivateFetchTest(unittest.TestCase):
+    """Посты приватного канала: текст экранируется, картинка и видео становятся ссылкой на эндпоинт."""
+
+    class FakeClient:
+        def __init__(self, messages):
+            self.messages = messages
+
+        async def connect(self):
+            pass
+
+        async def is_user_authorized(self):
+            return True
+
+        async def get_entity(self, entity_id):
+            return SimpleNamespace(id=entity_id)
+
+        async def get_messages(self, entity, limit=None, ids=None):
+            return self.messages
+
+        async def disconnect(self):
+            pass
+
+    def test_photo_and_video_become_links_to_the_media_endpoint(self):
+        when = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        messages = [
+            SimpleNamespace(id=7, message="привет <b>", photo=SimpleNamespace(), video=None, views=None, date=when),
+            SimpleNamespace(id=8, message="", photo=None, video=SimpleNamespace(), views=None, date=when),
+            SimpleNamespace(id=9, message="", photo=None, video=None, views=None, date=when),
+        ]
+        key = "private:-1001234567"
+        with patch.object(app.tg, "_client", return_value=self.FakeClient(messages)):
+            rows = asyncio.run(app.tg._fetch("prof", key, 10))
+        self.assertEqual([r["msg_id"] for r in rows], [7, 8])  # пустое сообщение без медиа пропускаем
+        self.assertEqual(rows[0]["text"], "привет &lt;b&gt;")
+        self.assertEqual(json.loads(rows[0]["media"]),
+                         [{"k": "i", "u": "/api/tg/media?channel=private%3A-1001234567&msg=7"}])
+        self.assertEqual(json.loads(rows[1]["media"])[0]["k"], "v")
+
+    def test_album_becomes_one_post_with_all_its_media(self):
+        when = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        messages = [
+            SimpleNamespace(id=11, message="подпись", photo=SimpleNamespace(), video=None, views=None,
+                            date=when, grouped_id=77),
+            SimpleNamespace(id=10, message="", photo=SimpleNamespace(), video=None, views=None,
+                            date=when, grouped_id=77),
+            SimpleNamespace(id=9, message="отдельный пост", photo=None, video=None, views=None,
+                            date=when, grouped_id=None),
+        ]
+        with patch.object(app.tg, "_client", return_value=self.FakeClient(messages)):
+            rows = asyncio.run(app.tg._fetch("prof", "private:-1001234567", 10))
+        self.assertEqual([r["msg_id"] for r in rows], [10, 9])  # номер альбома — его первое сообщение
+        self.assertEqual(rows[0]["text"], "подпись")  # подпись может стоять у любого кадра
+        self.assertEqual(json.loads(rows[0]["media"]), [
+            {"k": "i", "u": "/api/tg/media?channel=private%3A-1001234567&msg=10"},
+            {"k": "i", "u": "/api/tg/media?channel=private%3A-1001234567&msg=11"},
+        ])
+
+    def test_downloaded_media_is_cached_on_disk(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(app.tg, "TG_DIR", temp), \
+                patch.object(app.tg, "_download", new=lambda *args: None), \
+                patch.object(app.tg, "run", return_value=(b"jpegdata", "image/jpeg")) as run:
+            first = app.tg.media("prof", "private:-1001234567", 7)
+            second = app.tg.media("prof", "private:-1001234567", 7)
+        self.assertEqual(first, (b"jpegdata", "image/jpeg"))
+        self.assertEqual(second, (b"jpegdata", "image/jpeg"))
+        self.assertEqual(run.call_count, 1)  # второй раз берём с диска
 
 
 class MediaParseTest(unittest.TestCase):

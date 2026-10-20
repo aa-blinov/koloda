@@ -1552,7 +1552,7 @@ function extras(p){
   // Telegram не отдаёт в веб-версии некоторые публикации (опросы, голосовые и другое):
   // без текста, кадров и карточек карточка пустая. Говорим об этом и даём ссылку.
   if(!p.text && !(p.media && p.media.length) && !p.sticker && !p.preview && !p.doc && !p.quote)
-    h += '<p class="fresh">Telegram не показывает эту публикацию в веб-версии. <a href="https://t.me/'+esc(key(p))+
+    h += '<p class="fresh">Telegram не показывает эту публикацию в веб-версии. <a href="'+esc(p.url || 'https://t.me/'+key(p))+
          '" target="_blank" rel="noopener">Открыть в Telegram</a></p>';
 
   if(p.doc)
@@ -2382,14 +2382,21 @@ document.addEventListener('loadedmetadata', e => {
 // Ошибка загрузки не всплывает, ловим в фазе захвата.
 const freshMediaByPost = new Map();
 function freshMedia(post){
+  // у приватного поста нет публичной страницы, с которой можно взять свежие ссылки
+  if(post.startsWith('private:')) return Promise.resolve(null);
   if(!freshMediaByPost.has(post)) freshMediaByPost.set(post,
     fetch('/api/media?post='+encodeURIComponent(post)).then(r => r.ok ? r.json() : null)
       .catch(() => null));
   return freshMediaByPost.get(post);
 }
+// ссылка на пост: у приватного канала адрес t.me/c/<id>/<номер>, у публичного t.me/<имя>/<номер>
+function postLink(post){
+  const [channel, msg] = post.split('/');
+  return channel.startsWith('private:') ? 'https://t.me/c/'+channel.replace(/^private:-100/, '')+'/'+msg : 'https://t.me/'+post;
+}
 function brokenFrame(el, post){
   const a = document.createElement('a');
-  a.className = 'gal-broken'; a.href = 'https://t.me/' + post;
+  a.className = 'gal-broken'; a.href = postLink(post);
   a.target = '_blank'; a.rel = 'noopener';
   a.textContent = 'Медиа недоступно, открыть в Telegram';
   el.replaceWith(a);

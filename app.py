@@ -622,6 +622,82 @@ def refresh_media(db, channel, msg_id):
             "sticker": fresh["sticker"]}
 
 
+# Приватные каналы обновляются в фоне, как публичные: раз в PRIVATE_TTL секунд и только
+# те, что стоят в ленте. Ошибка Telegram (нет входа, лимит запросов) не повторяется
+# чаще, чем раз в PRIVATE_RETRY секунд.
+PRIVATE_TTL = 900
+PRIVATE_RETRY = 600
+_private_retry = {}   # (профиль, канал) -> когда можно пробовать снова
+
+
+def store_private_rows(db, cid, channel, rows):
+    db.executemany(
+        "INSERT OR REPLACE INTO private_posts "
+        "(profile,channel,msg_id,url,text,media,views,ts) VALUES (?,?,?,?,?,?,?,?)",
+        [(cid, r["channel"], r["msg_id"], r["url"], r["text"], r["media"],
+          r["views"], r["ts"]) for r in rows])
+
+
+def private_sync_step(db):
+    """Обновляет один приватный канал из ленты, который давно не обновлялся.
+    False, если делать нечего."""
+    now = int(time.time())
+    due = db.execute(
+        "SELECT t.profile, t.channel FROM tg_channels t JOIN user_subs s "
+        "ON s.profile=t.profile AND s.channel=t.channel "
+        "WHERE COALESCE(t.updated,0) <= ? ORDER BY COALESCE(t.updated,0) LIMIT 20",
+        (now - PRIVATE_TTL,)).fetchall()
+    for profile, channel in due:
+        if _private_retry.get((profile, channel), 0) > now or not tg.linked(profile):
+            continue
+        try:
+            rows = tg.fetch(profile, channel)
+        except Exception as exc:
+            print("приватный канал не обновился: " + type(exc).__name__, file=sys.stderr, flush=True)
+            _private_retry[(profile, channel)] = now + PRIVATE_RETRY
+            return True
+        store_private_rows(db, profile, channel, rows)
+        db.execute("UPDATE tg_channels SET updated=? WHERE profile=? AND channel=?",
+                   (now, profile, channel))
+        db.commit()
+        return True
+    return False
+
+
+def parse_range(header, total):
+    """Диапазон из заголовка Range: (начало, конец) включительно или None, если заголовок не про байты.
+    ValueError — диапазон вне файла."""
+    m = re.fullmatch(r"bytes=(\d*)-(\d*)", header.strip())
+    if not m or not (m.group(1) or m.group(2)):
+        return None
+    if m.group(1):
+        start = int(m.group(1))
+        end = int(m.group(2)) if m.group(2) else total - 1
+    else:  # суффикс: последние N байт
+        start = max(0, total - int(m.group(2)))
+        end = total - 1
+    end = min(end, total - 1)
+    if start > end or start >= total:
+        raise ValueError("диапазон вне файла")
+    return start, end
+
+
+def _private_loop():
+    while True:
+        worked = False
+        try:
+            db = connect()
+            try:
+                worked = private_sync_step(db)
+                db.commit()
+            finally:
+                db.close()
+        except Exception as exc:
+            # только тип ошибки: текст может содержать что-то из Telegram, а в журнал такое не пишем
+            print("фон приватных каналов: " + type(exc).__name__, file=sys.stderr, flush=True)
+        time.sleep(2 if worked else 30)
+
+
 def _backfill_loop():
     while True:
         worked = False
@@ -1244,7 +1320,9 @@ class Handler(BaseHTTPRequestHandler):
         # сжатого размера. Сжимаем всё, кроме мелких ответов, где выигрыш
         # меньше служебных байт заголовка.
         encoding = ""
-        if len(b) >= MIN_GZIP and "gzip" in self.headers.get("Accept-Encoding", ""):
+        # картинки и видео уже сжаты, gzip на них только тратит процессор
+        if len(b) >= MIN_GZIP and "gzip" in self.headers.get("Accept-Encoding", "") \
+                and not ctype.startswith(("image/", "video/")):
             b = gzip.compress(b, 6)
             encoding = "gzip"
         self.send_response(code)
@@ -1253,7 +1331,9 @@ class Handler(BaseHTTPRequestHandler):
         if encoding:
             self.send_header("Content-Encoding", encoding)
             self.send_header("Vary", "Accept-Encoding")
-        self.send_header("Cache-Control", "no-store")
+        # свой Cache-Control из headers заменяет стандартный, а не дублирует его
+        if "cache-control" not in {name.lower() for name, _ in headers or []}:
+            self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
         self.send_header("X-Frame-Options", "DENY")
@@ -1675,11 +1755,6 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, json.dumps(
                         {"posts": [], "titles": {}, "errors": [], "has_more": False,
                          "unread": 0, "next": None}), "application/json; charset=utf-8")
-                # Кэш отдаём сразу. Ждём только каналы, которых в базе ещё нет совсем
-                public_chans = public_channels(chans)
-                wait_for(request_refresh(db, public_chans))
-                errors = failures_for(public_chans)
-
                 before = None
                 cursor_values = (self._query("before_ts"), self._query("before_channel"),
                                  self._query("before_id"))
@@ -1693,6 +1768,11 @@ class Handler(BaseHTTPRequestHandler):
                     if not valid_feed_channel(before[1]) or before[2] < 1:
                         return self._send(400, json.dumps({"error": "неверная позиция ленты"}),
                                           "application/json")
+
+                # Кэш отдаём сразу. Ждём только каналы, которых в базе ещё нет совсем
+                public_chans = public_channels(chans)
+                wait_for(request_refresh(db, public_chans))
+                errors = failures_for(public_chans)
 
                 unread_profile = client_id(self, db)
                 only_unread = unread_profile if self._query("unread") == "1" else None
@@ -1890,6 +1970,45 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps({"found": len(found)}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
+            if path == "/api/tg/media":
+                # Картинка или видео из приватного поста. Файл тянется через Telegram от
+                # имени профиля, поэтому отдаётся только подписчику этого канала.
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                channel, msg = self._query("channel"), self._query("msg")
+                if not private_channel(channel) or not msg.isdigit() or len(msg) > 20:
+                    return self._send(400, json.dumps({"error": "неверный адрес медиа"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if not db.execute("SELECT 1 FROM user_subs WHERE profile=? AND channel=?",
+                                  (cid, channel)).fetchone():
+                    return self._send(404, json.dumps({"error": "канала нет в подписках"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                try:
+                    data, mime = tg.media(cid, channel, int(msg))
+                except (tg.MediaUnavailable, tg.TelegramMissing):
+                    return self._send(404, json.dumps({"error": "медиа недоступно"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                except Exception:  # Telegram не ответил или попросил подождать
+                    return self._send(502, json.dumps({"error": "Telegram не отдал файл"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                # файл тот же, что и в Telegram, поэтому браузер может держать его сутки.
+                # Видео перематывают через Range, поэтому отдаём и части файла.
+                cache = [("Cache-Control", "private, max-age=86400"), ("Accept-Ranges", "bytes")]
+                header = self.headers.get("Range", "")
+                if not header:
+                    return self._send(200, data, mime, cache)
+                try:
+                    span = parse_range(header, len(data))
+                except ValueError:
+                    return self._send(416, b"", mime, cache + [("Content-Range", "bytes */%d" % len(data))])
+                if span is None:
+                    return self._send(200, data, mime, cache)
+                start, end = span
+                return self._send(206, data[start:end + 1], mime,
+                                  cache + [("Content-Range", "bytes %d-%d/%d" % (start, end, len(data)))])
+
             if path == "/api/tg/sync":
                 if self.command != "POST":
                     return self._send(405, json.dumps({"error": "метод не поддерживается"}),
@@ -1907,11 +2026,7 @@ class Handler(BaseHTTPRequestHandler):
                     except Exception as exc:
                         errors.append({"channel": channel, "message": "не удалось прочитать канал"})
                         continue
-                    db.executemany(
-                        "INSERT OR REPLACE INTO private_posts "
-                        "(profile,channel,msg_id,url,text,media,views,ts) VALUES (?,?,?,?,?,?,?,?)",
-                        [(cid, r["channel"], r["msg_id"], r["url"], r["text"], r["media"],
-                          r["views"], r["ts"]) for r in rows])
+                    store_private_rows(db, cid, channel, rows)
                     db.execute("UPDATE tg_channels SET updated=? WHERE profile=? AND channel=?",
                                (int(time.time()), cid, channel))
                     total += len(rows)
@@ -2255,4 +2370,5 @@ if __name__ == "__main__":
     # История подписанных каналов догружается в фоне. В тестах фон не запускается:
     # там свой сервер и никаких фоновых запросов к t.me
     threading.Thread(target=_backfill_loop, daemon=True, name="backfill").start()
+    threading.Thread(target=_private_loop, daemon=True, name="private").start()
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
