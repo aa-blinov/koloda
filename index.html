@@ -240,8 +240,9 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   text-overflow:ellipsis;white-space:nowrap}
 .meta .who:hover{color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .meta .who::after{content:'';flex:0 0 auto}
-.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-round);
+.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-round);overflow:hidden;
   background:var(--acc-cont);color:var(--on-acc-cont);font-size:12px;font-weight:500}
+.chan-dot img,.channel-mark img{width:100%;height:100%;object-fit:cover;display:block}
 .meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
@@ -367,7 +368,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   border:0;border-radius:var(--r-sm);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
   transition:background .16s}
 .channel-open:hover,.channel-open[aria-expanded=true]{background:var(--surf)}
-.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-round);
+.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-round);overflow:hidden;
   background:var(--acc-cont);color:var(--on-acc-cont);font-size:16px;font-weight:500}
 .channel-copy{display:grid;gap:var(--sp-1);min-width:0;flex:1}
 .channel-fresh{font-size:12px;color:var(--dim)}
@@ -1039,8 +1040,33 @@ const dayLabel = ts => {
     : d.toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
 };
 
-const monogramOf = (channel, name) =>
-  '<span class="chan-dot" aria-hidden="true">'+esc((String(name||channel).trim()[0]||'?').toUpperCase())+'</span>';
+// Фото каналов: сервер отдаёт их пачками, пока фото нет, рисуем букву. Ушедшая картинка
+// возвращает букву (обработчик ошибок картинок ниже).
+const avatarUrl = new Map(), avatarChecked = new Set();
+const chanMark = (channel, name, cls='chan-dot') => {
+  const letter = (String(name||channel).trim()[0]||'?').toUpperCase();
+  const url = avatarUrl.get(channel);
+  return '<span class="'+cls+'" aria-hidden="true" data-av="'+esc(channel)+'" data-title="'+esc(letter)+'">'+
+    (url ? '<img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer">' : esc(letter))+'</span>';
+};
+// Сервер проверяет не больше 12 каналов за запрос, поэтому догружаем в несколько проходов
+async function loadAvatars(list, depth=0){
+  const want=[...new Set(list)].filter(c=>!avatarChecked.has(c)).slice(0,60);
+  if(!want.length) return;
+  try{
+    const r=await fetch('/api/avatars?channels='+encodeURIComponent(want.join(',')));
+    if(!r.ok) return;
+    const d=await r.json();
+    (d.checked||[]).forEach(c=>avatarChecked.add(c));
+    const found=d.avatars||{};
+    Object.entries(found).forEach(([c,url])=>avatarUrl.set(c,url));
+    document.querySelectorAll('[data-av]').forEach(s=>{
+      const url=found[s.dataset.av];
+      if(url) s.innerHTML='<img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer">';
+    });
+    if(depth<4 && want.some(c=>!avatarChecked.has(c))) return loadAvatars(list, depth+1);
+  }catch(e){ /* без фото остаются буквы */ }
+}
 
 const viewsText = raw => {
   const m = /^([\d.,]+)\s*([KkMm])?/.exec(String(raw||'').trim());
@@ -1467,6 +1493,7 @@ async function load(append=false, silent=false){
       unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
+    loadAvatars(subs());
     // В пустом состоянии render() уходит раньше и #feedEnd в разметке нет.
     // Обращение к нему бросало TypeError, и человек вместо «Ничего не нашлось»
     // видел «Не удалось загрузить ленту».
@@ -1818,7 +1845,7 @@ function render(posts,append=false){
       '<div class="meta">'+
         (read ? readMark(titles[p.channel] || p.channel, when(p.ts)) : NEW_MARK)+
         '<button type="button" class="who" data-chan="'+esc(p.channel)+'" title="Показать только этот канал">'+
-          monogramOf(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
+          chanMark(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
         '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
         (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
       '</div>'+ extras(p) + actionsRow(p);
@@ -2006,6 +2033,7 @@ async function loadCatalog(append=false){
       return;
     }
     const channels=[...shown].sort(CATALOG_SORTS[catalogSort] || CATALOG_SORTS.subs);
+    loadAvatars(channels.map(c=>c.username));
     if(!append){ box.className='channel-list'; box.replaceChildren(); }
     catalogMore?.remove();
     const have=new Set(subs());
@@ -2014,7 +2042,7 @@ async function loadCatalog(append=false){
       const row=document.createElement('div'); row.className='channel-row';
       const open=document.createElement('button'); open.type='button'; open.className='channel-open';
       open.dataset.act='preview'; open.dataset.channel=c.username;
-      open.innerHTML='<span class="channel-mark" aria-hidden="true">'+esc((c.name[0]||'@').toUpperCase())+'</span>'+ 
+      open.innerHTML=chanMark(c.username,c.name,'channel-mark')+ 
         '<span class="channel-copy"><span class="channel-name">'+esc(c.name)+'</span>'+
         (c.last_ts?'<span class="channel-fresh">последний пост '+esc(dayLabel(c.last_ts))+'</span>':'')+ 
         '<span class="channel-meta">@'+esc(c.username)+(c.cat?' ('+esc(catRu(c.cat))+')':'')+'</span>'+ 
@@ -2521,6 +2549,12 @@ function brokenFrame(el, post){
 }
 document.addEventListener('error', e => {
   const el = e.target;
+  // фото канала не открылось: возвращаем букву, как было до фото
+  if(el instanceof HTMLImageElement && el.parentElement && el.parentElement.dataset.av){
+    avatarUrl.delete(el.parentElement.dataset.av);
+    el.parentElement.textContent = el.parentElement.dataset.title;
+    return;
+  }
   if(!(el instanceof HTMLImageElement || el instanceof HTMLVideoElement)) return;
   const preview = el instanceof HTMLImageElement && el.closest('.preview');
   const sticker = el instanceof HTMLImageElement && el.classList.contains('sticker');
