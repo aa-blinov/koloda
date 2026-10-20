@@ -1374,6 +1374,32 @@ class ThemeContrastTest(unittest.TestCase):
                     self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
 
 
+class SpacingScaleTest(unittest.TestCase):
+    """Отступы берутся из шкалы --sp-N: литерал вне шкалы сбивает ритм, и тест его ловит."""
+
+    # 2 px остаются для волосяных зазоров, 0 и отрицательные значения задают оптические сдвиги
+    HAIRLINE = {0, 2}
+    SPACING = re.compile(r"(?<![\w-])(?:padding|margin|gap)(?:-(?:top|right|bottom|left))?:([^;{}]*)")
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
+            cls.html = page.read()
+
+    def test_literal_spacing_stays_on_the_scale(self):
+        style = self.html[self.html.index("<style>"):self.html.index("</style>")]
+        literals = sorted({int(px) for value in self.SPACING.findall(style)
+                           for px in re.findall(r"(?<![\w.-])(\d+)px", value)} - self.HAIRLINE)
+        self.assertEqual(literals, [])
+
+    def test_every_spacing_token_is_declared(self):
+        root = self.html[self.html.index(":root{"):self.html.index("}", self.html.index(":root{"))]
+        declared = set(re.findall(r"--sp-(\d+):", root))
+        used = set(re.findall(r"var\(--sp-(\d+)\)", self.html))
+        self.assertTrue(used)
+        self.assertEqual(used - declared, set())
+
+
 class ShellNesting(HTMLParser):
     """Запоминает, в каких элементах с id стоит каждый элемент с id."""
 
