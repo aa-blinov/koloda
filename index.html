@@ -26,6 +26,10 @@
   /* Шкала форм M3: 4, 8, 12 и 28 пикселей. Кнопки, поиск и сегменты: pill. */
   --r-xs:4px; --r-sm:8px; --r-md:12px; --r-xl:28px;
   --r-pill:999px; --r-round:50%;
+  /* Шкала отступов: 4 px и кратные ей, 2 px только для волосяных зазоров. Значения вне
+     шкалы округлены вверх: 10 → 12, 14 → 16, 20 → 24, 28 → 32, 56 → 64. */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --sp-7:48px; --sp-8:64px;
   /* Кривая M3 emphasized для переходов и появления экранов */
   --ease:cubic-bezier(.2,0,0,1);
   /* Шрифты: только системные, чтобы интерфейс не тянул ничего из сети */
@@ -63,7 +67,7 @@
   --font-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;
   --font-read:var(--font-ui);
 }
-html{scrollbar-color:var(--scroll-thumb) transparent}
+html{scrollbar-color:var(--scroll-thumb) transparent;overscroll-behavior-y:contain}
 [hidden]{display:none!important}
 body{
   background:var(--bg); color:var(--fg);
@@ -85,37 +89,37 @@ svg.i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
    контейнером для fixed-элементов, и снэкбар отмены уезжал внутрь неё. */
 header{position:sticky;top:0;z-index:20;background:var(--bg);
   border-bottom:1px solid var(--line);
-  padding:10px 16px; padding-top:calc(10px + env(safe-area-inset-top))}
-.bar{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:center}
+  padding:var(--sp-3) var(--sp-4); padding-top:calc(var(--sp-3) + env(safe-area-inset-top))}
+.bar{max-width:1120px;margin:0 auto;display:flex;gap:var(--sp-3);align-items:center}
 #sectionTabs,#sortTabs{flex:0 0 auto}
 #unreadBtn,#meBtn{flex:0 0 auto}
-#unreadBtn{display:inline-flex;align-items:center;gap:6px}
+#unreadBtn{display:inline-flex;align-items:center;gap:var(--sp-2)}
 #unreadBtn .u-count{font-variant-numeric:tabular-nums}
 /* бейдж M3: счётчик пилюлей акцента, пустой не занимает места */
-#unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);
+#unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 var(--sp-2);border-radius:var(--r-pill);
   background:var(--acc);color:var(--acc-ink);font-size:12px;font-weight:500;line-height:20px;text-align:center}
 #unreadBtn .u-short{display:none}
 @media(max-width:640px){#unreadBtn .u-short{display:inline}}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 /* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
-.seg{display:flex;gap:2px;padding:3px;border:1px solid var(--edge);border-radius:var(--r-pill)}
-.seg button{min-height:38px;padding:6px 14px;border:0;border-radius:var(--r-pill);background:none;
-  color:var(--fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px}
-.toggle{flex:0 0 auto;font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 16px;
+.seg{display:flex;gap:2px;padding:var(--sp-1);border:1px solid var(--edge);border-radius:var(--r-pill)}
+.seg button{min-height:38px;padding:var(--sp-2) var(--sp-4);border:0;border-radius:var(--r-pill);background:none;
+  color:var(--fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:var(--sp-2)}
+.toggle{flex:0 0 auto;font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-4);
   border:1px solid var(--edge);border-radius:var(--r-pill);background:none;color:var(--fg);
   cursor:pointer;white-space:nowrap}
 /* Поле поиска M3: заполненная пилюля без рамки, фокус отмечается кольцом */
-.search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:10px;
-  background:var(--surf-hi);border-radius:var(--r-pill);padding:0 16px}
+.search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:var(--sp-3);
+  background:var(--surf-hi);border-radius:var(--r-pill);padding:0 var(--sp-4)}
 .search:focus-within{box-shadow:inset 0 0 0 2px var(--acc)}
 .search svg.i{color:var(--faint)}
 /* min-height ровно 44, как у всех прочих кнопок: клик по полю не должен
    промахиваться мимо input, а нажатие на поля рамки его не ловит */
 .search input{flex:1;min-width:0;min-height:44px;background:none;border:0;color:var(--fg);font:inherit;font-size:16px;
-  padding:9px 0;outline:none}
+  padding:var(--sp-2) 0;outline:none}
 .search input::placeholder{color:var(--faint)}
-.search-hint{margin:8px 2px 0;color:var(--dim);font-size:12.5px}
+.search-hint{margin:var(--sp-2) 2px 0;color:var(--dim);font-size:12.5px}
 .search-hint[hidden]{display:none}
 
 /* ---------- Лента ---------- */
@@ -124,73 +128,79 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
    остаётся: на ней видно, какой канал открыт. Отступы 12/16/8 — как был ряд,
    иначе кнопка упирается в края окна. */
 /* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
-.fresh{margin:6px 0 0;color:var(--faint);font-size:11.5px;min-height:0}
+.fresh{margin:var(--sp-2) 0 0;color:var(--faint);font-size:11.5px;min-height:0}
 /* Кнопка «Показать N новых публикаций»: заливка акцентом, липнет под шапкой */
-.new-posts{display:block;position:sticky;top:76px;z-index:5;margin:8px auto 0;padding:8px 18px;
+.new-posts{display:block;position:sticky;top:calc(var(--head-h,72px) + var(--sp-2));z-index:5;margin:var(--sp-2) auto 0;padding:var(--sp-2) var(--sp-4);
   border:0;border-radius:var(--r-pill);background:var(--acc);color:var(--acc-ink);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--sh-1)}
+/* Жест «потянуть, чтобы обновить»: высота идёт за пальцем, после отпускания схлопывается */
+.pull{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
+  color:var(--dim);font-size:13px}
+.pull:not([data-drag]){transition:height .2s var(--ease)}
+.pull[data-busy] svg.i{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 /* Действия под постом: сохранить для потом и поделиться */
-.post-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.act-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 14px;
+.post-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-3)}
+.act-btn{display:inline-flex;align-items:center;gap:var(--sp-2);min-height:36px;padding:var(--sp-2) var(--sp-4);
   border:1px solid var(--edge);border-radius:var(--r-pill);background:none;color:var(--fg);
   font:inherit;font-size:13px;font-weight:500;cursor:pointer}
 .act-btn:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
 .act-save[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont);border-color:transparent}
 /* Экран канала: заголовок, подписка и последние публикации */
-.ch-page{max-width:748px;margin:0 auto;padding:24px 20px 56px}
-.ch-back{padding-left:0;margin-bottom:8px}
-.ch-page h2{font-size:24px;line-height:1.25;font-weight:400;margin:4px 0 4px;letter-spacing:0}
-.ch-meta{color:var(--dim);font-size:14px;margin-bottom:16px}
-.ch-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.ch-page{max-width:748px;margin:0 auto;padding:var(--sp-5) var(--sp-5) var(--sp-8)}
+.ch-back{padding-left:0;margin-bottom:var(--sp-2)}
+.ch-page h2{font-size:24px;line-height:1.25;font-weight:400;margin:var(--sp-1) 0 var(--sp-1);letter-spacing:0}
+.ch-meta{color:var(--dim);font-size:14px;margin-bottom:var(--sp-4)}
+.ch-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center;margin-bottom:var(--sp-3)}
 .ch-actions .quiet-btn{text-decoration:none}
-@media(max-width:640px){.ch-page{padding:18px 14px 56px}}
+@media(max-width:640px){.ch-page{padding:var(--sp-4) var(--sp-4) var(--sp-8)}}
 /* Список истории по каналам в профиле: название, состояние и полоска прогресса */
-.hist-row{padding:8px 0;border-bottom:1px solid var(--line)}
-.hist-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px}
+.hist-row{padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}
+.hist-head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-3);font-size:13.5px}
 .hist-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .hist-state{flex:0 0 auto;color:var(--dim);font-size:12.5px}
-.hist-bar{height:4px;margin-top:6px;border-radius:var(--r-pill);background:var(--raise);overflow:hidden}
+.hist-bar{height:4px;margin-top:var(--sp-2);border-radius:var(--r-pill);background:var(--raise);overflow:hidden}
 .hist-bar i{display:block;height:100%;background:var(--acc)}
 .fresh:empty{display:none}
-.tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:12px 20px 8px}
-.tabs-toggle{display:flex;align-items:center;gap:9px;width:100%;
-  min-height:44px;padding:10px 16px;font:inherit;font-size:14px;text-align:left;cursor:pointer;
+.tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:var(--sp-3) var(--sp-5) var(--sp-2)}
+.tabs-toggle{display:flex;align-items:center;gap:var(--sp-2);width:100%;
+  min-height:44px;padding:var(--sp-3) var(--sp-4);font:inherit;font-size:14px;text-align:left;cursor:pointer;
   background:var(--surf-hi);border:0;border-radius:var(--r-pill);color:var(--fg)}
 .tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
 .tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
 .tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
 /* список каналов на своём экране: колонка, а не меню, поэтому высоты не ограничиваем
    всем окном — на телефоне он должен листаться вместе с шапкой экрана */
-.chan-list{display:flex;flex-direction:column;gap:2px;margin:0 -6px;overflow-y:auto;
+.chan-list{display:flex;flex-direction:column;gap:2px;margin:0 -8px;overflow-y:auto;
   max-height:min(56vh,400px);overscroll-behavior:contain}
-.chan-item{justify-content:flex-start;text-align:left;min-height:44px;padding:10px 12px;
+.chan-item{justify-content:flex-start;text-align:left;min-height:44px;padding:var(--sp-3) var(--sp-3);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   border:0;border-radius:var(--r-sm);background:none;color:var(--fg);font:inherit;font-size:14px}
 .chan-item[aria-current=true]{background:var(--sec-cont);color:var(--on-sec-cont);font-weight:500}
-.chan-hint{padding:10px 12px;margin:0}
-main{max-width:980px;margin:0 auto;padding:0 20px 56px}
+.chan-hint{padding:var(--sp-3) var(--sp-3);margin:0}
+main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 #feed{max-width:748px;margin-inline:auto}
-.catalog-main{padding-top:28px}
-.catalog-head{margin:4px 0 22px}
+.catalog-main{padding-top:var(--sp-5)}
+.catalog-head{margin:var(--sp-2) 0 var(--sp-5)}
 .catalog-head h2{font-size:24px;line-height:1.25;font-weight:400;letter-spacing:0}
-.catalog-head p{margin-top:7px;color:var(--dim);font-size:14px;max-width:60ch}
+.catalog-head p{margin-top:var(--sp-2);color:var(--dim);font-size:14px;max-width:60ch}
 
 .post:not(:has(.gal,.doc,.preview,.photo)){max-width:calc(34em + 42px)}
 /* Карточка M3 «filled»: поверхность тоном, без рамки и подъёма. Наведение: слой 8% */
 .post{position:relative;scroll-margin-top:80px;content-visibility:auto;contain-intrinsic-size:auto 480px;background:var(--surf);border-radius:var(--r-md);
-  padding:18px 20px;margin-bottom:12px;
+  padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-3);
   transition:background .2s var(--ease), opacity .18s}
 .post:hover{background:color-mix(in srgb,var(--fg) 8%,var(--surf))}
 .post.read{background:color-mix(in srgb,var(--surf) 78%,var(--bg))}
 
-.day-sep{display:flex;align-items:center;gap:12px;margin:22px 0 12px;color:var(--faint);
+.day-sep{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-5) 0 var(--sp-3);color:var(--faint);
   font-size:12px;font-weight:600;letter-spacing:.01em}
 .day-sep::after{content:'';flex:1;height:1px;background:var(--line)}
-.day-sep:first-child{margin-top:4px}
-.meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:var(--dim)}
+.day-sep:first-child{margin-top:var(--sp-1)}
+.meta{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-3);font-size:12.5px;color:var(--dim)}
 .meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em;min-width:0;overflow:hidden;
-  display:inline-flex;align-items:center;gap:7px;max-width:100%;min-height:44px;
-  padding:0 6px 0 2px;margin-left:-2px;
+  display:inline-flex;align-items:center;gap:var(--sp-2);max-width:100%;min-height:44px;
+  padding:0 var(--sp-2) 0 var(--sp-1);margin-left:-4px;
   background:none;border:0;border-radius:var(--r-xs);font:inherit;font-size:12.5px;cursor:pointer;
   text-align:left;transition:color .16s,background .16s;
   text-overflow:ellipsis;white-space:nowrap}
@@ -202,13 +212,13 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
   box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
-.meta .stat{display:flex;align-items:center;gap:4px;color:var(--faint);font-variant-numeric:tabular-nums}
+.meta .stat{display:flex;align-items:center;gap:var(--sp-1);color:var(--faint);font-variant-numeric:tabular-nums}
 
-.post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:var(--r-md);margin:4px 0 11px;
+.post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:var(--r-md);margin:var(--sp-1) 0 var(--sp-3);
   background:var(--media-bg);border:1px solid var(--line)}
 /* Альбом: свайп по горизонтали, счётчик кадров поверх последнего */
-.galw{position:relative;margin:4px 0 11px}
-.gal{display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
+.galw{position:relative;margin:var(--sp-1) 0 var(--sp-3)}
+.gal{display:flex;gap:var(--sp-1);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
 .gal>img,.gal>video{flex:0 0 auto;width:auto;max-width:82%;margin:0;scroll-snap-align:center}
 /* один кадр не обрезаем: подложка остаётся, но видно всё фото */
 .gal.one>img,.gal.one>video{max-width:100%;max-height:520px;object-fit:contain}
@@ -225,12 +235,12 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .gal.one>video{height:520px;width:auto;max-width:100%;aspect-ratio:var(--ar,1/1);object-fit:contain}
 /* Счётчик кадров уезжает наверх, когда в альбоме есть видео: снизу он закрывал
    громкость и полноэкранный режим панели управления */
-.galw:has(video) .gal-n{top:10px;bottom:auto}
+.galw:has(video) .gal-n{top:8px;bottom:auto}
 /* Недоступный кадр: ссылка на пост вместо пустой подложки */
-.gal-broken{flex:0 0 auto;display:grid;place-items:center;min-width:200px;min-height:160px;padding:12px;
+.gal-broken{flex:0 0 auto;display:grid;place-items:center;min-width:200px;min-height:160px;padding:var(--sp-3);
   border-radius:var(--r-md);background:var(--raise);color:var(--dim);font-size:13px;text-align:center;text-decoration:none}
 .gal-broken:hover{color:var(--acc)}
-.gal-n{position:absolute;right:10px;bottom:10px;padding:2px 9px;border-radius:var(--r-pill);
+.gal-n{position:absolute;right:8px;bottom:8px;padding:2px var(--sp-2);border-radius:var(--r-pill);
   background:color-mix(in srgb,var(--bg) 82%,transparent);color:var(--fg);font-size:12px;
   font-variant-numeric:tabular-nums;box-shadow:0 0 0 1px var(--line);
   pointer-events:none}
@@ -240,14 +250,14 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .lb-img[hidden]{display:none}
 /* Подложка плотнее общей: под кадром не должно быть видно страницу */
 #lightbox{background:var(--bg)}
-.lb-n{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
-  padding:3px 11px;border-radius:var(--r-pill);background:rgba(0,0,0,.62);color:#fff;
+.lb-n{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+  padding:var(--sp-1) var(--sp-3);border-radius:var(--r-pill);background:rgba(0,0,0,.62);color:#fff;
   font-size:12.5px;font-variant-numeric:tabular-nums;pointer-events:none}
 .lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
   border-radius:var(--r-round);background:rgba(0,0,0,.55);color:#fff;border:0;font-size:20px;
   display:flex;align-items:center;justify-content:center;cursor:pointer}
 .lb-nav:hover{background:rgba(0,0,0,.75)}
-.lb-prev{left:14px}.lb-next{right:14px}
+.lb-prev{left:16px}.lb-next{right:16px}
 /* На телефоне Escape нет, а закрывать просмотр иначе нечем */
 .lb-close{top:12px;right:12px;transform:none;font-size:15px}
 .lb-nav[hidden]{display:none}
@@ -260,15 +270,15 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .txt i,.txt em{font-style:italic}
 .txt s,.txt del{color:var(--dim)}
 .txt code{font:13px/1.5 var(--font-mono);background:var(--raise);
-  padding:1px 5px;border-radius:var(--r-xs);border:1px solid var(--line)}
+  padding:2px var(--sp-1);border-radius:var(--r-xs);border:1px solid var(--line)}
 .txt pre{background:var(--raise);border:1px solid var(--line);border-radius:var(--r-sm);
-  padding:11px 13px;overflow-x:auto;margin:9px 0}
+  padding:var(--sp-3) var(--sp-3);overflow-x:auto;margin:var(--sp-2) 0}
 .txt pre code{background:none;border:0;padding:0}
-.txt blockquote{border-left:2px solid var(--line);padding-left:12px;color:var(--dim);margin:8px 0}
+.txt blockquote{border-left:2px solid var(--line);padding-left:var(--sp-3);color:var(--dim);margin:var(--sp-2) 0}
 
 /* --- Реакции --- */
-.rx{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
-.rx span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;padding:3px 9px;
+.rx{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-3)}
+.rx span{display:inline-flex;align-items:center;gap:var(--sp-1);font-size:12.5px;padding:var(--sp-1) var(--sp-2);
   border-radius:var(--r-pill);background:var(--raise);border:1px solid var(--line);color:var(--dim);
   font-variant-numeric:tabular-nums}
 /* Реакция без значка: только счётчик, никакого овала вместо эмодзи */
@@ -276,16 +286,16 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .rx span.paid{color:var(--paid);border-color:color-mix(in srgb,var(--paid) 32%,var(--line))}
 
 /* --- Пересылка и цитата --- */
-.orig{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);margin-bottom:7px}
+.orig{display:flex;align-items:center;gap:var(--sp-2);font-size:12.5px;color:var(--dim);margin-bottom:var(--sp-2)}
 .orig a{color:inherit;text-decoration:none}
 .orig a:hover{color:var(--acc)}
-.quote{border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:0 0 10px;
+.quote{border-left:2px solid var(--line);padding:2px 0 2px var(--sp-3);margin:0 0 var(--sp-3);
   font-size:13.5px;color:var(--dim)}
 .quote .who{color:var(--fg);font-weight:600}
 .quote .line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60ch}
 
 /* --- Файл --- */
-.doc{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-sm);margin-top:10px;
+.doc{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);margin-top:var(--sp-3);
   background:var(--raise);border:1px solid var(--line);color:inherit;text-decoration:none;
   transition:border-color .16s}
 .doc:hover{border-color:var(--acc)}
@@ -293,7 +303,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .doc .mt{font-size:12px;color:var(--dim)}
 
 /* --- Карточка ссылки --- */
-.preview{display:flex;gap:12px;margin-top:11px;padding:11px;border-radius:var(--r-sm);
+.preview{display:flex;gap:var(--sp-3);margin-top:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-sm);
   background:var(--raise);border:1px solid var(--line);color:inherit;text-decoration:none;
   transition:border-color .16s}
 .preview:hover{border-color:var(--acc)}
@@ -303,30 +313,30 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .preview .nm{font-size:13.5px;font-weight:600;line-height:1.35}
 .preview .ds{font-size:12.5px;color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
-.sticker{width:132px;margin-top:9px;display:block}
+.sticker{width:132px;margin-top:var(--sp-2);display:block}
 
 /* ---------- Каталог ---------- */
-.filters{display:flex;gap:8px;overflow-x:auto;padding:4px 0 14px;scrollbar-width:none}
+.filters{display:flex;gap:var(--sp-2);overflow-x:auto;padding:var(--sp-1) 0 var(--sp-4);scrollbar-width:none}
 .filters::-webkit-scrollbar{display:none}
 .filter-scroll{position:relative}
 .filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
   pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
-.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:9px 12px;border-radius:var(--r-pill);
+.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-pill);
   cursor:pointer;white-space:nowrap}
 
 .channel-list{display:grid;gap:2px}
-.channel-entry{min-width:0;padding:8px 0;border-bottom:1px solid var(--line)}
-.channel-row{display:flex;align-items:center;gap:12px;min-height:64px}
-.channel-open{flex:1;min-width:0;display:flex;align-items:center;gap:13px;padding:8px 10px;
+.channel-entry{min-width:0;padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}
+.channel-row{display:flex;align-items:center;gap:var(--sp-3);min-height:64px}
+.channel-open{flex:1;min-width:0;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-3);
   border:0;border-radius:var(--r-sm);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
   transition:background .16s}
 .channel-open:hover,.channel-open[aria-expanded=true]{background:var(--surf)}
 .channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-round);
   background:var(--acc-cont);color:var(--on-acc-cont);font-size:16px;font-weight:500}
-.channel-copy{display:grid;gap:3px;min-width:0;flex:1}
+.channel-copy{display:grid;gap:var(--sp-1);min-width:0;flex:1}
 .channel-fresh{font-size:12px;color:var(--dim)}
 .channel-name{font-size:15px;font-weight:500;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.channel-preview-label{flex:0 0 auto;min-height:40px;display:flex;align-items:center;padding:8px 16px;
+.channel-preview-label{flex:0 0 auto;min-height:40px;display:flex;align-items:center;padding:var(--sp-2) var(--sp-4);
   border-radius:var(--r-pill);font-size:14px;font-weight:500}
 /* На телефоне подпись «Посмотреть» уступает шеврону: строка и так кнопка,
    а текстовая подпись внутри кнопки читалась третьим элементом управления */
@@ -334,89 +344,89 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .channel-chevron{transform:rotate(-90deg)}
 .channel-meta{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.channel-count{display:grid;gap:1px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
+.channel-count{display:grid;gap:2px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:11px}
-.channel-action{flex:0 0 auto;min-width:108px;min-height:40px;padding:8px 16px;border-radius:var(--r-pill);
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+.channel-action{flex:0 0 auto;min-width:108px;min-height:40px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-pill);
+  display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 /* Знак появляется только там, где подпись не помещается, — на телефоне */
 .channel-action .i{display:none}
 .empty-action{color:var(--acc);border:0;background:none;font:inherit;font-size:14px;font-weight:500;
-  min-height:40px;padding:8px 12px;border-radius:var(--r-pill);cursor:pointer}
-.channel-form{display:flex;gap:8px;margin:2px 0 8px}
+  min-height:40px;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-pill);cursor:pointer}
+.channel-form{display:flex;gap:var(--sp-2);margin:2px 0 var(--sp-2)}
 /* Поле M3 «filled»: заливка, скруглены только верхние углы, линия снизу. Фокус
    утолщает линию до акцента, не сдвигая текст. */
 /* Поле добавления канала — той же пилюлей, что поиск и кнопки рядом */
-.channel-form input{flex:1;min-width:0;min-height:44px;padding:9px 16px;border:0;
+.channel-form input{flex:1;min-width:0;min-height:44px;padding:var(--sp-2) var(--sp-4);border:0;
   border-radius:var(--r-pill);background:var(--surf-hi);color:var(--fg);font:inherit;font-size:16px}
 .channel-form input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--acc)}
 .channel-form input::placeholder{color:var(--faint)}
-.channel-state{min-height:0;margin:0 0 8px;color:var(--dim);font-size:12.5px}
+.channel-state{min-height:0;margin:0 0 var(--sp-2);color:var(--dim);font-size:12.5px}
 .channel-state:empty{display:none}
 .channel-state[data-error="true"]{color:var(--error)}
-.auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px}
+.auth-screen{min-height:100svh;display:grid;place-items:center;padding:var(--sp-6) var(--sp-4)}
 /* Заставка до ответа сервера о входе: экран входа под ней не мелькает */
-.boot-screen{min-height:100svh;display:flex;align-items:center;justify-content:center;gap:8px;
+.boot-screen{min-height:100svh;display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
   color:var(--dim);font-size:15px;font-weight:600}
-.auth-card{width:min(100%,440px);padding:32px;background:var(--surf);border-radius:var(--r-xl);box-shadow:var(--sh-2)}
+.auth-card{width:min(100%,440px);padding:var(--sp-6);background:var(--surf);border-radius:var(--r-xl);box-shadow:var(--sh-2)}
 /* Название и знак: раньше продукт не называл себя нигде, и первые восемь
    секунд экрана входа не говорили ни слова о том, что это за вещь */
-.auth-brand{display:flex;align-items:center;gap:8px;margin-bottom:14px;color:var(--dim);
+.auth-brand{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-4);color:var(--dim);
   font-size:12.5px;font-weight:650;letter-spacing:.02em}
 .brand-mark{width:17px;height:17px;color:var(--acc)}
 .auth-card h1{font-size:28px;line-height:36px;font-weight:400;letter-spacing:0}
-.auth-card>p{margin-top:9px;color:var(--dim);font-size:14px;line-height:1.55}
-.auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:3px;margin:24px 0 18px;
+.auth-card>p{margin-top:var(--sp-2);color:var(--dim);font-size:14px;line-height:1.55}
+.auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:var(--sp-1);margin:var(--sp-5) 0 var(--sp-4);
   border:1px solid var(--edge);border-radius:var(--r-pill)}
 .auth-modes button{min-height:38px;border:0;border-radius:var(--r-pill);background:none;color:var(--fg);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
-.auth-form{display:grid;gap:8px}
-.auth-form label{margin-top:8px;font-size:13px;font-weight:600}
-.auth-form input{width:100%;min-height:48px;padding:10px 16px;border:0;border-radius:var(--r-xs) var(--r-xs) 0 0;
+.auth-form{display:grid;gap:var(--sp-2)}
+.auth-form label{margin-top:var(--sp-2);font-size:13px;font-weight:600}
+.auth-form input{width:100%;min-height:48px;padding:var(--sp-3) var(--sp-4);border:0;border-radius:var(--r-xs) var(--r-xs) 0 0;
   background:var(--surf-hi);box-shadow:inset 0 -1px 0 var(--edge);color:var(--fg);font:inherit;font-size:16px}
 .auth-form input:focus{outline:none;box-shadow:inset 0 -2px 0 var(--acc)}
 .auth-help{min-height:20px;color:var(--dim);font-size:12.5px}
 .auth-message{min-height:20px;color:var(--error);font-size:13px}
 .auth-message[data-success="true"]{color:var(--acc)}
-.auth-form .btn{width:100%;margin-top:5px}
+.auth-form .btn{width:100%;margin-top:var(--sp-2)}
 .auth-form .empty-action{justify-self:start;padding-left:0}
-.auth-footnote{margin-top:20px!important;font-size:12px!important;color:var(--faint)!important}
-.account-name{padding:12px 0;font-size:15px;font-weight:650}
-.account-actions{display:flex;gap:8px;margin-top:12px}
+.auth-footnote{margin-top:var(--sp-5)!important;font-size:12px!important;color:var(--faint)!important}
+.account-name{padding:var(--sp-3) 0;font-size:15px;font-weight:650}
+.account-actions{display:flex;gap:var(--sp-2);margin-top:var(--sp-3)}
 .account-actions button{flex:1}
-.feed-warning{margin:0 0 12px;padding:10px 12px;border-radius:var(--r-sm);
+.feed-warning{margin:0 0 var(--sp-3);padding:var(--sp-3) var(--sp-3);border-radius:var(--r-sm);
   background:color-mix(in srgb,var(--error) 10%,var(--surf));color:var(--fg);font-size:13px;
-  display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+  display:flex;gap:var(--sp-3);align-items:flex-start;justify-content:space-between}
 .feed-warning-x{flex:none;width:26px;height:26px;margin:-4px -4px 0 0;padding:0;border:0;
   border-radius:var(--r-xs);background:transparent;color:var(--dim);font-size:18px;line-height:1;
   cursor:pointer}
 .feed-warning-x:hover{background:var(--raise);color:var(--fg)}
-.load-more{display:block;margin:16px auto 28px}
-.feed-empty-more{padding:20px 16px;text-align:center;color:var(--dim)}
+.load-more{display:block;margin:var(--sp-4) auto var(--sp-6)}
+.feed-empty-more{padding:var(--sp-5) var(--sp-4);text-align:center;color:var(--dim)}
 
 /* Снэкбар M3: инверсная поверхность у нижнего края. Лежит в шапке, поэтому
    позиционируется от окна и держится без размытия шапки. */
 .undo-bar{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);
   z-index:40;width:min(560px,calc(100% - 32px));margin:0;display:flex;align-items:center;
-  justify-content:space-between;gap:12px;padding:12px 8px 12px 16px;border-radius:var(--r-xs);
+  justify-content:space-between;gap:var(--sp-3);padding:var(--sp-3) var(--sp-2) var(--sp-3) var(--sp-4);border-radius:var(--r-xs);
   background:var(--inv-surf);color:var(--inv-fg);font-size:14px;line-height:20px;box-shadow:var(--sh-2)}
-.undo-btn{flex:0 0 auto;min-height:36px;padding:6px 12px;border:0;border-radius:var(--r-pill);background:none;
+.undo-btn{flex:0 0 auto;min-height:36px;padding:var(--sp-2) var(--sp-3);border:0;border-radius:var(--r-pill);background:none;
   color:var(--inv-acc);font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 .undo-btn:hover{background:color-mix(in srgb,var(--inv-acc) 8%,transparent)}
 /* Статус синхронизации: плашка под шапкой, кнопка «Повторить» текстовая */
-.sync-status{margin:8px 2px 0;padding:8px 12px;border-radius:var(--r-sm);background:var(--surf-hi);
+.sync-status{margin:var(--sp-2) 2px 0;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);background:var(--surf-hi);
   color:var(--dim);font-size:13px;line-height:20px}
-.sync-status button{margin-left:6px;padding:4px 10px;border:0;border-radius:var(--r-pill);background:none;
+.sync-status button{margin-left:var(--sp-2);padding:var(--sp-1) var(--sp-3);border:0;border-radius:var(--r-pill);background:none;
   color:var(--acc);font:inherit;font-weight:500;cursor:pointer}
 .sync-status button:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 /* ---------- Состояния ---------- */
-.empty{color:var(--dim);text-align:center;padding:64px 24px;display:grid;gap:10px;justify-items:center}
+.empty{color:var(--dim);text-align:center;padding:var(--sp-8) var(--sp-5);display:grid;gap:var(--sp-3);justify-items:center}
 .empty svg.i{width:28px;height:28px;color:var(--faint)}
 .empty p{max-width:38ch;font-size:14px;line-height:1.6}
 /* Три вида кнопок, как в Material 3. Главное действие заливается акцентом,
    второстепенные обведены или тональны, текстовые без рамки. Слой состояния
    считается по спецификации: 8% на наведении, 12% при нажатии. */
-.btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 24px;border:0;
+.btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-5);border:0;
   border-radius:var(--r-pill);cursor:pointer;background:var(--acc);color:var(--acc-ink);
   text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
   transition:background .2s var(--ease)}
@@ -426,10 +436,12 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .toggle,.channel-action,.chan-action,.channel-preview-label,.filters button{
   background:none;border:1px solid var(--edge);color:var(--fg);transition:background .2s var(--ease)}
 /* текстовые кнопки без рамки и заливки: первая кнопка диалога, ссылки-действия */
-#meTabs button{flex:1 1 auto}
-#meTabs{margin:14px 0 16px}
+#meTabs button,#sortTabs button{flex:1 1 0;justify-content:center}
+/* Текстовые кнопки в ленте сдвинуты на свой внутренний отступ, чтобы текст встал на линию колонки */
+.tabs-wrap>.quiet-btn{margin-left:calc(var(--sp-3) * -1)}
+#meTabs{margin:var(--sp-4) 0 var(--sp-4)}
 #readToggle[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
-.quiet-btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 12px;border:0;
+.quiet-btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
   border-radius:var(--r-pill);background:none;color:var(--acc);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
 .filters button:hover,.chan-item:hover,.seg button:hover,.auth-modes button:hover,
@@ -450,7 +462,7 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 :disabled{cursor:default;opacity:.38}
 /* Оверлей профиля. position:fixed обязателен — иначе блок раздвигает страницу. */
 .ov{position:fixed;inset:0;z-index:100;background:var(--overlay);
-  display:none;align-items:center;justify-content:center;padding:16px}
+  display:none;align-items:center;justify-content:center;padding:var(--sp-4)}
 .ov.open{display:flex}
 /* страница под оверлеем не крутится: иначе свайп по кадру уводит ленту вниз,
    а её текст просвечивает сквозь подложку */
@@ -461,52 +473,54 @@ body:has(.ov.open){overflow:hidden}
 /* Диалог M3: поверхность, скругление 28, заголовок headline, действия справа */
 .dlg{width:min(420px,100%);max-height:86vh;overflow:auto;display:flex;flex-direction:column;
   background:var(--surf);color:var(--fg);
-  border-radius:var(--r-xl);padding:24px;box-shadow:var(--sh-2)}
-.dlg h2{font-size:24px;line-height:32px;font-weight:400;margin-bottom:8px;letter-spacing:0}
-.dlg p{color:var(--dim);font-size:14px;margin-bottom:16px;line-height:1.55}
-.dlg .empty{padding:20px}
-.account-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:16px}
+  border-radius:var(--r-xl);padding:var(--sp-5);box-shadow:var(--sh-2)}
+.dlg h2{font-size:24px;line-height:32px;font-weight:400;margin-bottom:var(--sp-2);letter-spacing:0}
+.dlg p{color:var(--dim);font-size:14px;margin-bottom:var(--sp-4);line-height:1.55}
+.dlg .empty{padding:var(--sp-5)}
+.account-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-4)}
 .account-actions button,.account-actions .btn{flex:0 0 auto}
 .dlg input{min-height:44px}
 /* Профиль отдельным экраном: карточка во всю страницу, без внутренней прокрутки */
-.me-page{width:min(560px,100%);max-height:none;overflow:visible;margin:0 auto;padding:24px 24px 56px}
-@media(max-width:640px){.me-page{padding:18px 16px 56px;border-radius:0;box-shadow:none}}
+.me-page{width:min(748px,100%);max-height:none;overflow:visible;margin:0 auto;padding:var(--sp-5) var(--sp-5) var(--sp-8)}
+@media(max-width:640px){.me-page{padding:var(--sp-4) var(--sp-4) var(--sp-8);border-radius:0;box-shadow:none}}
 body.view-solo .search{display:none}
 /* Экран каналов: панель выше профиля и без своих отступов по краю окна — на
    телефоне она занимает весь экран, иначе список снова оказывается тесным. */
-.ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 24px 24px}
-.ov .dlg-channels h2{padding-top:24px;margin-bottom:12px}
+.ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 var(--sp-5) var(--sp-5)}
+.ov .dlg-channels h2{padding-top:var(--sp-5);margin-bottom:var(--sp-3)}
 .ov .dlg-channels .chan-list{flex:0 1 auto;min-height:0}
-.ov .dlg-channels .account-actions{margin-top:12px}
+.ov .dlg-channels .account-actions{margin-top:var(--sp-3)}
   /* Настройки оформления в оверлее профиля */
-  .dlg .settings{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
-  .dlg .settings h3{font-size:14px;margin:0 0 4px}
-  .dlg .settings-hint{font-size:12.5px;color:var(--faint);margin:0 0 12px}
-.keys{display:grid;gap:6px;margin:0}
-.keys>div{display:flex;align-items:baseline;gap:10px}
-.keys dt{flex:0 0 auto;min-width:44px;text-align:center;padding:3px 8px;border-radius:var(--r-xs);
+  .dlg .settings{margin-top:var(--sp-4);padding-top:var(--sp-4);border-top:1px solid var(--line)}
+  .dlg .settings h3{font-size:14px;margin:0 0 var(--sp-1)}
+  .dlg .settings-hint{font-size:12.5px;color:var(--faint);margin:0 0 var(--sp-3)}
+.keys{display:grid;gap:var(--sp-2);margin:0}
+.keys>div{display:flex;align-items:baseline;gap:var(--sp-3)}
+.keys dt{flex:0 0 auto;min-width:44px;text-align:center;padding:var(--sp-1) var(--sp-2);border-radius:var(--r-xs);
   border:1px solid var(--line);background:var(--bg);color:var(--acc);font:inherit;font-size:12px;font-weight:600}
 .keys dd{margin:0;color:var(--dim);font-size:13px}
-.chan-head{padding:14px 2px 8px;border-top:1px solid var(--line);margin-top:8px}
+.chan-head{padding:var(--sp-4) 2px var(--sp-2);border-top:1px solid var(--line);margin-top:var(--sp-2)}
 .chan-head:first-child{border-top:0;margin-top:0;padding-top:2px}
 .chan-head h3{margin:0;font-size:12px;letter-spacing:.02em;color:var(--dim)}
-.tg-row .chan-open{border:0;background:none;padding:9px 2px;color:var(--fg);
+.tg-row .chan-open{border:0;background:none;padding:var(--sp-2) 2px;color:var(--fg);
   font:inherit;font-size:14.5px;min-height:44px;opacity:1;cursor:default}
-.chan-action{display:flex;align-items:center;justify-content:space-between;gap:8px;
-  width:100%;min-height:44px;padding:9px 16px;margin-bottom:6px;font:inherit;font-size:14px;
+.chan-action{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);
+  width:100%;min-height:44px;padding:var(--sp-2) var(--sp-4);margin-bottom:var(--sp-2);font:inherit;font-size:14px;
   text-align:left;cursor:pointer;background:none;border:1px solid var(--edge);
   border-radius:var(--r-pill);color:var(--fg)}
 .chan-action .chan-count{color:var(--dim);font-size:12px;white-space:nowrap}
   /* при переносе на две строки пилюля-контейнер перекрывает кнопки по углам: радиус меньше */
-  .dlg .settings .seg{width:100%;margin-bottom:8px;display:flex;flex-wrap:wrap;border-radius:var(--r-xl)}
+  .dlg .settings .seg{width:100%;margin-bottom:var(--sp-2);display:flex;flex-wrap:wrap;border-radius:var(--r-xl)}
   /* кнопка занимает всю свободную ширину ряда, а текст внутри по центру:
      иначе одинокая кнопка в конце ряда выглядит пустой и перекошенной */
   .dlg .settings .seg button{flex:1 1 auto;justify-content:center}
-  .dlg .seg-label{font-size:12.5px;color:var(--dim);margin:14px 0 6px}
+  .dlg .seg-label{font-size:12.5px;color:var(--dim);margin:var(--sp-4) 0 var(--sp-2)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
+/* Отметка стоит краем на линии текста. Кнопка 44 px, значок в ней по центру,
+   поэтому сдвиг равен половине кнопки минус половине значка: 14 px для галки, 18 px для точки */
 .read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
-  margin:-10px 0 -10px -10px;border-radius:var(--r-round)}
-.read-toggle{color:var(--acc)}
+  margin:-8px 0 -8px -14px;border-radius:var(--r-round)}
+.read-toggle{color:var(--acc);margin-left:-18px}
 .read-toggle .dot{width:8px;height:8px}
 /* Галка отметки — знак состояния, а не кнопка: рамка у неё делала вид,
    будто в шапке каждого поста стоит лишний блок. Клик остался. */
@@ -514,8 +528,8 @@ body.view-solo .search{display:none}
 .read-status:hover{color:var(--acc)}
 
 .skel{background:var(--surf);border-radius:var(--r-md);
-  padding:15px 17px;margin-bottom:12px}
-.skel i{display:block;height:10px;border-radius:var(--r-xs);background:var(--raise);margin-bottom:9px;
+  padding:var(--sp-4);margin-bottom:var(--sp-3)}
+.skel i{display:block;height:10px;border-radius:var(--r-xs);background:var(--raise);margin-bottom:var(--sp-2);
   animation:breathe 1.4s ease-in-out infinite}
 .skel i:nth-child(2){width:42%}
 .skel i:nth-child(3){width:100%;height:56px}
@@ -538,14 +552,14 @@ body.view-solo .search{display:none}
    и переключатель разделов при этом ещё и наезжал на сортировку. */
 .tabbar{display:none}
 .m-brand,.m-search-btn{display:none}
-.sort-row{margin:0 0 16px}
+.sort-row{margin:0 0 var(--sp-4)}
 @media(max-width:640px){
   /* Нижняя панель M3: иконка сидит в пилюле, которая заливается у текущего раздела.
      Пилюля 64×32 центрирована по иконке 24px, поэтому её верх на 8px выше иконки. */
   .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;
     z-index:30;background:var(--surf);padding-bottom:env(safe-area-inset-bottom)}
   .tabbar-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-    gap:4px;min-height:64px;padding:12px 4px 8px;background:none;border:0;font:inherit;font-size:12px;
+    gap:var(--sp-1);min-height:64px;padding:var(--sp-3) var(--sp-1) var(--sp-2);background:none;border:0;font:inherit;font-size:12px;
     font-weight:500;color:var(--dim);cursor:pointer}
   .tabbar-item::before{content:'';position:absolute;top:8px;left:50%;width:64px;height:32px;margin-left:-32px;
     border-radius:var(--r-pill);background:transparent}
@@ -553,14 +567,14 @@ body.view-solo .search{display:none}
   .tabbar-item[aria-current="page"]{color:var(--fg)}
   .tabbar-item[aria-current="page"]::before{background:var(--sec-cont)}
   .tabbar-item[aria-current="page"] .i{color:var(--on-sec-cont)}
-  #appShell{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  #appShell{padding-bottom:calc(var(--sp-8) + env(safe-area-inset-bottom))}
   /* снэкбар над нижней панелью, иначе панель его закрывает */
   .undo-bar{bottom:calc(80px + env(safe-area-inset-bottom))}
   /* шапка: поиск, название, непрочитанные — один ряд */
   #sectionTabs{display:none}
   #meBtn{display:none}
   .bar{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
-    gap:8px;align-items:center}
+    gap:var(--sp-2);align-items:center}
   .m-brand{grid-area:brand;display:block;font-size:22px;line-height:28px;font-weight:400;letter-spacing:0}
   .m-search-btn{grid-area:qtoggle;display:grid;place-items:center;width:44px;height:44px;
     background:none;border:0;border-radius:var(--r-round);color:var(--fg);cursor:pointer}
@@ -572,29 +586,28 @@ body.view-solo .search{display:none}
 }
 
 @media(max-width:640px){
-  header{padding:6px 10px;padding-top:calc(6px + env(safe-area-inset-top))}
-  .bar{gap:6px}
+  header{padding:var(--sp-2) var(--sp-4);padding-top:calc(var(--sp-2) + env(safe-area-inset-top))}
+  .bar{gap:var(--sp-2)}
   #unreadBtn .u-label{display:none}
   #unreadBtn .u-count:empty{display:none}
-  .seg button{padding:8px 10px;font-size:13px}
-  main{padding-left:14px;padding-right:14px}
-  .tabs-wrap{padding:12px 14px 8px}
+  .seg button{padding:var(--sp-2) var(--sp-3);font-size:13px}
+  main{padding-left:var(--sp-4);padding-right:var(--sp-4)}
+  .tabs-wrap{padding:var(--sp-3) var(--sp-4) var(--sp-2)}
   .chan-list{max-height:none}
   .ov:has(.dlg-channels){padding:0}
-  .ov .dlg-channels{width:100%;height:auto;max-height:100%;border-radius:0;padding:0 14px calc(14px + env(safe-area-inset-bottom))}
-  .ov .dlg-channels h2{padding-top:calc(20px + env(safe-area-inset-top))}
+  .ov .dlg-channels{width:100%;height:auto;max-height:100%;border-radius:0;padding:0 var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+  .ov .dlg-channels h2{padding-top:calc(var(--sp-5) + env(safe-area-inset-top))}
   .ov .dlg-channels .chan-list{flex:0 1 auto;max-height:none}
-  .catalog-main{padding-top:22px}
-  .catalog-head{margin-bottom:18px}
+  .catalog-head{margin-bottom:var(--sp-4)}
   .catalog-head h2{font-size:21px}
-  .auth-card{padding:24px 20px}
+  .auth-card{padding:var(--sp-5) var(--sp-5)}
   .auth-card h1{font-size:23px}
-  .post{padding:16px 16px;margin-bottom:13px}
+  .post{padding:var(--sp-4) var(--sp-4);margin-bottom:var(--sp-3)}
   .txt{max-width:none}
   .channel-form{align-items:stretch}
-  .channel-form .btn{padding-left:11px;padding-right:11px}
-  .channel-row{gap:8px}
-  .channel-open{gap:10px;padding:7px 4px}
+  .channel-form .btn{padding-left:var(--sp-3);padding-right:var(--sp-3)}
+  .channel-row{gap:var(--sp-2)}
+  .channel-open{gap:var(--sp-3);padding:var(--sp-2) var(--sp-1)}
   .channel-mark{width:38px;height:38px;flex-basis:38px}
   .channel-count{display:none}
   /* На телефоне имя канала — единственное, что строка вообще сообщает.
@@ -631,6 +644,7 @@ body.view-solo .search{display:none}
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.6 20a7.6 7.6 0 0 1 14.8 0"/></symbol>
   <symbol id="i-video" viewBox="0 0 24 24"><rect x="2.5" y="5" width="14" height="14" rx="2"/><path d="m16.5 10.5 5-3v9l-5-3z"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="m21 3-9.5 9.5M21 3l-6.5 18-3.5-7-7-3.5Z"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17L12 16.6l-5.5 4z"/></symbol>
@@ -666,6 +680,7 @@ body.view-solo .search{display:none}
   <!-- Заголовок невидим глазом, но нужен экранному диктору: без него внутри
      приложения нечему сказать, где человек находится -->
   <h1 class="sr-only">Лента</h1>
+  <div class="pull" id="pull" aria-hidden="true"><svg class="i"><use href="#i-refresh"/></svg><span>Потяни, чтобы обновить</span></div>
   <div class="tabs-wrap">
   <button id="tabsToggle" class="tabs-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="channelsOvl">
     <svg class="i"><use href="#i-grid"/></svg>
@@ -1500,12 +1515,12 @@ async function pollFresh(){
   }catch(e){ return; }
   if(context !== pollContext() || feedLoading) return;
   const shown = new Set([...($('#postList')?.children || [])].map(el => el.dataset.post).filter(Boolean));
-  const fresh = (d.posts || []).filter(p => !shown.has(key(p)));
+  // Новее верха ленты, а не просто не на экране: без прочитанных сервер дозаполняет
+  // страницу старыми постами, и счётчик врал бы «10 новых» при одной публикации.
+  const fresh = (d.posts || []).filter(p => !shown.has(key(p)) && Number(p.ts) > newestPost);
   if(!fresh.length) return;
-  if(window.scrollY < 120 && !$('#feed').contains(document.activeElement)){
-    load(false, true);
-    return;
-  }
+  // Новые посты ленту сами не меняют: иначе прочитанное пропадало бы без предупреждения.
+  // Обновляет человек, кнопкой «Показать новые» или жестом «потянуть вниз».
   const btn = $('#newPosts');
   btn.textContent = 'Показать ' + fresh.length + ' ' + plural(fresh.length, 'новую публикацию', 'новые публикации', 'новых публикаций');
   btn.hidden = false;
@@ -1515,6 +1530,39 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && Date.now() - pollStamp > 30000) pollFresh();
 });
 $('#newPosts').onclick = () => { window.scrollTo({top:0}); load(false, true); };
+// Высота шапки меняется с поиском и переносами строк: кнопка «Показать новые» липнет под ней
+new ResizeObserver(() => document.documentElement.style.setProperty('--head-h', $('header').offsetHeight + 'px')).observe($('header'));
+
+// Потянуть ленту вниз у её верха обновляет её. Высота индикатора идёт вполовину
+// за пальцем, поэтому порог 96 px даёт ему полные 48 px.
+const PULL_GO = 96;
+let pullFrom = null, pullDy = 0;
+const paintPull = (dy, busy=false) => {
+  const el = $('#pull');
+  el.style.height = busy ? '48px' : dy ? Math.min(dy/2, 48)+'px' : '';
+  el.toggleAttribute('data-drag', !busy && dy > 0);
+  el.toggleAttribute('data-busy', busy);
+  el.querySelector('span').textContent = busy ? 'Обновляю…' : dy >= PULL_GO ? 'Отпусти, чтобы обновить' : 'Потяни, чтобы обновить';
+};
+const pullReady = () => window.scrollY <= 0 && !$('#viewFeed').hidden && !document.querySelector('.ov.open');
+document.addEventListener('touchstart', e => {
+  pullFrom = e.touches.length === 1 && pullReady() ? e.touches[0].clientY : null;
+  pullDy = 0;
+}, {passive:true});
+document.addEventListener('touchmove', e => {
+  if(pullFrom === null) return;
+  pullDy = Math.max(0, e.touches[0].clientY - pullFrom);
+  paintPull(pullDy);
+}, {passive:true});
+document.addEventListener('touchend', () => {
+  if(pullFrom === null) return;
+  const go = pullDy >= PULL_GO;
+  pullFrom = null;
+  if(!go){ paintPull(0); return; }
+  paintPull(0, true);
+  load(false, true).finally(() => paintPull(0));
+});
+document.addEventListener('touchcancel', () => { pullFrom = null; paintPull(0); });
 
 const DOC_ICON = {audio:'audio', voice:'audio', video:'video', roundvideo:'video',
                   gif:'file', sticker:'file', file:'file'};
