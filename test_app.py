@@ -14,6 +14,7 @@ import time
 import types
 import unittest
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from http.server import ThreadingHTTPServer
 from types import SimpleNamespace
 from urllib.error import HTTPError
@@ -1360,6 +1361,41 @@ class ThemeContrastTest(unittest.TestCase):
             for text, bg in self.TEXT_ON_BG:
                 with self.subTest(theme=theme, text=text, bg=bg):
                     self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
+
+
+class ShellNesting(HTMLParser):
+    """Запоминает, в каких элементах с id стоит каждый элемент с id."""
+
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+    def __init__(self):
+        super().__init__()
+        self.open = []
+        self.parents = {}
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if "id" in attrs:
+            self.parents[attrs["id"]] = [i for _, i in self.open if i]
+        if tag not in self.VOID:
+            self.open.append((tag, attrs.get("id")))
+
+    def handle_endtag(self, tag):
+        while self.open:
+            name, _ = self.open.pop()
+            if name == tag:
+                break
+
+
+class GuestNavigationTest(unittest.TestCase):
+    """Гость видит экран входа, а не нижнюю панель: она должна жить внутри оболочки приложения."""
+
+    def test_tab_bar_lives_inside_app_shell(self):
+        nesting = ShellNesting()
+        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
+            nesting.feed(page.read())
+        self.assertIn("appShell", nesting.parents["tabBar"])
+        self.assertNotIn("appShell", nesting.parents["authScreen"])
 
 
 class DatabaseModeTest(unittest.TestCase):

@@ -851,6 +851,17 @@ body.view-solo .search{display:none}
     </div>
   </div>
 </section>
+
+<nav class="tabbar" id="tabBar" aria-label="Навигация">
+  <button type="button" class="tabbar-item" id="tbFeed" aria-current="page">
+    <svg class="i"><use href="#i-send"/></svg><span>Лента</span></button>
+  <button type="button" class="tabbar-item" id="tbCat">
+    <svg class="i"><use href="#i-grid"/></svg><span>Каталог</span></button>
+  <button type="button" class="tabbar-item" id="tbSaved">
+    <svg class="i"><use href="#i-bookmark"/></svg><span>Сохранённое</span></button>
+  <button type="button" class="tabbar-item" id="tbMe">
+    <svg class="i"><use href="#i-user"/></svg><span>Профиль</span></button>
+</nav>
 </div>
 
 <div class="ov" id="channelsOvl" role="dialog" aria-modal="true" aria-labelledby="channelsTitle" aria-hidden="true">
@@ -894,17 +905,6 @@ body.view-solo .search{display:none}
     <p class="auth-footnote">Для ленты не нужен аккаунт Telegram. Восстановить пароль можно по подтверждённой почте.</p>
   </section>
 </main>
-
-<nav class="tabbar" id="tabBar" aria-label="Навигация">
-  <button type="button" class="tabbar-item" id="tbFeed" aria-current="page">
-    <svg class="i"><use href="#i-send"/></svg><span>Лента</span></button>
-  <button type="button" class="tabbar-item" id="tbCat">
-    <svg class="i"><use href="#i-grid"/></svg><span>Каталог</span></button>
-  <button type="button" class="tabbar-item" id="tbSaved">
-    <svg class="i"><use href="#i-bookmark"/></svg><span>Сохранённое</span></button>
-  <button type="button" class="tabbar-item" id="tbMe">
-    <svg class="i"><use href="#i-user"/></svg><span>Профиль</span></button>
-</nav>
 
 <script>
 const $ = s => document.querySelector(s);
