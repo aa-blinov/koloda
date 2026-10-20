@@ -128,7 +128,7 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
    остаётся: на ней видно, какой канал открыт. Отступы 12/16/8 — как был ряд,
    иначе кнопка упирается в края окна. */
 /* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
-.fresh{margin:var(--sp-2) 0 0;color:var(--faint);font-size:11.5px;min-height:0}
+.fresh{margin:var(--sp-2) 0 0;color:var(--faint);font-size:12px;min-height:0}
 /* Кнопка «Показать N новых публикаций»: заливка акцентом, липнет под шапкой */
 .new-posts{display:block;position:sticky;top:calc(var(--head-h,72px) + var(--sp-2));z-index:5;margin:var(--sp-2) auto 0;padding:var(--sp-2) var(--sp-4);
   border:0;border-radius:var(--r-pill);background:var(--acc);color:var(--acc-ink);
@@ -207,7 +207,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .meta .who:hover{color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .meta .who::after{content:'';flex:0 0 auto}
 .chan-dot{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:var(--r-round);
-  background:var(--acc-cont);color:var(--on-acc-cont);font-size:11px;font-weight:500}
+  background:var(--acc-cont);color:var(--on-acc-cont);font-size:12px;font-weight:500}
 .meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
@@ -309,7 +309,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .preview:hover{border-color:var(--acc)}
 .preview img{width:84px;height:62px;object-fit:cover;border-radius:var(--r-sm);flex:0 0 auto;margin:0}
 .preview .body{min-width:0;display:grid;gap:2px;align-content:center}
-.preview .site{font-size:11.5px;color:var(--acc);letter-spacing:.01em}
+.preview .site{font-size:12px;color:var(--acc);letter-spacing:.01em}
 .preview .nm{font-size:13.5px;font-weight:600;line-height:1.35}
 .preview .ds{font-size:12.5px;color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
@@ -345,7 +345,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .channel-meta{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:2px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
-.channel-count small{color:var(--faint);font-size:11px}
+.channel-count small{color:var(--faint);font-size:12px}
 .channel-action{flex:0 0 auto;min-width:108px;min-height:40px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-pill);
   display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
@@ -364,7 +364,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .channel-state{min-height:0;margin:0 0 var(--sp-2);color:var(--dim);font-size:12.5px}
 .channel-state:empty{display:none}
 .channel-state[data-error="true"]{color:var(--error)}
-.auth-screen{min-height:100svh;display:grid;place-items:center;padding:var(--sp-6) var(--sp-4)}
+.auth-screen{min-height:100svh;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:var(--sp-6) var(--sp-4)}
 /* Заставка до ответа сервера о входе: экран входа под ней не мелькает */
 .boot-screen{min-height:100svh;display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
   color:var(--dim);font-size:15px;font-weight:600}
@@ -527,6 +527,9 @@ body.view-solo .search{display:none}
 .read-status{border:0;background:none;color:var(--dim);cursor:pointer}
 .read-status:hover{color:var(--acc)}
 
+/* Точка в строке статуса: инлайн-элемент не держит размер, поэтому блок. Кольцо 3 px выходит
+   влево, сдвиг на ту же величину ставит его на линию полей */
+.fresh .dot{display:inline-block;vertical-align:middle;margin:0 var(--sp-1) 0 calc(var(--sp-1) * .75)}
 .skel{background:var(--surf);border-radius:var(--r-md);
   padding:var(--sp-4);margin-bottom:var(--sp-3)}
 .skel i{display:block;height:10px;border-radius:var(--r-xs);background:var(--raise);margin-bottom:var(--sp-2);
@@ -559,7 +562,7 @@ body.view-solo .search{display:none}
   .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;
     z-index:30;background:var(--surf);padding-bottom:env(safe-area-inset-bottom)}
   .tabbar-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-    gap:var(--sp-1);min-height:64px;padding:var(--sp-3) var(--sp-1) var(--sp-2);background:none;border:0;font:inherit;font-size:12px;
+    gap:var(--sp-1);min-height:64px;padding:var(--sp-3) var(--sp-1) var(--sp-2);background:none;border:0;font:inherit;font-size:12px;line-height:var(--sp-4);
     font-weight:500;color:var(--dim);cursor:pointer}
   .tabbar-item::before{content:'';position:absolute;top:8px;left:50%;width:64px;height:32px;margin-left:-32px;
     border-radius:var(--r-pill);background:transparent}
@@ -573,10 +576,10 @@ body.view-solo .search{display:none}
   /* шапка: поиск, название, непрочитанные — один ряд */
   #sectionTabs{display:none}
   #meBtn{display:none}
-  .bar{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
+  .bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
     gap:var(--sp-2);align-items:center}
   .m-brand{grid-area:brand;display:block;font-size:22px;line-height:28px;font-weight:400;letter-spacing:0}
-  .m-search-btn{grid-area:qtoggle;display:grid;place-items:center;width:44px;height:44px;
+  .m-search-btn{grid-area:qtoggle;justify-self:end;display:grid;place-items:center;width:44px;height:44px;
     background:none;border:0;border-radius:var(--r-round);color:var(--fg);cursor:pointer}
   .m-search-btn[aria-expanded="true"]{background:var(--sec-cont);color:var(--on-sec-cont)}
   /* поиск появляется по требованию и занимает второй ряд */
@@ -586,6 +589,8 @@ body.view-solo .search{display:none}
 }
 
 @media(max-width:640px){
+  /* Касание: на телефоне кнопки и сегменты не ниже 44 px, как у системных элементов */
+  .quiet-btn,.toggle,.btn,.act-btn,.undo-btn,.seg button,.auth-modes button,.empty-action,.sync-status button{min-height:44px}
   header{padding:var(--sp-2) var(--sp-4);padding-top:calc(var(--sp-2) + env(safe-area-inset-top))}
   .bar{gap:var(--sp-2)}
   #unreadBtn .u-label{display:none}
@@ -600,7 +605,7 @@ body.view-solo .search{display:none}
   .ov .dlg-channels .chan-list{flex:0 1 auto;max-height:none}
   .catalog-head{margin-bottom:var(--sp-4)}
   .catalog-head h2{font-size:21px}
-  .auth-card{padding:var(--sp-5) var(--sp-5)}
+  .auth-card{width:100%;padding:0;background:none;border-radius:0;box-shadow:none}
   .auth-card h1{font-size:23px}
   .post{padding:var(--sp-4) var(--sp-4);margin-bottom:var(--sp-3)}
   .txt{max-width:none}
