@@ -480,8 +480,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .quiet-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
   border-radius:var(--radius);background:none;color:var(--acc);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
-.filters button:hover,.chan-item:hover,.seg button:hover,.auth-modes button:hover,
-.read-toggle:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.filters button:hover,.chan-item:hover,.seg button:hover,.auth-modes button:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
 .quiet-btn:hover,.empty-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 /* Выбранное: тональный контейнер без рамки, как сегмент и чип в M3. Идёт после
    наведения и нажатия, поэтому перекрывает их при той же специфичности. */
@@ -490,8 +489,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .channel-action.is-on{background:var(--sec-cont);border-color:transparent;color:var(--on-sec-cont);font-weight:500}
 /* Нажатие: слой 12% поверх фона. Палец на кнопке виден, даже когда кнопка без заливки */
 .toggle:active,.channel-action:active,.chan-action:active,.channel-preview-label:active,
-.filters button:active,.chan-item:active,.seg button:active,.auth-modes button:active,
-.read-toggle:active{background:color-mix(in srgb,var(--fg) 12%,transparent)}
+.filters button:active,.chan-item:active,.seg button:active,.auth-modes button:active{background:color-mix(in srgb,var(--fg) 12%,transparent)}
 .quiet-btn:active,.empty-action:active{background:color-mix(in srgb,var(--acc) 12%,transparent)}
 /* Отключённая кнопка обязана отличаться: её гасят одиннадцать раз, и без этого
    «Загружаю…» выглядит живой кнопкой, на которую смело жмут. */
@@ -557,16 +555,12 @@ body.view-solo .search{display:none}
   .dlg .settings .seg button{flex:1 1 auto;justify-content:center}
   .dlg .seg-label{font-size:12.5px;color:var(--dim);margin:var(--sp-4) 0 var(--sp-2)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
-/* Отметка стоит краем на линии текста. Кнопка 44 px, значок в ней по центру,
-   поэтому сдвиг равен половине кнопки минус половине значка: 14 px для галки, 18 px для точки */
-.read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
-  margin:-8px 0 -8px -14px;border-radius:var(--radius)}
-.read-toggle{color:var(--acc);margin-left:-18px}
-.read-toggle .dot{width:8px;height:8px}
-/* Галка отметки — знак состояния, а не кнопка: рамка у неё делала вид,
-   будто в шапке каждого поста стоит лишний блок. Клик остался. */
-.read-status{border:0;background:none;color:var(--dim);cursor:pointer}
-.read-status:hover{color:var(--acc)}
+/* Точка непрочитанного: не кнопка, поэтому без наведения и фокуса. Прочитанный пост точку прячет.
+   Кнопка 44 px со значком по центру: сдвиг держит точку краем на линии текста */
+.unread-dot{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
+  margin:-8px 0 -8px -18px;color:var(--acc)}
+.unread-dot .dot{width:8px;height:8px}
+.unread-dot.is-read{visibility:hidden}
 
 /* Точка в строке статуса: инлайн-элемент не держит размер, поэтому блок. Кольцо 3 px выходит
    влево, сдвиг на ту же величину ставит его на линию полей */
@@ -902,7 +896,7 @@ body.view-solo .search{display:none}
         <div><dt>j</dt><dd>следующий пост</dd></div>
         <div><dt>k</dt><dd>предыдущий пост</dd></div>
         <div><dt>n</dt><dd>к первому непрочитанному</dd></div>
-        <div><dt>u</dt><dd>снять или вернуть отметку</dd></div>
+        <div><dt>u</dt><dd>вернуть в непрочитанные</dd></div>
         <div><dt>/</dt><dd>поиск</dd></div>
         <div><dt>?</dt><dd>эта подсказка</dd></div>
         <div><dt>Esc</dt><dd>закрыть окно</dd></div>
@@ -1793,16 +1787,10 @@ function render(posts,append=false){
   if(!list.length && feedHasMore){
     const note=$('#feedPageNote'); note.hidden=false; note.textContent='В этой части нет непрочитанных постов.';
   }
-  // Шесть одинаковых кнопок «Прочитано» подряд ни о чём не говорили: подписи
-  // различают только канал и дата, иначе экранный диктор читает шесть одинаковых.
-  const readMark = (who, when) => {
-    const what = 'Прочитано: '+(who||'пост')+(when?', '+when:'');
-    return '<button type="button" class="read-status" aria-label="Вернуть в непрочитанные: '+esc(what)+'" title="'+esc(what)+'">'
-      +icon('check')+'<span class="sr-only">'+esc(what)+'</span></button>';
-  };
-  const NEW_MARK  = '<span class="read-toggle" title="Новое"><span class="dot" aria-hidden="true"></span></span>';
-  // делегирование: авто-отметка подменяет точку на галочку через outerHTML,
-  // и слушатель на каждый элемент повесить нельзя — пропадёт при подмене
+  // Непрочитанный пост помечен синей точкой, у прочитанного точки нет. Точка не кнопка:
+  // отметка ставится сама, когда пост виден на экране, вернуть её можно клавишей u.
+  const unreadDot = read => '<span class="unread-dot'+(read?' is-read':'')+'"'+(read?'':' title="Новое"')+' aria-hidden="true"><span class="dot"></span></span>';
+  // делегирование: один слушатель на все посты, даже когда их перерисовывают
   postList.addEventListener('click', e => {
     const who = e.target.closest('.meta .who');
     if(who){
@@ -1810,20 +1798,6 @@ function render(posts,append=false){
       load();
       return;
     }
-    const btn = e.target.closest('.read-status');
-    if(!btn) return;
-    const post = btn.closest('.post');
-    // сняли галочку — наблюдатель больше не вернёт отметку сам на этой же
-    // странице, иначе пост уходил бы обратно в прочитанные при первом же свипе
-    postSeen.unobserve(post);
-    if(!markUnread(post.dataset.post)) return;
-    post.classList.remove('read');
-    // Кнопка уходила в span, и фокус проваливался в body. Ставим его на
-    // замену: клавиатурный пользователь остаётся на том же посте.
-    btn.outerHTML = NEW_MARK;
-    // Фокус на кнопке, которая исчезла, без возврата падал в body. Отдаём его
-    // самому посту: он и есть то место, где человек только что находился.
-    post.focus({preventScroll:true});
   });
   // Размер группы заранее: разделитель рисуем только там, где он скрывает
   // переход, то есть подряд стоит больше одного поста одного дня.
@@ -1844,7 +1818,7 @@ function render(posts,append=false){
     el.dataset.url = p.url || ('https://t.me/' + key(p));
     el.innerHTML =
       '<div class="meta">'+
-        (read ? readMark(titles[p.channel] || p.channel, when(p.ts)) : NEW_MARK)+
+        unreadDot(read)+
         '<button type="button" class="who" data-chan="'+esc(p.channel)+'" title="Показать только этот канал">'+
           chanMark(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
         '<span class="meta-end">'+
@@ -1857,8 +1831,7 @@ function render(posts,append=false){
       if(seen().has(key(p))) return;
       markRead(p);
       el.classList.add('read');
-      const dot = el.querySelector('.read-toggle');
-      if(dot) dot.outerHTML = readMark(titles[p.channel] || p.channel, when(p.ts));
+      el.querySelector('.unread-dot')?.classList.add('is-read');
     };
     // Пост засчитывается прочитанным, когда его видно целиком. Клик для этого
     // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
@@ -2372,9 +2345,12 @@ function jumpUnread(){
 function markFocused(){
   const post = focusedPost();
   if(!post) return;
-  const back = post.querySelector('.read-status');
-  if(back){ back.click(); return; }
-  // непрочитанный отмечается сам, когда пост целиком виден — просто показываем его
+  // u возвращает прочитанный пост в непрочитанные; непрочитанный отмечается сам, когда виден
+  if(post.classList.contains('read') && markUnread(post.dataset.post)){
+    post.classList.remove('read');
+    post.querySelector('.unread-dot')?.classList.remove('is-read');
+    return;
+  }
   focusPost(post);
 }
 
