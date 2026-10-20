@@ -23,6 +23,8 @@ from urllib.request import Request, urlopen
 from unittest.mock import patch
 
 import app
+import qrcodegen
+import qrsvg
 
 
 def fake_post(channel, msg_id, ts):
@@ -1444,6 +1446,81 @@ class FontFileTest(unittest.TestCase):
         self.assertEqual(self.fetch("/fonts/LICENSE-JetBrainsMono.txt")[0], 404)
         self.assertEqual(self.fetch("/fonts/../app.py")[0], 404)
         self.assertEqual(self.fetch("/fonts/%2E%2E%2Fapp.py")[0], 404)
+
+
+class QrSvgTest(unittest.TestCase):
+    """QR-код входа: телефон сканирует с экрана компьютера, поэтому каждая тёмная клетка должна быть нарисована."""
+
+    def test_every_dark_module_of_the_link_is_drawn(self):
+        url = "tg://login?token=" + "AbC_-9" * 6
+        code = qrcodegen.QrCode.encode_text(url, qrcodegen.QrCode.Ecc.MEDIUM)
+        n = code.get_size()
+        dark = sum(code.get_module(x, y) for y in range(n) for x in range(n))
+        drawn = qrsvg.svg(url)
+        self.assertEqual(drawn.count("h1v1h-1z"), dark)
+        # цвета задаются классами из index.html, сами по себе в SVG их нет
+        self.assertNotIn("#", drawn)
+
+
+class QrLinkResponseTest(unittest.TestCase):
+    """Вход в Telegram отдаёт QR вместе со ссылкой, пока вход ждёт подтверждения."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="telegram-lenta-test-")
+        self.previous_db = app.DB
+        app.DB = self.temp.name + "/feed.db"
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+        patcher = patch.object(app.tg, "installed", lambda: True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(app.tg._pending.clear)
+        req = Request(self.base + "/api/auth/register", method="POST",
+                      data=json.dumps({"username": "qrlink", "password": "long-password-1"}).encode(),
+                      headers={"Content-Type": "application/json"})
+        with urlopen(req, timeout=5) as response:
+            self.cookie = response.headers.get("Set-Cookie", "").split(";", 1)[0]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        app.DB = self.previous_db
+        self.temp.cleanup()
+
+    def call(self, path, data):
+        req = Request(self.base + path, method="POST", data=json.dumps(data).encode(),
+                      headers={"Content-Type": "application/json", "Cookie": self.cookie})
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    def test_start_answers_with_a_qr_of_the_link(self):
+        url = "tg://login?token=QrStart123"
+        with patch.object(app.tg, "start_link", return_value={"state": "waiting", "token": "t1", "url": url}):
+            status, body = self.call("/api/tg/link/start", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["url"], url)
+        self.assertEqual(body["qr"], qrsvg.svg(url))
+
+    def test_poll_refreshes_the_qr_while_waiting(self):
+        url = "tg://login?token=QrPoll456"
+        with patch.object(app.tg, "poll_link", return_value={"state": "waiting", "url": url}):
+            status, body = self.call("/api/tg/link/poll", {"token": "t1"})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["qr"], qrsvg.svg(url))
+
+    def test_finished_login_has_no_qr_left_to_scan(self):
+        account = {"phone": "+70000000000", "title": "Тест"}
+        with patch.object(app.tg, "poll_link", return_value={"state": "done", "account": account}):
+            status, body = self.call("/api/tg/link/poll", {"token": "t1"})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["state"], "done")
+        self.assertNotIn("qr", body)
 
 
 class ShellNesting(HTMLParser):

@@ -54,6 +54,8 @@
   --scroll-thumb:#504945; --scroll-thumb-hover:#665c54;
   --paid:#fabd2f; --error:#ff7b6b; --media-bg:#000; --selection-fg:#282828;
   --overlay:rgba(0,0,0,.4);
+  /* QR-код входа: тёмный на светлом в обеих темах, иначе сканер его не берёт */
+  --qr-paper:#ffffff; --qr-ink:#000000;
   /* Плоско в покое: тень только у диалога и при подъёме карточки */
   --sh-1:0 1px 2px rgba(0,0,0,.03);
   --sh-2:0 25px 50px -12px rgba(0,0,0,.5);
@@ -512,6 +514,11 @@ body:has(.ov.open){overflow:hidden}
 .dlg p{color:var(--dim);font-size:14px;margin-bottom:var(--sp-4);line-height:1.55}
 .dlg .empty{padding:var(--sp-5)}
 .account-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-4)}
+/* QR-код входа: тёмный код на светлой бумаге, тихая зона внутри самого SVG */
+.tg-qr{width:min(100%,224px);margin:var(--sp-3) 0;padding:var(--sp-3);border-radius:var(--radius);background:var(--qr-paper)}
+.tg-qr svg{display:block;width:100%;height:auto}
+.qr-paper{fill:var(--qr-paper)}
+.qr-ink{fill:var(--qr-ink)}
 .account-actions button,.account-actions .btn{flex:0 0 auto}
 .dlg input{min-height:44px}
 /* Профиль отдельным экраном: карточка во всю страницу, без внутренней прокрутки */
@@ -816,6 +823,8 @@ body.view-solo .search{display:none}
         Читаются через твой вход в Telegram; публичные каналы работают и без него.</p>
       <p class="auth-message" id="tgState" role="status" aria-live="polite"></p>
       <div id="tgLink" hidden>
+        <div class="tg-qr" id="tgQr" hidden></div>
+        <p class="settings-hint">С компьютера: телефон сканирует этот код в Telegram, Настройки → Устройства → Подключить настольное устройство. С телефона: нажми «Открыть Telegram».</p>
         <div class="account-actions">
           <a class="btn" id="tgOpen" href="#" target="_blank" rel="noreferrer">Открыть Telegram</a>
         </div>
@@ -2665,12 +2674,14 @@ async function loadTgChannels(){
 // Ссылка tg://login живёт около 30 секунд. Пока окно открыто, опрос отдаёт свежую
 // ссылку, и она подменяется в «Открыть Telegram» до того, как её нажмут.
 let tgTimer=null;
-const stopTg=()=>{ clearInterval(tgTimer); tgTimer=null; };
+const setTgQr=svg=>{ const box=$('#tgQr'); box.innerHTML=svg||''; box.hidden=!svg; };
+const stopTg=()=>{ clearInterval(tgTimer); tgTimer=null; setTgQr(''); };
 const refreshTgLink=async()=>{
   if(!tgToken) return stopTg();
   try{
     const d=await tgPost('/api/tg/link/poll',{token:tgToken});
     if(d.url) $('#tgOpen').href=d.url;
+    if(d.qr) setTgQr(d.qr);
     if(d.state==='done'){ stopTg(); setTgState('Готово, Telegram подключён'); tgToken=''; await loadTgStatus(); }
     else if(d.state==='expired'){ stopTg(); setTgState('Ссылка протухла, начни заново',true); tgToken=''; await loadTgStatus(); }
   }catch(e){}
@@ -2682,7 +2693,7 @@ $('#tgStart').onclick=async()=>{
     if(d.linked){ setTgState('Telegram уже подключён'); await loadTgStatus(); return; }
     tgToken=d.token||'';
     $('#tgOpen').href=d.url;
-    stopTg(); tgTimer=setInterval(refreshTgLink,3000);
+    stopTg(); tgTimer=setInterval(refreshTgLink,3000); setTgQr(d.qr);
     $('#tgLink').hidden=false; btn.hidden=true;
     setTgState('Открой ссылку в Telegram и подтверди вход, потом нажми «Я подтвердил вход»');
   }catch(e){ setTgState(e.message,true); }
