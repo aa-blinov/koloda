@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark" data-font="sans">
+<html lang="ru" data-theme="dark" data-font="mono">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -7,24 +7,59 @@
 <title>Колода: своя лента каналов</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21.9 2.1 2.6 9.3c-1 .4-1 1.9.1 2.2l4.6 1.4 1.7 5.2c.3 1 1.7 1.2 2.3.3l2.5-2.7 4.3 3.2c.8.6 2 .1 2.2-.9l3.6-14c.2-1-.8-1.9-1.9-1.9Z' fill='%235aa2ff'/%3E%3C/svg%3E">
 <style>
+/* JetBrains Mono отдаётся с нашего адреса (fonts/, маршрут /fonts/…): внешние серверы не нужны.
+   Переменный вес 100–800, латиница и кириллица. Лицензия SIL OFL: fonts/LICENSE-JetBrainsMono.txt. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  /* Роли Material 3: поверхности по уровням, контейнеры акцента и выделения,
+  /* Роли Monos (Gruvbox): поверхности по уровням, контейнеры акцента и выделения,
      инверсная пара для снэкбара. Пары текста считает тест ThemeContrastTest. */
-  --bg:#0C0E12; --surf:#171A1F; --surf-hi:#1C2026; --raise:#22262D;
-  --line:#444850; --edge:#72757E;
-  --fg:#E2E5EF; --dim:#A7ABB4; --faint:#8E929B;
-  --acc:#78B0FF; --acc-ink:#002F5B; --acc-cont:#3E5373; --on-acc-cont:#D6E4FF;
-  --sec-cont:#323C4C; --on-sec-cont:#B5C0D4;
-  --inv-surf:#E2E5EF; --inv-fg:#2E333A; --inv-acc:#43608A;
-  --scroll-thumb:#3A3F49; --scroll-thumb-hover:#4A505B;
-  --paid:#F0B429; --error:#FA746F; --media-bg:#000; --selection-fg:#fff;
-  --overlay:rgba(0,0,0,.6);
-  /* Тени уровней 1 и 2 из M3: поверхность держится тоном, тень лишь подсказывает слой */
-  --sh-1:0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
-  --sh-2:0 1px 3px rgba(0,0,0,.3), 0 4px 8px 3px rgba(0,0,0,.15);
-  /* Шкала форм M3: 4, 8, 12 и 28 пикселей. Кнопки, поиск и сегменты: pill. */
-  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-xl:28px;
+  --bg:#282828; --surf:#3c3836; --surf-hi:#3c3836; --raise:#504945;
+  --line:#504945; --edge:#928374;
+  --fg:#ebdbb2; --dim:#d5c4a1; --faint:#d5c4a1;
+  --acc:#9ec5b8; --acc-ink:#282828; --acc-cont:#504945; --on-acc-cont:#ebdbb2;
+  --sec-cont:#504945; --on-sec-cont:#ebdbb2;
+  --inv-surf:#ebdbb2; --inv-fg:#3c3836; --inv-acc:#05525e;
+  --scroll-thumb:#504945; --scroll-thumb-hover:#665c54;
+  --paid:#fabd2f; --error:#ff7b6b; --media-bg:#000; --selection-fg:#282828;
+  --overlay:rgba(0,0,0,.4);
+  /* Плоско в покое: тень только у диалога и при подъёме карточки */
+  --sh-1:0 1px 2px rgba(0,0,0,.03);
+  --sh-2:0 25px 50px -12px rgba(0,0,0,.5);
+  /* Один радиус на все прямоугольники. Пилюля остаётся у поиска, круг у точек и полосы прокрутки */
+  --radius:6px;
+  --r-xs:var(--radius); --r-sm:var(--radius); --r-md:var(--radius); --r-xl:var(--radius);
   --r-pill:999px; --r-round:50%;
   /* Шкала отступов: 4 px и кратные ей, 2 px только для волосяных зазоров. Значения вне
      шкалы округлены вверх: 10 → 12, 14 → 16, 20 → 24, 28 → 32, 56 → 64. */
@@ -32,26 +67,26 @@
   --sp-7:48px; --sp-8:64px;
   /* Кривая M3 emphasized для переходов и появления экранов */
   --ease:cubic-bezier(.2,0,0,1);
-  /* Шрифты: только системные, чтобы интерфейс не тянул ничего из сети */
-  --font-ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  /* Одна гарнитура, JetBrains Mono. Системные запасные нужны, если файл не загрузился */
+  --font-ui:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --font-read:var(--font-ui);
-  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 
-/* Светлая тема: те же роли на светлых тонах. Поверхность карточки темнее фона,
-   как filled-карточка M3 на surface. */
+/* Светлая тема: та же бумага Gruvbox. Четыре тона темнее оригинала, чтобы текст и ошибки
+   держали 4.5:1 на светлом фоне; причины записаны в README. */
 :root[data-theme="light"]{
-  --bg:#F9F9FE; --surf:#ECEDF5; --surf-hi:#E6E8F1; --raise:#DFE2EC;
-  --line:#C4C7D0; --edge:#777B84;
-  --fg:#2E333A; --dim:#4A4F58; --faint:#5E626B;
-  --acc:#005CAA; --acc-ink:#EEF2FF; --acc-cont:#A3C0EF; --on-acc-cont:#1C3B63;
-  --sec-cont:#D8E3F8; --on-sec-cont:#485264;
-  --inv-surf:#2E333A; --inv-fg:#F2F3FA; --inv-acc:#A3C0EF;
-  --scroll-thumb:#C3C6CF; --scroll-thumb-hover:#AEB2BB;
-  --paid:#8A5A00; --error:#A83836; --media-bg:#E9ECF1; --selection-fg:#0B1220;
-  --overlay:rgba(16,20,28,.5);
-  --sh-1:0 1px 2px rgba(20,28,44,.12), 0 1px 3px 1px rgba(20,28,44,.08);
-  --sh-2:0 1px 3px rgba(20,28,44,.2), 0 4px 8px 3px rgba(20,28,44,.1);
+  --bg:#fbf1c7; --surf:#ebdbb2; --surf-hi:#ebdbb2; --raise:#d5c4a1;
+  --line:#d5c4a1; --edge:#7c6f64;
+  --fg:#3c3836; --dim:#504945; --faint:#504945;
+  --acc:#05525e; --acc-ink:#fbf1c7; --acc-cont:#d5c4a1; --on-acc-cont:#3c3836;
+  --sec-cont:#d5c4a1; --on-sec-cont:#3c3836;
+  --inv-surf:#3c3836; --inv-fg:#fbf1c7; --inv-acc:#9ec5b8;
+  --scroll-thumb:#d5c4a1; --scroll-thumb-hover:#bdae93;
+  --paid:#5c3f00; --error:#9d0006; --media-bg:#ebdbb2; --selection-fg:#fbf1c7;
+  --overlay:rgba(60,56,54,.3);
+  --sh-1:0 1px 2px rgba(60,56,54,.04);
+  --sh-2:0 25px 50px -12px rgba(60,56,54,.3);
 }
 
 /* Шрифты на выбор: системные стеки, ничего не тянем из сети */
@@ -71,7 +106,7 @@ html{scrollbar-color:var(--scroll-thumb) transparent;overscroll-behavior-y:conta
 [hidden]{display:none!important}
 body{
   background:var(--bg); color:var(--fg);
-  font:15px/1.55 var(--font-ui);
+  font:14px/1.625 var(--font-ui);
   padding-bottom:env(safe-area-inset-bottom);
   -webkit-font-smoothing:antialiased;
 }
@@ -80,7 +115,7 @@ body{
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:var(--r-pill);border:3px solid var(--bg)}
 ::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover)}
-:focus-visible{outline:2px solid var(--acc); outline-offset:2px; border-radius:var(--r-xs)}
+:focus-visible{outline:2px solid color-mix(in srgb, var(--fg) 85%, transparent); outline-offset:2px; border-radius:var(--radius)}
 svg.i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
@@ -96,18 +131,18 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 #unreadBtn{display:inline-flex;align-items:center;gap:var(--sp-2)}
 #unreadBtn .u-count{font-variant-numeric:tabular-nums}
 /* бейдж M3: счётчик пилюлей акцента, пустой не занимает места */
-#unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 var(--sp-2);border-radius:var(--r-pill);
+#unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 var(--sp-2);border-radius:var(--radius);
   background:var(--acc);color:var(--acc-ink);font-size:12px;font-weight:500;line-height:20px;text-align:center}
 #unreadBtn .u-short{display:none}
 @media(max-width:640px){#unreadBtn .u-short{display:inline}}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 /* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
-.seg{display:flex;gap:2px;padding:var(--sp-1);border:1px solid var(--edge);border-radius:var(--r-pill)}
-.seg button{min-height:38px;padding:var(--sp-2) var(--sp-4);border:0;border-radius:var(--r-pill);background:none;
+.seg{display:flex;gap:2px;padding:var(--sp-1);border:1px solid var(--edge);border-radius:var(--radius)}
+.seg button{min-height:38px;padding:var(--sp-2) var(--sp-4);border:0;border-radius:var(--radius);background:none;
   color:var(--fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:var(--sp-2)}
 .toggle{flex:0 0 auto;font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-4);
-  border:1px solid var(--edge);border-radius:var(--r-pill);background:none;color:var(--fg);
+  border:1px solid var(--edge);border-radius:var(--radius);background:none;color:var(--fg);
   cursor:pointer;white-space:nowrap}
 /* Поле поиска M3: заполненная пилюля без рамки, фокус отмечается кольцом */
 .search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:var(--sp-3);
@@ -131,7 +166,7 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .fresh{margin:var(--sp-2) 0 0;color:var(--faint);font-size:12px;min-height:0}
 /* Кнопка «Показать N новых публикаций»: заливка акцентом, липнет под шапкой */
 .new-posts{display:block;position:sticky;top:calc(var(--head-h,72px) + var(--sp-2));z-index:5;margin:var(--sp-2) auto 0;padding:var(--sp-2) var(--sp-4);
-  border:0;border-radius:var(--r-pill);background:var(--acc);color:var(--acc-ink);
+  border:0;border-radius:var(--radius);background:var(--acc);color:var(--acc-ink);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--sh-1)}
 /* Жест «потянуть, чтобы обновить»: высота идёт за пальцем, после отпускания схлопывается */
 .pull{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
@@ -142,14 +177,14 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 /* Действия под постом: сохранить для потом и поделиться */
 .post-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-3)}
 .act-btn{display:inline-flex;align-items:center;gap:var(--sp-2);min-height:36px;padding:var(--sp-2) var(--sp-4);
-  border:1px solid var(--edge);border-radius:var(--r-pill);background:none;color:var(--fg);
-  font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+  border:0;border-radius:var(--radius);background:none;color:var(--fg);
+  font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
 .act-btn:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
 .act-save[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont);border-color:transparent}
 /* Экран канала: заголовок, подписка и последние публикации */
 .ch-page{max-width:748px;margin:0 auto;padding:var(--sp-5) var(--sp-5) var(--sp-8)}
 .ch-back{padding-left:0;margin-bottom:var(--sp-2)}
-.ch-page h2{font-size:24px;line-height:1.25;font-weight:400;margin:var(--sp-1) 0 var(--sp-1);letter-spacing:0}
+.ch-page h2{font-size:24px;line-height:1.25;font-weight:700;margin:var(--sp-1) 0 var(--sp-1);letter-spacing:-0.025em}
 .ch-meta{color:var(--dim);font-size:14px;margin-bottom:var(--sp-4)}
 .ch-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center;margin-bottom:var(--sp-3)}
 .ch-actions .quiet-btn{text-decoration:none}
@@ -159,13 +194,13 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .hist-head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-3);font-size:13.5px}
 .hist-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .hist-state{flex:0 0 auto;color:var(--dim);font-size:12.5px}
-.hist-bar{height:4px;margin-top:var(--sp-2);border-radius:var(--r-pill);background:var(--raise);overflow:hidden}
+.hist-bar{height:4px;margin-top:var(--sp-2);border-radius:var(--radius);background:var(--raise);overflow:hidden}
 .hist-bar i{display:block;height:100%;background:var(--acc)}
 .fresh:empty{display:none}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:var(--sp-3) var(--sp-5) var(--sp-2)}
 .tabs-toggle{display:flex;align-items:center;gap:var(--sp-2);width:100%;
   min-height:44px;padding:var(--sp-3) var(--sp-4);font:inherit;font-size:14px;text-align:left;cursor:pointer;
-  background:var(--surf-hi);border:0;border-radius:var(--r-pill);color:var(--fg)}
+  background:var(--surf-hi);border:0;border-radius:var(--radius);color:var(--fg)}
 .tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
 .tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
 .tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
@@ -182,16 +217,16 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 #feed{max-width:748px;margin-inline:auto}
 .catalog-main{padding-top:var(--sp-5)}
 .catalog-head{margin:var(--sp-2) 0 var(--sp-5)}
-.catalog-head h2{font-size:24px;line-height:1.25;font-weight:400;letter-spacing:0}
+.catalog-head h2{font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-0.025em}
 .catalog-head p{margin-top:var(--sp-2);color:var(--dim);font-size:14px;max-width:60ch}
 
 .post:not(:has(.gal,.doc,.preview,.photo)){max-width:calc(34em + 42px)}
 /* Карточка M3 «filled»: поверхность тоном, без рамки и подъёма. Наведение: слой 8% */
-.post{position:relative;scroll-margin-top:80px;content-visibility:auto;contain-intrinsic-size:auto 480px;background:var(--surf);border-radius:var(--r-md);
+.post{position:relative;scroll-margin-top:80px;content-visibility:auto;contain-intrinsic-size:auto 480px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);
   padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-3);
   transition:background .2s var(--ease), opacity .18s}
 .post:hover{background:color-mix(in srgb,var(--fg) 8%,var(--surf))}
-.post.read{background:color-mix(in srgb,var(--surf) 78%,var(--bg))}
+.post.read{background:var(--bg)}
 
 .day-sep{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-5) 0 var(--sp-3);color:var(--faint);
   font-size:12px;font-weight:600;letter-spacing:.01em}
@@ -214,6 +249,8 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
 .meta .stat{display:flex;align-items:center;gap:var(--sp-1);color:var(--faint);font-variant-numeric:tabular-nums}
 
+/* Метаданные-шёпот: прописные с разрядкой, как подписи в DESIGN.md */
+.day-sep,.fresh{text-transform:uppercase;letter-spacing:.12em;font-size:12px}
 .post img,.post video{width:100%;max-height:460px;object-fit:cover;display:block;border-radius:var(--r-md);margin:var(--sp-1) 0 var(--sp-3);
   background:var(--media-bg);border:1px solid var(--line)}
 /* Альбом: свайп по горизонтали, счётчик кадров поверх последнего */
@@ -240,7 +277,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .gal-broken{flex:0 0 auto;display:grid;place-items:center;min-width:200px;min-height:160px;padding:var(--sp-3);
   border-radius:var(--r-md);background:var(--raise);color:var(--dim);font-size:13px;text-align:center;text-decoration:none}
 .gal-broken:hover{color:var(--acc)}
-.gal-n{position:absolute;right:8px;bottom:8px;padding:2px var(--sp-2);border-radius:var(--r-pill);
+.gal-n{position:absolute;right:8px;bottom:8px;padding:2px var(--sp-2);border-radius:var(--radius);
   background:color-mix(in srgb,var(--bg) 82%,transparent);color:var(--fg);font-size:12px;
   font-variant-numeric:tabular-nums;box-shadow:0 0 0 1px var(--line);
   pointer-events:none}
@@ -251,10 +288,10 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* Подложка плотнее общей: под кадром не должно быть видно страницу */
 #lightbox{background:var(--bg)}
 .lb-n{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
-  padding:var(--sp-1) var(--sp-3);border-radius:var(--r-pill);background:rgba(0,0,0,.62);color:#fff;
+  padding:var(--sp-1) var(--sp-3);border-radius:var(--radius);background:rgba(0,0,0,.62);color:#fff;
   font-size:12.5px;font-variant-numeric:tabular-nums;pointer-events:none}
 .lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;
-  border-radius:var(--r-round);background:rgba(0,0,0,.55);color:#fff;border:0;font-size:20px;
+  border-radius:var(--radius);background:rgba(0,0,0,.55);color:#fff;border:0;font-size:20px;
   display:flex;align-items:center;justify-content:center;cursor:pointer}
 .lb-nav:hover{background:rgba(0,0,0,.75)}
 .lb-prev{left:16px}.lb-next{right:16px}
@@ -279,7 +316,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* --- Реакции --- */
 .rx{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-3)}
 .rx span{display:inline-flex;align-items:center;gap:var(--sp-1);font-size:12.5px;padding:var(--sp-1) var(--sp-2);
-  border-radius:var(--r-pill);background:var(--raise);border:1px solid var(--line);color:var(--dim);
+  border-radius:var(--radius);background:var(--raise);border:1px solid var(--line);color:var(--dim);
   font-variant-numeric:tabular-nums}
 /* Реакция без значка: только счётчик, никакого овала вместо эмодзи */
 .rx span.bare{color:var(--dim)}
@@ -321,7 +358,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .filter-scroll{position:relative}
 .filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
   pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
-.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-pill);
+.filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);
   cursor:pointer;white-space:nowrap}
 
 .channel-list{display:grid;gap:2px}
@@ -337,7 +374,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .channel-fresh{font-size:12px;color:var(--dim)}
 .channel-name{font-size:15px;font-weight:500;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-preview-label{flex:0 0 auto;min-height:40px;display:flex;align-items:center;padding:var(--sp-2) var(--sp-4);
-  border-radius:var(--r-pill);font-size:14px;font-weight:500}
+  border-radius:var(--radius);font-size:14px;font-weight:500}
 /* На телефоне подпись «Посмотреть» уступает шеврону: строка и так кнопка,
    а текстовая подпись внутри кнопки читалась третьим элементом управления */
 .channel-chevron{display:none;flex:0 0 auto;color:var(--faint);transition:transform .16s}
@@ -346,13 +383,13 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .channel-desc{font-size:12.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .channel-count{display:grid;gap:2px;justify-items:end;flex:0 0 auto;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums}
 .channel-count small{color:var(--faint);font-size:12px}
-.channel-action{flex:0 0 auto;min-width:108px;min-height:40px;padding:var(--sp-2) var(--sp-4);border-radius:var(--r-pill);
+.channel-action{flex:0 0 auto;min-width:108px;min-height:40px;padding:var(--sp-2) var(--sp-4);border-radius:var(--radius);
   display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 /* Знак появляется только там, где подпись не помещается, — на телефоне */
 .channel-action .i{display:none}
 .empty-action{color:var(--acc);border:0;background:none;font:inherit;font-size:14px;font-weight:500;
-  min-height:40px;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-pill);cursor:pointer}
+  min-height:40px;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);cursor:pointer}
 .channel-form{display:flex;gap:var(--sp-2);margin:2px 0 var(--sp-2)}
 /* Поле M3 «filled»: заливка, скруглены только верхние углы, линия снизу. Фокус
    утолщает линию до акцента, не сдвигая текст. */
@@ -368,23 +405,23 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* Заставка до ответа сервера о входе: экран входа под ней не мелькает */
 .boot-screen{min-height:100svh;display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
   color:var(--dim);font-size:15px;font-weight:600}
-.auth-card{width:min(100%,440px);padding:var(--sp-6);background:var(--surf);border-radius:var(--r-xl);box-shadow:var(--sh-2)}
+.auth-card{width:min(100%,440px);padding:var(--sp-6);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--sh-2)}
 /* Название и знак: раньше продукт не называл себя нигде, и первые восемь
    секунд экрана входа не говорили ни слова о том, что это за вещь */
 .auth-brand{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-4);color:var(--dim);
   font-size:12.5px;font-weight:650;letter-spacing:.02em}
 .brand-mark{width:17px;height:17px;color:var(--acc)}
-.auth-card h1{font-size:28px;line-height:36px;font-weight:400;letter-spacing:0}
+.auth-card h1{font-size:28px;line-height:36px;font-weight:700;letter-spacing:-0.025em}
 .auth-card>p{margin-top:var(--sp-2);color:var(--dim);font-size:14px;line-height:1.55}
 .auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:var(--sp-1);margin:var(--sp-5) 0 var(--sp-4);
-  border:1px solid var(--edge);border-radius:var(--r-pill)}
-.auth-modes button{min-height:38px;border:0;border-radius:var(--r-pill);background:none;color:var(--fg);
+  border:1px solid var(--edge);border-radius:var(--radius)}
+.auth-modes button{min-height:38px;border:0;border-radius:var(--radius);background:none;color:var(--fg);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 .auth-form{display:grid;gap:var(--sp-2)}
 .auth-form label{margin-top:var(--sp-2);font-size:13px;font-weight:600}
-.auth-form input{width:100%;min-height:48px;padding:var(--sp-3) var(--sp-4);border:0;border-radius:var(--r-xs) var(--r-xs) 0 0;
-  background:var(--surf-hi);box-shadow:inset 0 -1px 0 var(--edge);color:var(--fg);font:inherit;font-size:16px}
-.auth-form input:focus{outline:none;box-shadow:inset 0 -2px 0 var(--acc)}
+.auth-form input{width:100%;min-height:48px;padding:var(--sp-3) 0;border:0;border-radius:0;
+  background:none;box-shadow:inset 0 -1px 0 var(--edge);color:var(--fg);font:inherit;font-size:16px}
+.auth-form input:focus{outline:none;box-shadow:inset 0 -2px 0 var(--dim)}
 .auth-help{min-height:20px;color:var(--dim);font-size:12.5px}
 .auth-message{min-height:20px;color:var(--error);font-size:13px}
 .auth-message[data-success="true"]{color:var(--acc)}
@@ -410,13 +447,13 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   z-index:40;width:min(560px,calc(100% - 32px));margin:0;display:flex;align-items:center;
   justify-content:space-between;gap:var(--sp-3);padding:var(--sp-3) var(--sp-2) var(--sp-3) var(--sp-4);border-radius:var(--r-xs);
   background:var(--inv-surf);color:var(--inv-fg);font-size:14px;line-height:20px;box-shadow:var(--sh-2)}
-.undo-btn{flex:0 0 auto;min-height:36px;padding:var(--sp-2) var(--sp-3);border:0;border-radius:var(--r-pill);background:none;
+.undo-btn{flex:0 0 auto;min-height:36px;padding:var(--sp-2) var(--sp-3);border:0;border-radius:var(--radius);background:none;
   color:var(--inv-acc);font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 .undo-btn:hover{background:color-mix(in srgb,var(--inv-acc) 8%,transparent)}
 /* Статус синхронизации: плашка под шапкой, кнопка «Повторить» текстовая */
 .sync-status{margin:var(--sp-2) 2px 0;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);background:var(--surf-hi);
   color:var(--dim);font-size:13px;line-height:20px}
-.sync-status button{margin-left:var(--sp-2);padding:var(--sp-1) var(--sp-3);border:0;border-radius:var(--r-pill);background:none;
+.sync-status button{margin-left:var(--sp-2);padding:var(--sp-1) var(--sp-3);border:0;border-radius:var(--radius);background:none;
   color:var(--acc);font:inherit;font-weight:500;cursor:pointer}
 .sync-status button:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 /* ---------- Состояния ---------- */
@@ -426,8 +463,8 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* Три вида кнопок, как в Material 3. Главное действие заливается акцентом,
    второстепенные обведены или тональны, текстовые без рамки. Слой состояния
    считается по спецификации: 8% на наведении, 12% при нажатии. */
-.btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-5);border:0;
-  border-radius:var(--r-pill);cursor:pointer;background:var(--acc);color:var(--acc-ink);
+.btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-5);border:0;
+  border-radius:var(--radius);cursor:pointer;background:var(--acc);color:var(--acc-ink);
   text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
   transition:background .2s var(--ease)}
 .btn:hover{background:color-mix(in srgb,var(--acc-ink) 8%,var(--acc))}
@@ -441,8 +478,8 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .tabs-wrap>.quiet-btn{margin-left:calc(var(--sp-3) * -1)}
 #meTabs{margin:var(--sp-4) 0 var(--sp-4)}
 #readToggle[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
-.quiet-btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
-  border-radius:var(--r-pill);background:none;color:var(--acc);cursor:pointer}
+.quiet-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
+  border-radius:var(--radius);background:none;color:var(--acc);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
 .filters button:hover,.chan-item:hover,.seg button:hover,.auth-modes button:hover,
 .read-toggle:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
@@ -472,9 +509,9 @@ body:has(.ov.open){overflow:hidden}
    вместе — безвкусная связка, которую ловит детектор. */
 /* Диалог M3: поверхность, скругление 28, заголовок headline, действия справа */
 .dlg{width:min(420px,100%);max-height:86vh;overflow:auto;display:flex;flex-direction:column;
-  background:var(--surf);color:var(--fg);
-  border-radius:var(--r-xl);padding:var(--sp-5);box-shadow:var(--sh-2)}
-.dlg h2{font-size:24px;line-height:32px;font-weight:400;margin-bottom:var(--sp-2);letter-spacing:0}
+  background:var(--bg);color:var(--fg);border:1px solid var(--line);
+  border-radius:var(--radius);padding:var(--sp-6);box-shadow:var(--sh-2)}
+.dlg h2{font-size:24px;line-height:32px;font-weight:700;margin-bottom:var(--sp-2);letter-spacing:-0.025em}
 .dlg p{color:var(--dim);font-size:14px;margin-bottom:var(--sp-4);line-height:1.55}
 .dlg .empty{padding:var(--sp-5)}
 .account-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-4)}
@@ -507,7 +544,7 @@ body.view-solo .search{display:none}
 .chan-action{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);
   width:100%;min-height:44px;padding:var(--sp-2) var(--sp-4);margin-bottom:var(--sp-2);font:inherit;font-size:14px;
   text-align:left;cursor:pointer;background:none;border:1px solid var(--edge);
-  border-radius:var(--r-pill);color:var(--fg)}
+  border-radius:var(--radius);color:var(--fg)}
 .chan-action .chan-count{color:var(--dim);font-size:12px;white-space:nowrap}
   /* при переносе на две строки пилюля-контейнер перекрывает кнопки по углам: радиус меньше */
   .dlg .settings .seg{width:100%;margin-bottom:var(--sp-2);display:flex;flex-wrap:wrap;border-radius:var(--r-xl)}
@@ -519,7 +556,7 @@ body.view-solo .search{display:none}
 /* Отметка стоит краем на линии текста. Кнопка 44 px, значок в ней по центру,
    поэтому сдвиг равен половине кнопки минус половине значка: 14 px для галки, 18 px для точки */
 .read-toggle,.read-status{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
-  margin:-8px 0 -8px -14px;border-radius:var(--r-round)}
+  margin:-8px 0 -8px -14px;border-radius:var(--radius)}
 .read-toggle{color:var(--acc);margin-left:-18px}
 .read-toggle .dot{width:8px;height:8px}
 /* Галка отметки — знак состояния, а не кнопка: рамка у неё делала вид,
@@ -565,11 +602,11 @@ body.view-solo .search{display:none}
     gap:var(--sp-1);min-height:64px;padding:var(--sp-3) var(--sp-1) var(--sp-2);background:none;border:0;font:inherit;font-size:12px;line-height:var(--sp-4);
     font-weight:500;color:var(--dim);cursor:pointer}
   .tabbar-item::before{content:'';position:absolute;top:8px;left:50%;width:64px;height:32px;margin-left:-32px;
-    border-radius:var(--r-pill);background:transparent}
+    border-radius:var(--radius);background:transparent}
   .tabbar-item .i{position:relative;width:24px;height:24px}
-  .tabbar-item[aria-current="page"]{color:var(--fg)}
-  .tabbar-item[aria-current="page"]::before{background:var(--sec-cont)}
-  .tabbar-item[aria-current="page"] .i{color:var(--on-sec-cont)}
+  .tabbar-item[aria-current="page"]{color:var(--fg);font-weight:700}
+  .tabbar-item[aria-current="page"]::before{background:none}
+  .tabbar-item[aria-current="page"] .i{color:var(--fg)}
   #appShell{padding-bottom:calc(var(--sp-8) + env(safe-area-inset-bottom))}
   /* снэкбар над нижней панелью, иначе панель его закрывает */
   .undo-bar{bottom:calc(80px + env(safe-area-inset-bottom))}
@@ -578,9 +615,9 @@ body.view-solo .search{display:none}
   #meBtn{display:none}
   .bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
     gap:var(--sp-2);align-items:center}
-  .m-brand{grid-area:brand;display:block;font-size:22px;line-height:28px;font-weight:400;letter-spacing:0}
+  .m-brand{grid-area:brand;display:block;font-size:22px;line-height:28px;font-weight:700;letter-spacing:-0.025em}
   .m-search-btn{grid-area:qtoggle;justify-self:end;display:grid;place-items:center;width:44px;height:44px;
-    background:none;border:0;border-radius:var(--r-round);color:var(--fg);cursor:pointer}
+    background:none;border:0;border-radius:var(--radius);color:var(--fg);cursor:pointer}
   .m-search-btn[aria-expanded="true"]{background:var(--sec-cont);color:var(--on-sec-cont)}
   /* поиск появляется по требованию и занимает второй ряд */
   .search{grid-area:search;grid-column:1/-1;display:none}
@@ -1042,7 +1079,7 @@ function applyState(data){
 // варианта «как в системе» в CSS без дублирования палитры не выразить.
 const THEMES = ['dark','light','auto'], FONTS = ['sans','serif','mono','grotesk'];
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-let settings = {theme:'dark', font:'sans'};
+let settings = {theme:'dark', font:'mono'};
 function applySettings(next){
   if(next) settings = Object.assign({}, settings, next);
   const theme = settings.theme === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : settings.theme;

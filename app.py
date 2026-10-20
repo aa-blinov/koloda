@@ -175,6 +175,9 @@ UNREAD_DAYS = 14        # непрочитанное считаем за две 
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 MIN_GZIP = 1024        # меньше килобайта сжатие не окупает служебных байт заголовка
+# Шрифты лежат в fonts/ рядом с приложением и отдаются только по этим именам
+FONT_FILES = {"jetbrains-mono-latin.woff2", "jetbrains-mono-latin-ext.woff2",
+              "jetbrains-mono-cyrillic.woff2", "jetbrains-mono-cyrillic-ext.woff2"}
 
 
 def connect():
@@ -1162,7 +1165,7 @@ def client_id(handler, db):
 
 SETTINGS_ALLOWED = {"theme": ("dark", "light", "auto"),
                     "font": ("sans", "serif", "mono", "grotesk")}
-DEFAULT_SETTINGS = {"theme": "dark", "font": "sans"}
+DEFAULT_SETTINGS = {"theme": "dark", "font": "mono"}
 
 
 def load_settings(db, cid):
@@ -1320,9 +1323,9 @@ class Handler(BaseHTTPRequestHandler):
         # сжатого размера. Сжимаем всё, кроме мелких ответов, где выигрыш
         # меньше служебных байт заголовка.
         encoding = ""
-        # картинки и видео уже сжаты, gzip на них только тратит процессор
+        # картинки, видео и шрифты уже сжаты, gzip на них только тратит процессор
         if len(b) >= MIN_GZIP and "gzip" in self.headers.get("Accept-Encoding", "") \
-                and not ctype.startswith(("image/", "video/")):
+                and not ctype.startswith(("image/", "video/", "font/")):
             b = gzip.compress(b, 6)
             encoding = "gzip"
         self.send_response(code)
@@ -1370,6 +1373,16 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/verify", "/reset"):
                 html = open(os.path.join(BASE, "index.html"), encoding="utf-8").read()
                 return self._send(200, html, "text/html; charset=utf-8")
+            # Шрифт с нашего адреса: сеть для него не нужна. Имена проверяем по списку,
+            # поэтому путь вида ../app.py сюда не попадёт
+            if path.startswith("/fonts/"):
+                name = path[len("/fonts/"):]
+                if name not in FONT_FILES:
+                    return self._send(404, json.dumps({"error": "нет такого файла"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                with open(os.path.join(BASE, "fonts", name), "rb") as font:
+                    return self._send(200, font.read(), "font/woff2",
+                                      [("Cache-Control", "public, max-age=604800")])
 
             # /api/auth/me отвечает всегда: иначе гость не отличит «сессии нет»
             # от «сервис сломан». Публичное чтение ленты и каталога тоже

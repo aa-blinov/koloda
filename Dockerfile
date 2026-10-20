@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir telethon==1.45.0
 
 # Сервис использует только стандартную библиотеку — кроме Telethon выше.
 COPY app.py index.html tg.py ./
+# Шрифт JetBrains Mono отдаётся с нашего адреса, поэтому файлы едут в образ вместе с кодом
+COPY fonts ./fonts
 
 ENV PORT=8000
 EXPOSE 8000
