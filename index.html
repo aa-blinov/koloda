@@ -230,7 +230,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .meta{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-3);font-size:12.5px;color:var(--dim)}
 .meta .who{color:var(--fg);font-weight:600;letter-spacing:-.01em;min-width:0;overflow:hidden;
   display:inline-flex;align-items:center;gap:var(--sp-2);max-width:100%;min-height:44px;
-  padding:0 var(--sp-2) 0 var(--sp-1);margin-left:-4px;
+  padding:0 var(--sp-2) 0 0;margin-left:0;
   background:none;border:0;border-radius:var(--r-xs);font:inherit;font-size:12.5px;cursor:pointer;
   text-align:left;transition:color .16s,background .16s;
   text-overflow:ellipsis;white-space:nowrap}
@@ -389,6 +389,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .empty-action{color:var(--acc);border:0;background:none;font:inherit;font-size:14px;font-weight:500;
   min-height:40px;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);cursor:pointer}
 .channel-form{display:flex;gap:var(--sp-2);margin:2px 0 var(--sp-2)}
+#channelAdd{min-height:44px}
 /* Поле M3 «filled»: заливка, скруглены только верхние углы, линия снизу. Фокус
    утолщает линию до акцента, не сдвигая текст. */
 /* Поле добавления канала — той же пилюлей, что поиск и кнопки рядом */
@@ -555,12 +556,6 @@ body.view-solo .search{display:none}
   .dlg .settings .seg button{flex:1 1 auto;justify-content:center}
   .dlg .seg-label{font-size:12.5px;color:var(--dim);margin:var(--sp-4) 0 var(--sp-2)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
-/* Точка непрочитанного: не кнопка, поэтому без наведения и фокуса. Прочитанный пост точку прячет.
-   Кнопка 44 px со значком по центру: сдвиг держит точку краем на линии текста */
-.unread-dot{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
-  margin:-8px 0 -8px -18px;color:var(--acc)}
-.unread-dot .dot{width:8px;height:8px}
-.unread-dot.is-read{visibility:hidden}
 
 /* Точка в строке статуса: инлайн-элемент не держит размер, поэтому блок. Кольцо 3 px выходит
    влево, сдвиг на ту же величину ставит его на линию полей */
@@ -603,8 +598,8 @@ body.view-solo .search{display:none}
     border-radius:var(--radius);background:transparent}
   .tabbar-item .i{position:relative;width:24px;height:24px}
   .tabbar-item[aria-current="page"]{color:var(--fg);font-weight:700}
-  .tabbar-item[aria-current="page"]::before{background:none}
-  .tabbar-item[aria-current="page"] .i{color:var(--fg)}
+  .tabbar-item[aria-current="page"]::before{background:var(--sec-cont);border-radius:var(--r-pill)}
+  .tabbar-item[aria-current="page"] .i{color:var(--on-sec-cont)}
   #appShell{padding-bottom:calc(var(--sp-8) + env(safe-area-inset-bottom))}
   /* снэкбар над нижней панелью, иначе панель его закрывает */
   .undo-bar{bottom:calc(80px + env(safe-area-inset-bottom))}
@@ -644,7 +639,7 @@ body.view-solo .search{display:none}
   .post{padding:var(--sp-4) var(--sp-4);margin-bottom:var(--sp-3)}
   .txt{max-width:none}
   .channel-form{align-items:stretch}
-  .channel-form .btn{padding-left:var(--sp-3);padding-right:var(--sp-3)}
+  #channelAdd{width:auto;min-width:0;padding:var(--sp-2) var(--sp-4)}
   .channel-row{gap:var(--sp-2)}
   .channel-open{gap:var(--sp-3);padding:var(--sp-2) var(--sp-1)}
   .channel-mark{width:38px;height:38px;flex-basis:38px}
@@ -769,7 +764,7 @@ body.view-solo .search{display:none}
       <label class="sr-only" for="channelInput">Ссылка или имя публичного канала Telegram</label>
       <input id="channelInput" type="text" placeholder="@username или t.me/username"
              autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="120">
-      <button class="btn" id="channelAdd" type="submit">Добавить по ссылке</button>
+      <button class="channel-action" id="channelAdd" type="submit">Добавить по ссылке</button>
     </form>
     <p class="channel-state" id="channelState" role="status" aria-live="polite"></p>
     <div class="filter-scroll" id="filterScroll"><div class="filters" id="cats" role="group" aria-label="Категории"></div></div>
@@ -904,7 +899,6 @@ body.view-solo .search{display:none}
     </div>
     </section>
     <div class="account-actions">
-      <button id="meClose" class="quiet-btn">Закрыть</button>
       <button id="logoutBtn" class="quiet-btn">Выйти из профиля</button>
     </div>
   </div>
@@ -1268,16 +1262,16 @@ const paintUnread = () => {
   ub.setAttribute('aria-label', unreadTotal ? 'Непрочитанные: '+unreadTotal : 'Непрочитанные');
 };
 
-// Пост прочитан, когда видно 60% карточки. Ниже порога пост просто мелькнул
-// внизу экрана, и засчитывать его рано.
+// Пост прочитан, когда его проскроллили вверх: нижний край ушёл за верхнюю границу экрана.
+// Пост, который ещё виден или лежит ниже экрана, не засчитывается.
 const markFn = new WeakMap();
 const postSeen = new IntersectionObserver((entries, obs) => {
   entries.forEach(e => {
-    if (e.intersectionRatio < 0.6) return;
+    if (e.isIntersecting || e.boundingClientRect.bottom > 0) return;
     obs.unobserve(e.target);
     markFn.get(e.target)?.();
   });
-}, {threshold:[0.6]});
+}, {threshold:[0]});
 
 const markRead = p => {
   const post=key(p), s=seen();
@@ -1787,9 +1781,6 @@ function render(posts,append=false){
   if(!list.length && feedHasMore){
     const note=$('#feedPageNote'); note.hidden=false; note.textContent='В этой части нет непрочитанных постов.';
   }
-  // Непрочитанный пост помечен синей точкой, у прочитанного точки нет. Точка не кнопка:
-  // отметка ставится сама, когда пост виден на экране, вернуть её можно клавишей u.
-  const unreadDot = read => '<span class="unread-dot'+(read?' is-read':'')+'"'+(read?'':' title="Новое"')+' aria-hidden="true"><span class="dot"></span></span>';
   // делегирование: один слушатель на все посты, даже когда их перерисовывают
   postList.addEventListener('click', e => {
     const who = e.target.closest('.meta .who');
@@ -1818,7 +1809,6 @@ function render(posts,append=false){
     el.dataset.url = p.url || ('https://t.me/' + key(p));
     el.innerHTML =
       '<div class="meta">'+
-        unreadDot(read)+
         '<button type="button" class="who" data-chan="'+esc(p.channel)+'" title="Показать только этот канал">'+
           chanMark(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
         '<span class="meta-end">'+
@@ -1831,7 +1821,6 @@ function render(posts,append=false){
       if(seen().has(key(p))) return;
       markRead(p);
       el.classList.add('read');
-      el.querySelector('.unread-dot')?.classList.add('is-read');
     };
     // Пост засчитывается прочитанным, когда его видно целиком. Клик для этого
     // не нужен, а ловушка «случайно прокрутил мимо» ушла вместе с кнопкой.
@@ -2348,7 +2337,6 @@ function markFocused(){
   // u возвращает прочитанный пост в непрочитанные; непрочитанный отмечается сам, когда виден
   if(post.classList.contains('read') && markUnread(post.dataset.post)){
     post.classList.remove('read');
-    post.querySelector('.unread-dot')?.classList.remove('is-read');
     return;
   }
   focusPost(post);
@@ -2580,7 +2568,7 @@ $('#lbClose').onclick = closeLightbox;
 // закрываем только по самой подложке: иначе тап по стрелке листает и сразу закрывает
 $('#lightbox').onclick = e => { if(e.target===e.currentTarget) closeLightbox(); };
 
-$('#meBtn').onclick=openProfile; $('#meClose').onclick=closeProfile;
+$('#meBtn').onclick=openProfile;
 document.addEventListener('click', e => {
   const btn = e.target.closest('[data-set]');
   if(btn) saveSettings({ [btn.dataset.set]: btn.dataset.value });
