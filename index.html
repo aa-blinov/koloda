@@ -522,8 +522,9 @@ body:has(.ov.open){overflow:hidden}
 .account-actions button,.account-actions .btn{flex:0 0 auto}
 .dlg input{min-height:44px}
 /* Профиль отдельным экраном: карточка во всю страницу, без внутренней прокрутки */
-.me-page{width:min(748px,100%);max-height:none;overflow:visible;margin:0 auto;padding:var(--sp-5) var(--sp-5) var(--sp-8)}
-@media(max-width:640px){.me-page{padding:var(--sp-4) var(--sp-4) var(--sp-8);border-radius:0;box-shadow:none}}
+/* Профиль — экран, а не диалог: рамка от .dlg сдвигала контент на 1 px относительно остальных */
+.me-page{width:min(748px,100%);max-height:none;overflow:visible;margin:0 auto;padding:var(--sp-5) var(--sp-5) var(--sp-8);border:0;border-radius:0;box-shadow:none}
+@media(max-width:640px){.me-page{padding:var(--sp-4) var(--sp-4) var(--sp-8)}}
 body.view-solo .search{display:none}
 /* Экран каналов: панель выше профиля и без своих отступов по краю окна — на
    телефоне она занимает весь экран, иначе список снова оказывается тесным. */
@@ -634,7 +635,7 @@ body.view-solo .search{display:none}
   .ov .dlg-channels .chan-list{flex:0 1 auto;max-height:none}
   .catalog-head{margin-bottom:var(--sp-4)}
   .catalog-head h2{font-size:21px}
-  .auth-card{width:100%;padding:0;background:none;border-radius:0;box-shadow:none}
+  .auth-card{width:100%;padding:0;background:none;border:0;border-radius:0;box-shadow:none}
   .auth-card h1{font-size:23px}
   .post{padding:var(--sp-4) var(--sp-4);margin-bottom:var(--sp-3)}
   .txt{max-width:none}
@@ -706,6 +707,7 @@ body.view-solo .search{display:none}
   <p class="undo-bar" id="undoBar" role="status" aria-live="polite" hidden></p>
   <p class="sync-status" id="syncStatus" role="status" aria-live="polite" hidden></p>
 </header>
+<div class="pull" id="pull" aria-hidden="true"><svg class="i"><use href="#i-refresh"/></svg><span>Потяни, чтобы обновить</span></div>
 
 <!-- Панель раздела без tabindex: иначе в табуляции оказываются два больших
      пустых контейнера, а роль панели достаётся вложенной ленте каналов -->
@@ -713,7 +715,6 @@ body.view-solo .search{display:none}
   <!-- Заголовок невидим глазом, но нужен экранному диктору: без него внутри
      приложения нечему сказать, где человек находится -->
   <h1 class="sr-only">Лента</h1>
-  <div class="pull" id="pull" aria-hidden="true"><svg class="i"><use href="#i-refresh"/></svg><span>Потяни, чтобы обновить</span></div>
   <div class="tabs-wrap">
   <button id="tabsToggle" class="tabs-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="channelsOvl">
     <svg class="i"><use href="#i-grid"/></svg>
@@ -1263,15 +1264,20 @@ const paintUnread = () => {
 };
 
 // Пост прочитан, когда его проскроллили вверх: нижний край ушёл за верхнюю границу экрана.
-// Пост, который ещё виден или лежит ниже экрана, не засчитывается.
+// Проверяем по прокрутке, а не через IntersectionObserver: он не сообщает о посте, который
+// рывком пролетел мимо экрана, так и не побывав на нём.
 const markFn = new WeakMap();
-const postSeen = new IntersectionObserver((entries, obs) => {
-  entries.forEach(e => {
-    if (e.isIntersecting || e.boundingClientRect.bottom > 0) return;
-    obs.unobserve(e.target);
-    markFn.get(e.target)?.();
-  });
-}, {threshold:[0]});
+let passedFrame = 0;
+const markPassed = () => {
+  passedFrame = 0;
+  for (const el of [...($('#postList')?.children || [])]) {
+    if (!el.classList.contains('post') || el.classList.contains('read')) continue;
+    if (el.getBoundingClientRect().bottom > 0) break; // дальше по списку только ниже экрана
+    markFn.get(el)?.();
+  }
+};
+const scheduleMarkPassed = () => { if (!passedFrame) passedFrame = requestAnimationFrame(markPassed); };
+window.addEventListener('scroll', scheduleMarkPassed, {passive:true});
 
 const markRead = p => {
   const post=key(p), s=seen();
@@ -1482,6 +1488,7 @@ async function load(append=false, silent=false){
       unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
+    scheduleMarkPassed();
     loadAvatars(subs());
     // В пустом состоянии render() уходит раньше и #feedEnd в разметке нет.
     // Обращение к нему бросало TypeError, и человек вместо «Ничего не нашлось»
@@ -1609,7 +1616,14 @@ const paintPull = (dy, busy=false) => {
   el.toggleAttribute('data-busy', busy);
   el.querySelector('span').textContent = busy ? 'Обновляю…' : dy >= PULL_GO ? 'Отпусти, чтобы обновить' : 'Потяни, чтобы обновить';
 };
-const pullReady = () => window.scrollY <= 0 && !$('#viewFeed').hidden && !document.querySelector('.ov.open');
+const pullReady = () => window.scrollY <= 0 && !$('#appShell').hidden && !document.querySelector('.ov.open');
+// Что обновляет жест: тот экран, который открыт сейчас
+const refreshCurrent = () => {
+  if(!$('#viewCat').hidden) return Promise.resolve(loadCatalog());
+  if(!$('#viewChannel').hidden) return Promise.resolve(loadChannel());
+  if(!$('#viewMe').hidden) return Promise.resolve(loadTgStatus());
+  return Promise.resolve(load(false, true));
+};
 document.addEventListener('touchstart', e => {
   pullFrom = e.touches.length === 1 && pullReady() ? e.touches[0].clientY : null;
   pullDy = 0;
@@ -1625,7 +1639,7 @@ document.addEventListener('touchend', () => {
   pullFrom = null;
   if(!go){ paintPull(0); return; }
   paintPull(0, true);
-  load(false, true).finally(() => paintPull(0));
+  refreshCurrent().finally(() => paintPull(0));
 });
 document.addEventListener('touchcancel', () => { pullFrom = null; paintPull(0); });
 
@@ -1756,8 +1770,6 @@ function render(posts,append=false){
   const box = $('#feed'), s = seen();
   const list = onlyUnread && feedMode !== 'saved' ? posts.filter(p => !s.has(key(p))) : posts;
   if(!append){
-    // старая разметка уходит вместе с целями наблюдателя: иначе он держит их
-    postSeen.disconnect();
     if(!list.length && feedErrors.length){
       const message='Не удалось обновить каналы: '+feedErrors.map(e=>e.channel).filter(Boolean).join(', ')+'. Проверь соединение и попробуй ещё раз.';
       box.innerHTML=emptyState('alert',message,['retry','Попробовать снова']);
@@ -1837,7 +1849,6 @@ function render(posts,append=false){
       lastDay = day;
     }
     markFn.set(el, setRead);
-    postSeen.observe(el);
     postList.appendChild(el);
   }
   watchGalleries(postList);
@@ -2535,16 +2546,25 @@ document.addEventListener('error', e => {
     return;
   }
   el.dataset.fresh = '1';
+  // Пока свежей ссылки нет, кадр пустой, а не битый: без src и подписи браузер не рисует
+  // значок ошибки, и на месте фото виден серый квадрат. Подпись возвращаем с новой ссылкой.
+  const alt = el.getAttribute('alt');
+  el.removeAttribute('src');
+  if(alt !== null) el.setAttribute('alt', '');
+  const show = url => {
+    if(alt !== null) el.setAttribute('alt', alt);
+    el.src = url;
+  };
   const i = [...el.parentElement.children].indexOf(el);
   freshMedia(post.dataset.post).then(fresh => {
     if(minor){
       const src = sticker ? fresh && fresh.sticker : fresh && fresh.preview && fresh.preview.image;
-      if(src && el.isConnected) el.src = src; else el.remove();
+      if(src && el.isConnected) show(src); else el.remove();
       return;
     }
     const m = fresh && fresh.media && fresh.media[i];
     if(!m || !m.u) return brokenFrame(el, post.dataset.post);
-    el.src = m.u;
+    show(m.u);
   });
 }, true);
 document.addEventListener('click', e => {
@@ -2567,6 +2587,17 @@ $('#lbNext').onclick = () => stepLightbox(1);
 $('#lbClose').onclick = closeLightbox;
 // закрываем только по самой подложке: иначе тап по стрелке листает и сразу закрывает
 $('#lightbox').onclick = e => { if(e.target===e.currentTarget) closeLightbox(); };
+// Свайп влево и вправо листает кадры. По видео не листаем: там водят ползунок
+let lbSwipe = null;
+$('#lightbox').addEventListener('touchstart', e => {
+  lbSwipe = e.touches.length === 1 && !e.target.closest('video') ? [e.touches[0].clientX, e.touches[0].clientY] : null;
+}, {passive:true});
+$('#lightbox').addEventListener('touchend', e => {
+  if(!lbSwipe) return;
+  const dx = e.changedTouches[0].clientX - lbSwipe[0], dy = e.changedTouches[0].clientY - lbSwipe[1];
+  lbSwipe = null;
+  if(lbItems.length > 1 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) stepLightbox(dx < 0 ? 1 : -1);
+}, {passive:true});
 
 $('#meBtn').onclick=openProfile;
 document.addEventListener('click', e => {

@@ -1632,6 +1632,18 @@ class GuestNavigationTest(unittest.TestCase):
         self.assertNotIn("appShell", nesting.parents["authScreen"])
 
 
+class FreshMediaPlaceholderTest(unittest.TestCase):
+    """Кадр с протухшей ссылкой ждёт свежую пустым: битой картинки с подписью быть не должно."""
+
+    def test_broken_frame_is_emptied_before_fresh_links_are_asked(self):
+        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
+            text = page.read()
+        start = text.index("document.addEventListener('error'")
+        handler = text[start:text.index("}, true);", start)]
+        self.assertIn("removeAttribute('src')", handler)
+        self.assertLess(handler.index("removeAttribute('src')"), handler.index("freshMedia(post.dataset.post)"))
+
+
 class DatabaseModeTest(unittest.TestCase):
     """База открывается в WAL: лента читает, пока фон пишет кэш."""
 
