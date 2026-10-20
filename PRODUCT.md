@@ -162,9 +162,7 @@ and 0 forks, and it was created on 2026-10-15.
    error of Telegram: each says what happened and what is left to do.
 4. **The service does not carry the media.** The photos and the video of the
    public posts come straight from the CDN of Telegram, and the server stays out
-   of the hot path. A link that has expired is replaced by a fresh one from the
-   same post, and until it arrives the frame stays empty: a broken picture with
-   its caption is never shown.
+   of the hot path.
 5. **The private data of one profile never reaches another.** The private posts
    live in a table keyed by the profile, and their media is given to the
    subscribers of that channel alone.
