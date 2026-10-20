@@ -1221,7 +1221,7 @@ def client_id(handler, db):
 
 
 SETTINGS_ALLOWED = {"theme": ("dark", "light", "auto"),
-                    "font": ("sans", "serif", "mono", "grotesk")}
+                    "font": ("sans", "serif", "mono")}
 DEFAULT_SETTINGS = {"theme": "dark", "font": "mono"}
 
 

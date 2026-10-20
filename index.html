@@ -100,10 +100,6 @@
   --font-ui:var(--font-mono);
   --font-read:var(--font-mono);
 }
-:root[data-font="grotesk"]{
-  --font-ui:"Helvetica Neue",Helvetica,Arial,sans-serif;
-  --font-read:var(--font-ui);
-}
 html{scrollbar-color:var(--scroll-thumb) transparent;overscroll-behavior-y:contain}
 [hidden]{display:none!important}
 body{
@@ -240,10 +236,12 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   text-overflow:ellipsis;white-space:nowrap}
 .meta .who:hover{color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .meta .who::after{content:'';flex:0 0 auto}
-.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:36px;height:36px;border-radius:var(--r-round);overflow:hidden;
+.chan-dot{flex:0 0 auto;display:grid;place-items:center;width:36px;height:36px;border-radius:var(--radius);overflow:hidden;
   background:var(--acc-cont);color:var(--on-acc-cont);font-size:15px;font-weight:500}
 .chan-dot img,.channel-mark img{width:100%;height:100%;object-fit:cover;display:block}
 .meta time,.meta .stat{white-space:nowrap;flex:0 0 auto}
+/* Дата и просмотры прижаты к правому краю карточки, как в Telegram */
+.meta-end{margin-left:auto;display:flex;align-items:center;gap:var(--sp-3);white-space:nowrap}
 /* Непрочитанность — точка и вес, а не цветная полоса на карточке */
 .dot{width:7px;height:7px;border-radius:var(--r-round);background:var(--acc);flex:0 0 auto;
   box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent)}
@@ -368,7 +366,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   border:0;border-radius:var(--r-sm);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;
   transition:background .16s}
 .channel-open:hover,.channel-open[aria-expanded=true]{background:var(--surf)}
-.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--r-round);overflow:hidden;
+.channel-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:var(--radius);overflow:hidden;
   background:var(--acc-cont);color:var(--on-acc-cont);font-size:16px;font-weight:500}
 .channel-copy{display:grid;gap:var(--sp-1);min-width:0;flex:1}
 .channel-fresh{font-size:12px;color:var(--dim)}
@@ -426,6 +424,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .auth-message{min-height:20px;color:var(--error);font-size:13px}
 .auth-message[data-success="true"]{color:var(--acc)}
 .auth-form .btn{width:100%;margin-top:var(--sp-2)}
+#emailSubmit{display:block;margin:var(--sp-2) 0 0 auto}
 .auth-form .empty-action{justify-self:start;padding-left:0}
 .auth-footnote{margin-top:var(--sp-5)!important;font-size:12px!important;color:var(--faint)!important}
 .account-name{padding:var(--sp-3) 0;font-size:15px;font-weight:650}
@@ -800,6 +799,7 @@ body.view-solo .search{display:none}
       <button type="button" role="tab" id="meTabAccount" aria-controls="mePanelAccount" aria-selected="true">Аккаунт</button>
       <button type="button" role="tab" id="meTabData" aria-controls="mePanelData" aria-selected="false">Данные</button>
       <button type="button" role="tab" id="meTabView" aria-controls="mePanelView" aria-selected="false">Вид</button>
+      <button type="button" role="tab" id="meTabHelp" aria-controls="mePanelHelp" aria-selected="false">Справка</button>
     </div>
     <section id="mePanelAccount" role="tabpanel" aria-labelledby="meTabAccount">
     <p id="meDescription">Твоя подборка каналов хранится отдельно от других профилей.</p>
@@ -811,11 +811,8 @@ body.view-solo .search{display:none}
       <label for="profilePassword">Текущий пароль</label>
       <input id="profilePassword" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
       <p class="auth-message" id="emailMessage" role="status" aria-live="polite"></p>
-      <button class="btn" id="emailSubmit" type="submit">Подтвердить почту</button>
+      <button class="quiet-btn" id="emailSubmit" type="submit">Подтвердить почту</button>
     </form>
-    <div class="account-actions">
-      <button id="logoutBtn" class="quiet-btn">Выйти из профиля</button>
-    </div>
     </section>
     <section id="mePanelData" role="tabpanel" aria-labelledby="meTabData" hidden>
     <div class="settings">
@@ -827,11 +824,11 @@ body.view-solo .search{display:none}
         <div class="tg-qr" id="tgQr" hidden></div>
         <p class="settings-hint">С компьютера: телефон сканирует этот код в Telegram, Настройки → Устройства → Подключить настольное устройство. С телефона: нажми «Открыть Telegram».</p>
         <div class="account-actions">
-          <a class="btn" id="tgOpen" href="#" target="_blank" rel="noreferrer">Открыть Telegram</a>
+          <a class="quiet-btn" id="tgOpen" href="#" target="_blank" rel="noreferrer">Открыть Telegram</a>
         </div>
         <div class="account-actions">
           <button class="quiet-btn" id="tgCancel" type="button">Отмена</button>
-          <button class="btn" id="tgConfirm" type="button">Я подтвердил вход</button>
+          <button class="quiet-btn" id="tgConfirm" type="button">Я подтвердил вход</button>
         </div>
       </div>
       <div id="tgLinked" hidden>
@@ -845,7 +842,9 @@ body.view-solo .search{display:none}
           <button class="quiet-btn" id="tgUnlink" type="button">Отключить Telegram</button>
         </div>
       </div>
-      <button class="btn" id="tgStart" type="button">Подключить Telegram</button>
+      <div class="account-actions">
+        <button class="quiet-btn" id="tgStart" type="button">Подключить Telegram</button>
+      </div>
     </div>
     <div class="settings">
       <h3>Резервная копия</h3>
@@ -891,11 +890,11 @@ body.view-solo .search{display:none}
         <button type="button" data-set="font" data-value="sans">Системный</button>
         <button type="button" data-set="font" data-value="serif">Классический</button>
         <button type="button" data-set="font" data-value="mono">Моноширинный</button>
-        <button type="button" data-set="font" data-value="grotesk">Гротеск</button>
       </div>
       <p class="auth-message" id="settingsState" role="status" aria-live="polite"></p>
     </div>
     </section>
+    <section id="mePanelHelp" role="tabpanel" aria-labelledby="meTabHelp" hidden>
     <div class="settings">
       <h3>Клавиши</h3>
       <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
@@ -909,8 +908,10 @@ body.view-solo .search{display:none}
         <div><dt>Esc</dt><dd>закрыть окно</dd></div>
       </dl>
     </div>
+    </section>
     <div class="account-actions">
       <button id="meClose" class="quiet-btn">Закрыть</button>
+      <button id="logoutBtn" class="quiet-btn">Выйти из профиля</button>
     </div>
   </div>
 </section>
@@ -1110,7 +1111,7 @@ function applyState(data){
 }
 // Тема и шрифт живут в атрибутах корня: тема решается в JS, потому что
 // варианта «как в системе» в CSS без дублирования палитры не выразить.
-const THEMES = ['dark','light','auto'], FONTS = ['sans','serif','mono','grotesk'];
+const THEMES = ['dark','light','auto'], FONTS = ['sans','serif','mono'];
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 let settings = {theme:'dark', font:'mono'};
 function applySettings(next){
@@ -1846,8 +1847,10 @@ function render(posts,append=false){
         (read ? readMark(titles[p.channel] || p.channel, when(p.ts)) : NEW_MARK)+
         '<button type="button" class="who" data-chan="'+esc(p.channel)+'" title="Показать только этот канал">'+
           chanMark(p.channel,titles[p.channel] || p.channel)+esc(titles[p.channel] || p.channel)+'</button>'+
-        '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
-        (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
+        '<span class="meta-end">'+
+          '<time'+(p.ts ? ' datetime="'+new Date(p.ts*1000).toISOString()+'"' : '')+'>'+when(p.ts)+'</time>'+
+          (p.views ? '<span class="stat">'+icon('eye')+esc(viewsText(p.views))+'</span>' : '')+
+        '</span>'+
       '</div>'+ extras(p) + actionsRow(p);
     el.querySelectorAll('.gal video[poster]').forEach(sizeFromPoster);
     const setRead = () => {
@@ -2252,12 +2255,12 @@ function viewFromHash(){
 }
 // Настройки разбиты на вкладки; при открытии всегда показываем «Аккаунт»
 function showMeTab(panelId){
-  [['meTabAccount','mePanelAccount'], ['meTabData','mePanelData'], ['meTabView','mePanelView']].forEach(([tabId, id]) => {
+  [['meTabAccount','mePanelAccount'], ['meTabData','mePanelData'], ['meTabView','mePanelView'], ['meTabHelp','mePanelHelp']].forEach(([tabId, id]) => {
     $('#'+tabId).setAttribute('aria-selected', String(id === panelId));
     $('#'+id).hidden = id !== panelId;
   });
 }
-[['meTabAccount','mePanelAccount'], ['meTabData','mePanelData'], ['meTabView','mePanelView']].forEach(([tabId, id]) => {
+[['meTabAccount','mePanelAccount'], ['meTabData','mePanelData'], ['meTabView','mePanelView'], ['meTabHelp','mePanelHelp']].forEach(([tabId, id]) => {
   $('#'+tabId).onclick = () => showMeTab(id);
 });
 function show(which, opts={}){
