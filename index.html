@@ -94,8 +94,8 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 /* бейдж M3: счётчик пилюлей акцента, пустой не занимает места */
 #unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);
   background:var(--acc);color:var(--acc-ink);font-size:12px;font-weight:500;line-height:20px;text-align:center}
-#unreadBtn .u-glyph{display:none}
-@media(max-width:640px){#unreadBtn .u-glyph{display:block;width:16px;height:16px}}
+#unreadBtn .u-short{display:none}
+@media(max-width:640px){#unreadBtn .u-short{display:inline}}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 /* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
@@ -426,6 +426,9 @@ main{max-width:980px;margin:0 auto;padding:0 20px 56px}
 .toggle,.channel-action,.chan-action,.channel-preview-label,.filters button{
   background:none;border:1px solid var(--edge);color:var(--fg);transition:background .2s var(--ease)}
 /* текстовые кнопки без рамки и заливки: первая кнопка диалога, ссылки-действия */
+#meTabs button{flex:1 1 auto}
+#meTabs{margin:14px 0 16px}
+#readToggle[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
 .quiet-btn{font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:8px 12px;border:0;
   border-radius:var(--r-pill);background:none;color:var(--acc);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
@@ -649,7 +652,7 @@ body.view-solo .search{display:none}
       <svg class="i"><use href="#i-search"/></svg>
       <input id="q" type="search" placeholder="Поиск по постам" autocomplete="off" aria-label="Поиск по постам">
     </label>
-    <button id="unreadBtn" class="toggle" aria-pressed="false"><svg class="i u-glyph" aria-hidden="true"><use href="#i-send"/></svg><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
+    <button id="unreadBtn" class="toggle" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-short">Новые</span><span class="u-count"></span></button>
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
   <p class="search-hint" id="searchHint" role="status" aria-live="polite" hidden></p>
@@ -731,7 +734,13 @@ body.view-solo .search{display:none}
 
 <section class="view" id="viewMe" role="region" aria-labelledby="meTitle" hidden>
   <div class="dlg me-page">
-    <h2 id="meTitle" tabindex="-1">Твой профиль</h2>
+    <h2 id="meTitle" tabindex="-1">Настройки</h2>
+    <div class="seg" id="meTabs" role="tablist" aria-label="Разделы настроек">
+      <button type="button" role="tab" id="meTabAccount" aria-controls="mePanelAccount" aria-selected="true">Аккаунт</button>
+      <button type="button" role="tab" id="meTabData" aria-controls="mePanelData" aria-selected="false">Данные</button>
+      <button type="button" role="tab" id="meTabView" aria-controls="mePanelView" aria-selected="false">Вид</button>
+    </div>
+    <section id="mePanelAccount" role="tabpanel" aria-labelledby="meTabAccount">
     <p id="meDescription">Твоя подборка каналов хранится отдельно от других профилей.</p>
     <div class="account-name" id="accountName"></div>
     <p id="accountEmailState" aria-live="polite"></p>
@@ -743,28 +752,11 @@ body.view-solo .search{display:none}
       <p class="auth-message" id="emailMessage" role="status" aria-live="polite"></p>
       <button class="btn" id="emailSubmit" type="submit">Подтвердить почту</button>
     </form>
-    <div class="settings">
-      <h3>История каналов</h3>
-      <p class="settings-hint">Старые публикации загружаются в фоне, по одной странице в несколько секунд. Здесь видно, что уже есть и что ждёт очереди.</p>
-      <div id="historyList"></div>
-    </div>
-    <div class="settings">
-      <h3>Клавиши</h3>
-      <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
-      <dl class="keys">
-        <div><dt>j</dt><dd>следующий пост</dd></div>
-        <div><dt>k</dt><dd>предыдущий пост</dd></div>
-        <div><dt>n</dt><dd>к первому непрочитанному</dd></div>
-        <div><dt>u</dt><dd>снять или вернуть отметку</dd></div>
-        <div><dt>/</dt><dd>поиск</dd></div>
-        <div><dt>?</dt><dd>эта подсказка</dd></div>
-        <div><dt>Esc</dt><dd>закрыть окно</dd></div>
-      </dl>
-    </div>
     <div class="account-actions">
       <button id="logoutBtn" class="quiet-btn">Выйти из профиля</button>
-      <button id="meClose" class="quiet-btn">Закрыть</button>
     </div>
+    </section>
+    <section id="mePanelData" role="tabpanel" aria-labelledby="meTabData" hidden>
     <div class="settings">
       <h3>Приватные каналы</h3>
       <p class="settings-hint" id="tgHint">Видны только те, где ты участник.
@@ -793,6 +785,36 @@ body.view-solo .search{display:none}
       <button class="btn" id="tgStart" type="button">Подключить Telegram</button>
     </div>
     <div class="settings">
+      <h3>Резервная копия</h3>
+      <p class="settings-hint">Скачай каналы и отметки о прочитанном. На другом устройстве
+        войди в профиль и загрузи этот файл, лента восстановится.</p>
+      <div class="account-actions">
+        <button id="exportBtn" class="quiet-btn">Скачать файл</button>
+        <button id="importBtn" class="quiet-btn">Загрузить файл</button>
+      </div>
+      <input id="importFile" type="file" accept=".jsonl" hidden>
+      <p class="auth-message" id="transferState" role="status" aria-live="polite"></p>
+    </div>
+    <div class="settings">
+      <h3>Список для переноса</h3>
+      <p class="settings-hint">Ссылки на каналы, по одной в строке. Список можно открыть
+        в блокноте, переслать другому человеку или загрузить в другой профиль.
+        Отметки о прочитанном в него не входят: для них есть файл ленты выше.</p>
+      <div class="account-actions">
+        <button id="subsExportBtn" class="quiet-btn" type="button">Скачать список</button>
+        <button id="subsImportBtn" class="quiet-btn" type="button">Загрузить список</button>
+      </div>
+      <input id="subsFile" type="file" accept=".txt,text/plain" hidden>
+      <p class="auth-message" id="subsState" role="status" aria-live="polite"></p>
+    </div>
+    <div class="settings">
+      <h3>История каналов</h3>
+      <p class="settings-hint">Старые публикации загружаются в фоне, по одной странице в несколько секунд. Здесь видно, что уже есть и что ждёт очереди.</p>
+      <div id="historyList"></div>
+    </div>
+    </section>
+    <section id="mePanelView" role="tabpanel" aria-labelledby="meTabView" hidden>
+    <div class="settings">
       <h3>Оформление</h3>
       <p class="settings-hint">Выбор сохраняется в профиле и переезжает на другое устройство.</p>
       <p class="seg-label">Цвета</p>
@@ -810,28 +832,22 @@ body.view-solo .search{display:none}
       </div>
       <p class="auth-message" id="settingsState" role="status" aria-live="polite"></p>
     </div>
+    </section>
     <div class="settings">
-      <h3>Файл ленты</h3>
-      <p class="settings-hint">Скачай каналы и отметки о прочитанном. На другом устройстве
-        войди в профиль и загрузи этот файл, лента восстановится.</p>
-      <div class="account-actions">
-        <button id="exportBtn" class="quiet-btn">Скачать файл</button>
-        <button id="importBtn" class="quiet-btn">Загрузить файл</button>
-      </div>
-      <input id="importFile" type="file" accept=".jsonl" hidden>
-      <p class="auth-message" id="transferState" role="status" aria-live="polite"></p>
+      <h3>Клавиши</h3>
+      <p class="settings-hint">Работают, когда курсор не в поле ввода.</p>
+      <dl class="keys">
+        <div><dt>j</dt><dd>следующий пост</dd></div>
+        <div><dt>k</dt><dd>предыдущий пост</dd></div>
+        <div><dt>n</dt><dd>к первому непрочитанному</dd></div>
+        <div><dt>u</dt><dd>снять или вернуть отметку</dd></div>
+        <div><dt>/</dt><dd>поиск</dd></div>
+        <div><dt>?</dt><dd>эта подсказка</dd></div>
+        <div><dt>Esc</dt><dd>закрыть окно</dd></div>
+      </dl>
     </div>
-    <div class="settings">
-      <h3>Список каналов</h3>
-      <p class="settings-hint">Ссылки на каналы, по одной в строке. Список можно открыть
-        в блокноте, переслать другому человеку или загрузить в другой профиль.
-        Отметки о прочитанном в него не входят: для них есть файл ленты выше.</p>
-      <div class="account-actions">
-        <button id="subsExportBtn" class="quiet-btn" type="button">Скачать список</button>
-        <button id="subsImportBtn" class="quiet-btn" type="button">Загрузить список</button>
-      </div>
-      <input id="subsFile" type="file" accept=".txt,text/plain" hidden>
-      <p class="auth-message" id="subsState" role="status" aria-live="polite"></p>
+    <div class="account-actions">
+      <button id="meClose" class="quiet-btn">Закрыть</button>
     </div>
   </div>
 </section>
@@ -1232,13 +1248,7 @@ function paintHistory(h){
   historyLoading = Boolean(h.loading);
   const line = $('#historyStatus');
   line.hidden = !historyLoading;
-  if(historyLoading){
-    const total = h.channels.length;
-    const finished = h.channels.filter(c => c.state === 'done' || c.state === 'capped').length;
-    const paused = h.channels.filter(c => c.state === 'paused').length;
-    line.innerHTML = '<span class="dot" aria-hidden="true"></span> Загружаем историю: '+finished+' из '+total+
-      ' '+(total === 1 ? 'канала' : 'каналов')+(paused ? ', на паузе: '+paused : '');
-  }
+  if(historyLoading) line.innerHTML = '<span class="dot" aria-hidden="true"></span> Загружаем старые публикации';
   const end = $('#feedEnd');
   if(end) end.textContent = historyLoading
     ? 'Старые публикации ещё загружаются, они появятся здесь сами.'
@@ -2115,6 +2125,16 @@ function viewFromHash(){
   if(h.startsWith('channel/')) return {view:'channel', channel: decodeURIComponent(h.slice(8))};
   return {view: HASH_VIEW[h] || 'feed'};
 }
+// Настройки разбиты на вкладки; при открытии всегда показываем «Аккаунт»
+function showMeTab(panelId){
+  [['meTabAccount','mePanelAccount'], ['meTabData','mePanelData'], ['meTabView','mePanelView']].forEach(([tabId, id]) => {
+    $('#'+tabId).setAttribute('aria-selected', String(id === panelId));
+    $('#'+id).hidden = id !== panelId;
+  });
+}
+[['meTabAccount','mePanelAccount'], ['meTabData','mePanelData'], ['meTabView','mePanelView']].forEach(([tabId, id]) => {
+  $('#'+tabId).onclick = () => showMeTab(id);
+});
 function show(which, opts={}){
   const me = which === 'me';
   const cat = which === 'cat';
@@ -2127,6 +2147,7 @@ function show(which, opts={}){
   document.body.classList.toggle('view-solo', me || channel);
   if(me) $('header').classList.toggle('search-open', false);
   $('#viewMe').hidden = !me;
+  if(me) showMeTab('mePanelAccount');
   $('#viewChannel').hidden = !channel;
   $('#viewFeed').hidden = me || cat || channel;
   $('#viewCat').hidden = me || channel || !cat;
