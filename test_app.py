@@ -1523,6 +1523,80 @@ class QrLinkResponseTest(unittest.TestCase):
         self.assertNotIn("qr", body)
 
 
+class AvatarTest(unittest.TestCase):
+    """Фото канала берём с t.me, но в src уйдёт только картинка Telegram."""
+
+    def test_takes_the_channel_photo_from_og_image(self):
+        html = '<meta property="og:image" content="https://cdn4.telesco.pe/file/abc_-1.jpg">'
+        self.assertEqual(app.avatar_url(html), "https://cdn4.telesco.pe/file/abc_-1.jpg")
+
+    def test_ignores_other_hosts_quotes_and_a_missing_photo(self):
+        self.assertEqual(app.avatar_url('<meta property="og:image" content="https://telegram.org/img/t_logo.png">'), "")
+        self.assertEqual(app.avatar_url('<meta property="og:image" content="https://cdn4.telesco.pe/a&quot;b">'), "")
+        self.assertEqual(app.avatar_url("<title>без фото</title>"), "")
+
+
+class AvatarEndpointTest(unittest.TestCase):
+    """Фото догружается пачками, один раз на канал, и отдаётся только вошедшим."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="telegram-lenta-test-")
+        self.previous_db = app.DB
+        app.DB = self.temp.name + "/feed.db"
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+        req = Request(self.base + "/api/auth/register", method="POST",
+                      data=json.dumps({"username": "avatars", "password": "long-password-1"}).encode(),
+                      headers={"Content-Type": "application/json"})
+        with urlopen(req, timeout=5) as response:
+            self.cookie = response.headers.get("Set-Cookie", "").split(";", 1)[0]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        app.DB = self.previous_db
+        self.temp.cleanup()
+
+    def get(self, path, cookie=None):
+        req = Request(self.base + path, headers={"Cookie": self.cookie if cookie is None else cookie})
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except HTTPError as exc:
+            with exc:
+                return exc.code, json.loads(exc.read())
+
+    def test_photos_are_fetched_once_then_read_from_the_table(self):
+        seen = []
+
+        def fake(channel):
+            seen.append(channel)
+            return f"https://cdn4.telesco.pe/file/{channel}.jpg"
+
+        with patch.object(app, "fetch_avatar", side_effect=fake):
+            status, body = self.get("/api/avatars?channels=alpha,beta")
+            self.assertEqual(status, 200)
+            self.assertEqual(body["avatars"], {"alpha": "https://cdn4.telesco.pe/file/alpha.jpg",
+                                               "beta": "https://cdn4.telesco.pe/file/beta.jpg"})
+            self.assertEqual(body["checked"], ["alpha", "beta"])
+            self.get("/api/avatars?channels=alpha,beta")
+        self.assertEqual(sorted(seen), ["alpha", "beta"])  # второй раз t.me не спрашиваем
+
+    def test_private_channels_have_no_public_page_to_ask(self):
+        with patch.object(app, "fetch_avatar") as fetch:
+            status, body = self.get("/api/avatars?channels=private:-1001234567890")
+        self.assertEqual(status, 200)
+        fetch.assert_not_called()
+        self.assertEqual(body["avatars"], {})
+
+    def test_photos_need_a_profile(self):
+        status, _ = self.get("/api/avatars?channels=alpha", cookie="")
+        self.assertEqual(status, 401)
+
+
 class ShellNesting(HTMLParser):
     """Запоминает, в каких элементах с id стоит каждый элемент с id."""
 

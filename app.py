@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS cache (
     title    TEXT,
     fetched  INTEGER
 );
+-- Фото каналов из og:image страницы t.me/s. Пустой url: фото у канала нет, второй раз его не ищем
+CREATE TABLE IF NOT EXISTS avatars (
+    channel  TEXT PRIMARY KEY,
+    url      TEXT,
+    fetched  INTEGER
+);
 -- Состояние пользователя: подписки и прочитанные посты.
 -- Доступ к профилю задаётся паролем и серверной сессией.
 CREATE TABLE IF NOT EXISTS profiles (
@@ -936,6 +942,56 @@ def store_channel_cache(db, channel, title, posts):
     )
     db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)",
                (channel, title, int(time.time())))
+
+
+# Фото каналов. Берём og:image со страницы t.me/s, которую приложение и так открывает.
+# Ссылку пускаем только на картинки Telegram (telesco.pe, без кавычек и скобок): она
+# уходит в атрибут src, и чужой адрес в ответе t.me в ленту попадать не должен.
+AVATAR_TTL = 7 * 86400
+AVATAR_FETCH_CAP = 12   # страница t.me весит около 150 КБ: за один запрос ходим не больше чем за 12 каналов
+AVATAR_URL = re.compile(r'https://[\w.-]+\.telesco\.pe/[^\s"\'<>]+')
+
+
+def avatar_url(html):
+    m = re.search(r'property="og:image" content="([^"]+)"', html)
+    if not m:
+        return ""
+    url = unescape(m.group(1))
+    return url if AVATAR_URL.fullmatch(url) else ""
+
+
+def fetch_avatar(channel):
+    req = urllib.request.Request(f"https://t.me/s/{channel}", headers={"User-Agent": UA})
+    html = urllib.request.urlopen(req, timeout=FETCH_TIMEOUT).read().decode("utf-8", "replace")
+    return avatar_url(html)
+
+
+def channel_avatars(db, channels):
+    """Фото каналов: сначала своя таблица, устаревшие и новые догружаем с t.me, но не больше AVATAR_FETCH_CAP.
+    Возвращает (фото по каналам, какие каналы уже проверены): непроверенные спросим в следующий раз."""
+    now = int(time.time())
+    known = {}
+    if channels:
+        marks = ",".join("?" * len(channels))
+        known = {c: (u, f) for c, u, f in db.execute(
+            f"SELECT channel, url, fetched FROM avatars WHERE channel IN ({marks})", channels)}
+    stale = [c for c in channels if c not in known or now - known[c][1] > AVATAR_TTL][:AVATAR_FETCH_CAP]
+
+    def pull(channel):
+        try:
+            return channel, fetch_avatar(channel)
+        except Exception:  # t.me не ответил: в таблицу не пишем, спросим позже
+            return channel, None
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for channel, url in pool.map(pull, stale):
+            if url is not None:
+                db.execute("INSERT OR REPLACE INTO avatars VALUES (?,?,?)", (channel, url, now))
+                known[channel] = (url, now)
+    db.commit()
+    avatars = {c: known[c][0] for c in channels if c in known and known[c][0]}
+    checked = [c for c in channels if c in known]
+    return avatars, checked
 
 
 # TGMania — открытый каталог каналов (без ключа). Сортировку на их стороне
@@ -2281,6 +2337,18 @@ class Handler(BaseHTTPRequestHandler):
                                                    "history": {"fetched": hist[0] if hist else 0,
                                                                "done": bool(hist and hist[1])}},
                                                   ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+
+            if path == "/api/avatars":
+                if not client_id(self, db):
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                chans = list(dict.fromkeys(c for c in self._query("channels", "").split(",") if c))[:60]
+                if any(not valid_feed_channel(c) for c in chans):
+                    return self._send(400, json.dumps({"error": "неверное имя канала"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                avatars, checked = channel_avatars(db, public_channels(chans))
+                return self._send(200, json.dumps({"avatars": avatars, "checked": checked}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/categories":
