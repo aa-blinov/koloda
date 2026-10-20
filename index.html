@@ -133,8 +133,6 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 /* бейдж M3: счётчик пилюлей акцента, пустой не занимает места */
 #unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 var(--sp-2);border-radius:var(--radius);
   background:var(--acc);color:var(--acc-ink);font-size:12px;font-weight:500;line-height:20px;text-align:center}
-#unreadBtn .u-short{display:none}
-@media(max-width:640px){#unreadBtn .u-short{display:inline}}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 /* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
@@ -225,7 +223,6 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .post{position:relative;scroll-margin-top:80px;content-visibility:auto;contain-intrinsic-size:auto 480px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);
   padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-3);
   transition:background .2s var(--ease), opacity .18s}
-.post:hover{background:color-mix(in srgb,var(--fg) 8%,var(--surf))}
 .post.read{background:var(--bg)}
 
 .day-sep{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-5) 0 var(--sp-3);color:var(--faint);
@@ -477,7 +474,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* Текстовые кнопки в ленте сдвинуты на свой внутренний отступ, чтобы текст встал на линию колонки */
 .tabs-wrap>.quiet-btn{margin-left:calc(var(--sp-3) * -1)}
 #meTabs{margin:var(--sp-4) 0 var(--sp-4)}
-#readToggle[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
+#readToggle[aria-pressed=true],#unreadBtn[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
 .quiet-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
   border-radius:var(--radius);background:none;color:var(--acc);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
@@ -630,7 +627,6 @@ body.view-solo .search{display:none}
   .quiet-btn,.toggle,.btn,.act-btn,.undo-btn,.seg button,.auth-modes button,.empty-action,.sync-status button{min-height:44px}
   header{padding:var(--sp-2) var(--sp-4);padding-top:calc(var(--sp-2) + env(safe-area-inset-top))}
   .bar{gap:var(--sp-2)}
-  #unreadBtn .u-label{display:none}
   #unreadBtn .u-count:empty{display:none}
   .seg button{padding:var(--sp-2) var(--sp-3);font-size:13px}
   main{padding-left:var(--sp-4);padding-right:var(--sp-4)}
@@ -708,7 +704,6 @@ body.view-solo .search{display:none}
       <svg class="i"><use href="#i-search"/></svg>
       <input id="q" type="search" placeholder="Поиск по постам" autocomplete="off" aria-label="Поиск по постам">
     </label>
-    <button id="unreadBtn" class="toggle" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-short">Новые</span><span class="u-count"></span></button>
     <button id="meBtn" class="toggle" title="Профиль">Профиль</button>
   </div>
   <p class="search-hint" id="searchHint" role="status" aria-live="polite" hidden></p>
@@ -730,6 +725,7 @@ body.view-solo .search{display:none}
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
   <button id="unsubBtn" class="quiet-btn" type="button" hidden>Убрать из ленты</button>
+  <button id="unreadBtn" class="quiet-btn" type="button" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
   <button id="readToggle" class="quiet-btn" type="button" aria-pressed="false">Показать прочитанное</button>
   <p class="fresh" id="fresh" aria-live="polite"></p>
   <p class="fresh" id="historyStatus" aria-live="polite" hidden></p>
@@ -1008,12 +1004,14 @@ function paintFreshness(){
   const el=$('#fresh');
   if(!el) return;
   if(!lastFetched){ el.textContent=''; return; }
+  // Фильтр меняет, что видно в ленте: говорим об этом прямо, иначе кнопка кажется немой
+  const mode = onlyUnread && feedMode !== 'saved' ? 'показаны только непрочитанные. ' : '';
   if(newestPost){
-    const d=new Date(newestPost*1000), mins=Math.floor((Date.now()-newestPost)/86400);
-    el.textContent = 'последний пост '+(mins<1?'сегодня':mins<2?'вчера':d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'}));
+    const days = Math.floor((Date.now()/1000 - newestPost)/86400);
+    el.textContent = mode+'последний пост '+(days<1?'сегодня':days<2?'вчера':new Date(newestPost*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}));
     return;
   }
-  el.textContent = lastFetched ? 'обновлено только что' : '';
+  el.textContent = mode+'обновлено только что';
 }
 function plural(n,one,few,many){
   const m10=n%10, m100=n%100;
