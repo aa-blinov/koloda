@@ -507,6 +507,99 @@ class FeedAPITest(unittest.TestCase):
         self.request("/api/state/subscription", "POST", {"channel": "alpha", "subscribed": False})
         self.assertEqual(self.request("/api/collections")[1]["collections"][0]["channels"], ["beta"])
 
+    @patch.object(app, "SMTP_ENABLED", True)
+    def test_password_reset_sets_a_new_password_and_the_link_works_once(self):
+        # A5, A6: почта подтверждается по ссылке, потом забытый пароль меняется по ссылке из письма
+        sent = {}
+        with patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(verify=t)), \
+                patch.object(app, "send_password_reset_email", side_effect=lambda e, t: sent.update(reset=t)):
+            status, _ = self.request("/api/auth/register", method="POST", data={
+                "username": "reset_user", "password": "password123", "email": "reset-user@example.com"})
+            self.assertEqual(status, 202)  # профиль создан, но ждёт подтверждения почты
+            self.assertEqual(self.request("/api/auth/verify", method="POST", data={"token": sent["verify"]})[0], 200)
+            self.assertEqual(self.request("/api/auth/verify", method="POST", data={"token": sent["verify"]})[0], 400)
+            self.assertEqual(self.request("/api/auth/forgot", method="POST",
+                                          data={"email": "reset-user@example.com"})[0], 200)
+            self.assertEqual(self.request("/api/auth/reset", method="POST",
+                                          data={"token": sent["reset"], "password": "brandnew123"})[0], 200)
+            self.assertEqual(self.request("/api/auth/reset", method="POST",
+                                          data={"token": sent["reset"], "password": "again12345"})[0], 400)
+        self.assertEqual(self.request("/api/auth/login", method="POST",
+                                      data={"username": "reset_user", "password": "password123"})[0], 401)
+        self.assertEqual(self.request("/api/auth/login", method="POST",
+                                      data={"username": "reset_user", "password": "brandnew123"})[0], 200)
+
+    @patch.object(app, "SMTP_ENABLED", True)
+    def test_forgot_password_answers_the_same_for_strangers_and_unverified_mail(self):
+        # Ответ одинаковый, чтобы по форме нельзя было узнать, есть ли такая почта в сервисе
+        with patch.object(app, "send_password_reset_email") as send, patch.dict(app.MAIL_REQUESTS, clear=True):
+            self.request("/api/auth/register", method="POST", data={
+                "username": "unverified_user", "password": "password123", "email": "unverified@example.com"})
+            status_unknown, payload_unknown = self.request("/api/auth/forgot", method="POST",
+                                                           data={"email": "nobody-here@example.com"})
+            status_unverified, payload_unverified = self.request("/api/auth/forgot", method="POST",
+                                                                 data={"email": "unverified@example.com"})
+        self.assertEqual((status_unknown, status_unverified), (200, 200))
+        self.assertEqual(payload_unknown, payload_unverified)
+        send.assert_not_called()
+
+    @patch.object(app, "SMTP_ENABLED", True)
+    def test_resend_verification_waits_a_minute_between_mails(self):
+        with patch.object(app, "send_verification_email") as send, patch.dict(app.MAIL_REQUESTS, clear=True):
+            self.request("/api/auth/register", method="POST", data={
+                "username": "resend_user", "password": "password123", "email": "resend-user@example.com"})
+            self.request("/api/auth/resend-verification", method="POST", data={"email": "resend-user@example.com"})
+            self.request("/api/auth/resend-verification", method="POST", data={"email": "resend-user@example.com"})
+        self.assertEqual(send.call_count, 2)  # регистрация и одна повторная отправка, вторая попытка ждёт минуту
+
+    @patch.object(app, "SMTP_ENABLED", True)
+    def test_email_change_needs_the_password_and_a_confirmed_link(self):
+        # A8: смена почты требует текущий пароль и работает только по ссылке из нового письма
+        sent = {}
+        with patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(verify=t)):
+            self.assertEqual(self.request("/api/auth/register", method="POST", data={
+                "username": "change_user", "password": "password123", "email": "old-mail@example.com"})[0], 202)
+        # без подтверждения сессии нет: смена почты доступна только после входа
+        self.assertEqual(self.request("/api/auth/email", method="POST",
+                                      data={"password": "password123", "email": "new-mail@example.com"})[0], 401)
+        self.assertEqual(self.request("/api/auth/verify", method="POST", data={"token": sent["verify"]})[0], 200)
+        with patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(change=t)):
+            self.assertEqual(self.request("/api/auth/email", method="POST",
+                                          data={"password": "wrong-pass", "email": "new-mail@example.com"})[0], 401)
+            self.assertEqual(self.request("/api/auth/email", method="POST",
+                                          data={"password": "password123", "email": "not-an-address"})[0], 400)
+            self.assertEqual(self.request("/api/auth/email", method="POST",
+                                          data={"password": "password123", "email": "new-mail@example.com"})[0], 202)
+        self.assertEqual(self.request("/api/auth/verify", method="POST", data={"token": sent["change"]})[0], 200)
+        email = self.db.execute("SELECT email FROM accounts WHERE username='change_user'").fetchone()[0]
+        self.assertEqual(email, "new-mail@example.com")
+
+    def test_collection_and_subscription_limits_hold(self):
+        # C13: 50 коллекций на профиль, 200 каналов в коллекции и 200 подписок в ленте
+        profile = self.login("limits_user")
+        for i in range(50):
+            self.assertEqual(self.request("/api/collections/save", "POST",
+                                          {"name": "Коллекция %d" % i, "channels": []})[0], 200)
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": "Лишняя", "channels": []})[0], 400)
+        names = ["chan%03d" % i for i in range(201)]
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": "Длинная", "channels": names})[0], 400)
+        for name in names[:200]:
+            self.subscribe(profile, name)
+        self.assertEqual(self.request("/api/state/subscription", "POST",
+                                      {"channel": "chan200", "subscribed": True})[0], 409)
+        self.assertEqual(self.request("/api/state/merge", "POST", {"subs": ["chan201"], "reads": []})[0], 409)
+
+    def test_feed_search_keeps_only_matching_posts(self):
+        # F7: поиск по ленте отдаёт только посты с запросом из выбранных каналов
+        profile = self.login("search_user")
+        self.subscribe(profile, "alpha")
+        self.subscribe(profile, "beta")
+        status, payload = self.request("/api/feed?channels=alpha,beta&q=post%207")
+        self.assertEqual(status, 200)
+        texts = [post["text"] for post in payload["posts"]]
+        self.assertTrue(texts)
+        self.assertTrue(all("post 7" in text for text in texts), texts)
+
     def test_catalog_is_for_signed_in_profiles_only(self):
         # Каталог и категории отдают список каналов, поэтому без входа их не получают
         self.assertEqual(self.request("/api/catalog")[0], 401)
