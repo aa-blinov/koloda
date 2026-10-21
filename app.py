@@ -1035,6 +1035,7 @@ def store_channel_cache(db, channel, title, posts):
 # уходит в атрибут src, и чужой адрес в ответе t.me в ленту попадать не должен.
 AVATAR_TTL = 7 * 86400
 AVATAR_FETCH_CAP = 12   # страница t.me весит около 150 КБ: за один запрос ходим не больше чем за 12 каналов
+AVATAR_RETRY = 10 * 60  # секунд: канал, который t.me не ответил, спросим снова не раньше чем через десять минут
 AVATAR_URL = re.compile(r'https://[\w.-]+\.telesco\.pe/[^\s"\'<>]+')
 
 
@@ -1065,15 +1066,17 @@ def channel_avatars(db, channels):
 
     def pull(channel):
         try:
-            return channel, fetch_avatar(channel)
-        except Exception:  # t.me не ответил: в таблицу не пишем, спросим позже
-            return channel, None
+            return channel, fetch_avatar(channel), True
+        except Exception:  # t.me не ответил: отмечаем, но спросим снова не раньше чем через AVATAR_RETRY
+            return channel, "", False
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        for channel, url in pool.map(pull, stale):
-            if url is not None:
-                db.execute("INSERT OR REPLACE INTO avatars VALUES (?,?,?)", (channel, url, now))
-                known[channel] = (url, now)
+        for channel, url, ok in pool.map(pull, stale):
+            # страница без фото и сбой тоже отмечаем пустой строкой: канал проверен, и его не спрашивают
+            # на каждом заходе. Сбой помнится как проверка, которая истекает раньше обычной
+            stamp = now if ok else now - AVATAR_TTL + AVATAR_RETRY
+            db.execute("INSERT OR REPLACE INTO avatars VALUES (?,?,?)", (channel, url, stamp))
+            known[channel] = (url, stamp)
     db.commit()
     avatars = {c: known[c][0] for c in channels if c in known and known[c][0]}
     checked = [c for c in channels if c in known]

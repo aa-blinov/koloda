@@ -483,6 +483,8 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   background:none;border:0;color:var(--fg);transition:background .2s var(--ease)}
 /* текстовые кнопки без рамки и заливки: первая кнопка диалога, ссылки-действия */
 #meTabs button,#sortTabs button{flex:1 1 0;justify-content:center}
+/* Сортировка каталога: подписи в одну строку, ширина по тексту, иначе выбранная кнопка переносится */
+#sortTabs button{flex:1 1 auto;white-space:nowrap;font-size:13px;padding:var(--sp-2) var(--sp-3)}
 /* Текстовые кнопки в ленте сдвинуты на свой внутренний отступ, чтобы текст встал на линию колонки */
 /* Тулбар ленты: текстовые действия с отступом 24 px, чтобы два соседних не читались как одна фраза */
 .feed-tools{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-5);margin-top:var(--sp-3)}
