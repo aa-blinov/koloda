@@ -209,7 +209,7 @@ docker compose down              # stop
 The tests and the check of the markup run on every push in GitHub Actions:
 
 ```bash
-python3 -m unittest -v           # 112 tests: no network, no Telegram, a temporary database
+python3 -m unittest -v           # 128 tests: no network, no Telegram, a temporary database
 python3 check_ui.py              # the integrity of index.html, without a browser
 docker build -t koloda:ci .      # the image builds
 ```
@@ -230,6 +230,18 @@ copying the single file `feed.db` could lose the last records. The script finds
 the posts where an emoji stayed in the database instead of a photo, the lost
 frames of an album and the stale addresses.
 
+The user paths are described in `docs/user-paths.md`, each with an ID. The
+browser check walks the paths that can be checked on a running stand. It needs
+Playwright and Chrome, the internet for the channels, and a stand without mail:
+
+```bash
+python3 ui_paths_check.py http://127.0.0.1:8090                 # every path for its device
+python3 ui_paths_check.py http://127.0.0.1:8090 --only C1,F2   # some paths
+```
+
+Each check creates its own profile through the API and prints PASS, FAIL or SKIP.
+A path that needs posts which the stand does not have is SKIP, not PASS.
+
 | Path | What it holds |
 | --- | --- |
 | `app.py` | The server: the parsing of t.me, the API, the profiles, the sessions, the letters, the serving of the interface. |
@@ -238,6 +250,8 @@ frames of an album and the stale addresses.
 | `qrsvg.py`, `qrcodegen.py` | The QR code of the login link. `qrcodegen.py` is the encoder from Project Nayuki, unchanged. |
 | `test_app.py` | The tests. |
 | `check_ui.py` | The integrity of the markup, without a browser. |
+| `ui_paths_check.py` | The user paths of `docs/user-paths.md` in a browser, on a running stand. A service script: not in the image, not in the tests. |
+| `docs/user-paths.md` | The user paths, with their IDs and what checks them. |
 | `audit_media.py` | The audit of the media against t.me. A service script: it is not in the image and it is not in the tests. |
 | `sync.py`, `serve.py` | The old variant with Telethon and RSS. The current service does not call them. |
 | `fonts/` | JetBrains Mono, served from the address of the service itself. |
