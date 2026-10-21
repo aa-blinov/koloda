@@ -150,9 +150,22 @@ def post_rows(pg):
                        ".map(e => ({post: e.dataset.post, read: e.classList.contains('read')}))")
 
 
-def unread_counter(pg):
-    text = pg.inner_text("#unreadBtn .u-count") if pg.locator("#unreadBtn .u-count").count() else ""
-    return int(text) if text.strip().isdigit() else 0
+def insert_newer_post(channel):
+    """Свежий пост канала прямо в базе стенда: обновление обязано поставить его выше ленты."""
+    import time
+    os.environ["DATA_DIR"] = DATA_DIR
+    import app
+    db = app.connect()
+    try:
+        msg_id = db.execute("SELECT MAX(msg_id) FROM posts WHERE channel=?", (channel,)).fetchone()[0] + 1
+        row = dict.fromkeys(app.POST_FIELDS)
+        row.update(channel=channel, msg_id=msg_id, url="https://t.me/%s/%d" % (channel, msg_id),
+                   text="пост для проверки отметки", media="[]", ts=int(time.time()))
+        db.execute(app.POST_INSERT, row)
+        db.commit()
+    finally:
+        db.close()
+    return "%s/%d" % (channel, msg_id)
 
 
 def open_profile(pg):
@@ -476,45 +489,50 @@ def f2(c):
     assert api("/api/state", None, c.user["cookie"])[2].get("reads"), "отметок на сервере нет"
 
 
-@check("F3", "«Показать прочитанное» возвращает прочитанные посты и прячет обратно")
+@check("F3", "«Скрыть прочитанные» показывает прочитанное и прячет обратно")
 def f3(c):
     login(c.pg, c.user)
     if len(post_rows(c.pg)) < 3:
         raise Skip("постов меньше трёх")
+    assert c.pg.get_attribute("#readToggle", "aria-pressed") == "true", "по умолчанию прочитанное должно быть спрятано"
     for _ in range(3):
         c.pg.evaluate("window.scrollBy(0, 900)")
         c.pg.wait_for_timeout(700)
     c.pg.wait_for_timeout(4000)
     c.pg.click("#readToggle")
     c.pg.wait_for_timeout(3000)
+    assert c.pg.get_attribute("#readToggle", "aria-pressed") == "false", "кнопка не отжалась"
     assert any(r["read"] for r in post_rows(c.pg)), "прочитанных постов не видно"
     c.pg.click("#readToggle")
     c.pg.wait_for_timeout(2500)
+    assert c.pg.get_attribute("#readToggle", "aria-pressed") == "true", "кнопка не нажалась обратно"
     assert not any(r["read"] for r in post_rows(c.pg)), "прочитанные не спрятались"
 
 
-@check("F4", "«Непрочитанные»: прочитанное уходит из списка, счётчик совпадает с первой страницей")
+@check("F4", "Обновление не отмечает прочитанным посты, которые встали выше экрана")
 def f4(c):
     login(c.pg, c.user)
     if len(post_rows(c.pg)) < 3:
         raise Skip("постов меньше трёх")
-    # сначала отмечаем прочитанное прокруткой: без этого фильтр ничем не отличается от ленты
     for _ in range(3):
         c.pg.evaluate("window.scrollBy(0, 900)")
         c.pg.wait_for_timeout(700)
     c.pg.wait_for_timeout(4000)
     marked = {r["post"] for r in post_rows(c.pg) if r["read"]}
-    assert marked, "прокруткой ничего не отметилось"
-    c.pg.evaluate("window.scrollTo(0, 0)")
-    c.pg.wait_for_timeout(500)
-    c.pg.click("#unreadBtn")
-    c.pg.wait_for_timeout(3000)
-    # страница после фильтра приходит с сервера, без прокрутки: прочитанного в ней быть не должно
-    rows = post_rows(c.pg)
-    shown = [r["post"] for r in rows if r["post"] in marked]
-    assert not shown, "в фильтре остались прочитанные: %s" % shown[:3]
-    expected = min(unread_counter(c.pg), 80)
-    assert len(rows) == expected, "счётчик %s, на первой странице %s" % (unread_counter(c.pg), len(rows))
+    assert marked, "прокруткой ничего не отметилось, проверка пуста"
+    new_post = insert_newer_post(CHANNELS[0])
+    # жест «потянуть» вызывает refreshCurrent; на ПК жеста нет, проверяем саму функцию
+    c.pg.evaluate("refreshCurrent()")
+    c.pg.wait_for_function("key => (document.querySelector('#postList .post') || {}).dataset?.post === key",
+                           arg=new_post, timeout=20000)
+    c.pg.wait_for_timeout(2000)
+    stolen = [r["post"] for r in post_rows(c.pg) if r["read"] and r["post"] not in marked]
+    assert not stolen, "обновление отметило прочитанными непросмотренные: %s" % stolen[:3]
+    # контроль: после обновления прокрутка по-прежнему отмечает посты
+    c.pg.evaluate("window.scrollBy(0, 1500)")
+    c.pg.wait_for_timeout(1500)
+    passed = [r["post"] for r in post_rows(c.pg) if r["read"] and r["post"] not in marked]
+    assert passed, "после обновления прокрутка ничего не отметила"
 
 
 @check("F8", "Прокрутка к концу ленты подгружает следующую страницу без повторов")
@@ -737,7 +755,7 @@ def e3(c):
 @check("X3", "Нажимаемые зоны не ниже 44 px на телефоне", device="phone")
 def x3(c):
     login(c.pg, c.user)
-    sizes = c.pg.evaluate("""() => [...document.querySelectorAll('#tabBar .tabbar-item, #readToggle, #unreadBtn')]
+    sizes = c.pg.evaluate("""() => [...document.querySelectorAll('#tabBar .tabbar-item, #readToggle')]
         .filter(e => e.offsetParent !== null).map(e => [e.id || e.textContent.trim().slice(0, 12),
         Math.round(e.getBoundingClientRect().height)])""")
     small = [s for s in sizes if s[1] < 44]

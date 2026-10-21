@@ -195,7 +195,6 @@ MEDIA_WINDOW_DAYS = 3       # на сколько дней назад освеж
 MEDIA_SWEEP_MAX_PAGES = 12  # страниц на проход, около двухсот постов; дальше хватит запроса на пост
 MEDIA_PAUSE = 3       # секунд между страницами и каналами: не дёргаем t.me
 MEDIA_IDLE = 60       # секунд ждать, когда все подписанные каналы свежие
-UNREAD_DAYS = 14        # непрочитанное считаем за две недели: старый архив счётчик не раздувает
 COLLECTION_NAME_MAX = 32       # символов в названии коллекции
 COLLECTION_CHANNELS_CAP = 200  # каналов в одной коллекции, как и подписок в ленте
 COLLECTIONS_CAP = 50           # коллекций на профиль
@@ -538,7 +537,7 @@ PRIVATE_FIELDS = ("channel", "msg_id", "url", "text", "media", "views", "ts",
                   "reactions", "preview", "doc", "fwd", "quote", "sticker")
 
 
-def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, before=None, hide_read=None):
+def search_private_posts(db, q, channels, profile, limit=120, before=None, hide_read=None):
     """То же, что search_posts, но из приватной корзины и только своего профиля.
 
     Отдельная таблица и обязательный profile: общий запрос по постам отдавал бы
@@ -554,10 +553,6 @@ def search_private_posts(db, q, channels, profile, only_unread=None, limit=120, 
     if q:
         sql += " AND text LIKE ?"
         args.append(f"%{q}%")
-    if only_unread:
-        sql += (" AND ts >= ? AND NOT EXISTS (SELECT 1 FROM user_reads r"
-                " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
-        args += [unread_floor(), only_unread]
     if hide_read:
         sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
@@ -843,32 +838,7 @@ def public_channels(channels):
     return [c for c in channels if valid_channel(c)]
 
 
-def unread_floor():
-    """Самый ранний пост, который ещё считается непрочитанным."""
-    return int(time.time()) - UNREAD_DAYS * 86400
-
-
-def count_unread_private(db, channels, profile):
-    """Непрочитанные в приватной корзине — по той же формуле, что и у публичных."""
-    if not channels or not profile:
-        return 0
-    sql = ("SELECT COUNT(*) FROM private_posts WHERE channel IN (%s) AND ts >= ? AND NOT EXISTS "
-           "(SELECT 1 FROM user_reads r WHERE r.profile=? "
-           "AND r.post=private_posts.channel || '/' || private_posts.msg_id)") % ",".join("?" * len(channels))
-    return db.execute(sql, list(channels) + [unread_floor(), profile]).fetchone()[0]
-
-
-def count_unread(db, channels, profile):
-    """Сколько постов подписок ещё не прочитано: без числа фильтр включают вслепую."""
-    if not channels or not profile:
-        return 0
-    sql = ("SELECT COUNT(*) FROM posts WHERE channel IN (%s) AND ts >= ? AND NOT EXISTS "
-           "(SELECT 1 FROM user_reads r WHERE r.profile=? "
-           "AND r.post=posts.channel || '/' || posts.msg_id)") % ",".join("?" * len(channels))
-    return db.execute(sql, list(channels) + [unread_floor(), profile]).fetchone()[0]
-
-
-def search_posts(db, q, channels, only_unread=None, limit=120, before=None, hide_read=None):
+def search_posts(db, q, channels, limit=120, before=None, hide_read=None):
     """Простой LIKE поверх SQLite — FTS5 тут оверинжиниринг."""
     sql = "SELECT " + ",".join(POST_FIELDS) + " FROM posts WHERE 1=1"
     args = []
@@ -878,10 +848,6 @@ def search_posts(db, q, channels, only_unread=None, limit=120, before=None, hide
     if q:
         sql += " AND text LIKE ?"
         args.append(f"%{q}%")
-    if only_unread:
-        sql += (" AND ts >= ? AND NOT EXISTS (SELECT 1 FROM user_reads r"
-                " WHERE r.profile=? AND r.post=posts.channel || '/' || posts.msg_id)")
-        args += [unread_floor(), only_unread]
     if hide_read:
         sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=posts.channel || '/' || posts.msg_id)")
@@ -2018,8 +1984,7 @@ class Handler(BaseHTTPRequestHandler):
                     # без подписок лента пустая: иначе поиск без фильтра отдавал бы
                     # весь кэш, а с пустым списком это весь кэш целиком
                     return self._send(200, json.dumps(
-                        {"posts": [], "titles": {}, "errors": [], "has_more": False,
-                         "unread": 0, "next": None}), "application/json; charset=utf-8")
+                        {"posts": [], "titles": {}, "errors": [], "has_more": False, "next": None}), "application/json; charset=utf-8")
                 before = None
                 cursor_values = (self._query("before_ts"), self._query("before_channel"),
                                  self._query("before_id"))
@@ -2040,7 +2005,6 @@ class Handler(BaseHTTPRequestHandler):
                 errors = failures_for(public_chans)
 
                 unread_profile = client_id(self, db)
-                only_unread = unread_profile if self._query("unread") == "1" else None
                 # прочитанное по умолчанию не показываем: фильтр в запросе, а не на клиенте,
                 # чтобы страница не приходила полупустой
                 hide_read = unread_profile if self._query("hide_read") == "1" else None
@@ -2052,11 +2016,11 @@ class Handler(BaseHTTPRequestHandler):
                 # search_posts на пустом списке каналов отдаёт весь кэш — так он
                 # был написан для выгрузки. В ленте это значило бы, что подписчик
                 # одних лишь приватных каналов увидит все публичные подряд.
-                rows = search_posts(db, q, public, only_unread=only_unread, hide_read=hide_read,
+                rows = search_posts(db, q, public, hide_read=hide_read,
                                     limit=FEED_PAGE_SIZE + 1, before=before) if public else []
                 if unread_profile and want_private:
                     rows += search_private_posts(db, q, want_private, unread_profile,
-                                                only_unread=only_unread, hide_read=hide_read,
+                                                hide_read=hide_read,
                                                 limit=FEED_PAGE_SIZE + 1, before=before)
                     # Порядок ленты общий для обеих корзин, иначе посты одного
                     # времени шли бы двумя кусками: сначала публичные, потом приватные.
@@ -2098,11 +2062,8 @@ class Handler(BaseHTTPRequestHandler):
                     titles.update(dict(db.execute(
                         "SELECT channel,title FROM tg_channels WHERE profile=? AND channel IN (%s)"
                         % ",".join("?" * len(want_private)), [unread_profile] + want_private)))
-                unread_count = (count_unread(db, public_channels(chans), unread_profile)
-                                + count_unread_private(db, want_private, unread_profile))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "has_more": has_more,
-                                                   "unread": unread_count,
                                                    "history": history_status(db, unread_profile),
                                                    "next": next_cursor}),
                                   "application/json; charset=utf-8")

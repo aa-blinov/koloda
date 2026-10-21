@@ -128,12 +128,7 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
   padding:var(--sp-3) var(--sp-4); padding-top:calc(var(--sp-3) + env(safe-area-inset-top))}
 .bar{max-width:1120px;margin:0 auto;display:flex;gap:var(--sp-3);align-items:center}
 #sectionTabs,#sortTabs{flex:0 0 auto}
-#unreadBtn,#meBtn{flex:0 0 auto}
-#unreadBtn{display:inline-flex;align-items:center;gap:var(--sp-2)}
-#unreadBtn .u-count{font-variant-numeric:tabular-nums}
-/* бейдж M3: счётчик пилюлей акцента, пустой не занимает места */
-#unreadBtn .u-count:not(:empty){min-width:20px;height:20px;padding:0 var(--sp-2);border-radius:var(--radius);
-  background:var(--acc);color:var(--acc-ink);font-size:12px;font-weight:500;line-height:20px;text-align:center}
+#meBtn{flex:0 0 auto}
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 /* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
@@ -143,9 +138,9 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .toggle{flex:0 0 auto;font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-4);
   border:1px solid var(--edge);border-radius:var(--radius);background:none;color:var(--fg);
   cursor:pointer;white-space:nowrap}
-/* Поле поиска M3: заполненная пилюля без рамки, фокус отмечается кольцом */
+/* Поле поиска: заливка без рамки, скругление как у кнопок, фокус отмечается кольцом */
 .search{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:var(--sp-3);
-  background:var(--surf-hi);border-radius:var(--r-pill);padding:0 var(--sp-4)}
+  background:var(--surf-hi);border-radius:var(--radius);padding:0 var(--sp-4)}
 .search:focus-within{box-shadow:inset 0 0 0 2px var(--acc)}
 .search svg.i{color:var(--faint)}
 /* min-height ровно 44, как у всех прочих кнопок: клик по полю не должен
@@ -163,10 +158,6 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
    иначе кнопка упирается в края окна. */
 /* отступы по бокам как у колонки постов, иначе кнопка шире карточек */
 .fresh{margin:var(--sp-2) 0 0;color:var(--faint);font-size:12px;min-height:0}
-/* Кнопка «Показать N новых публикаций»: заливка акцентом, липнет под шапкой */
-.new-posts{display:block;position:sticky;top:calc(var(--head-h,72px) + var(--sp-2));z-index:5;margin:var(--sp-2) auto 0;padding:var(--sp-2) var(--sp-4);
-  border:0;border-radius:var(--radius);background:var(--acc);color:var(--acc-ink);
-  font:inherit;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--sh-1)}
 /* Жест «потянуть, чтобы обновить»: высота идёт за пальцем, после отпускания схлопывается */
 .pull{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
   color:var(--dim);font-size:13px}
@@ -400,11 +391,9 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
   min-height:40px;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);cursor:pointer}
 .channel-form{display:flex;gap:var(--sp-2);margin:2px 0 var(--sp-2)}
 #channelAdd{min-height:44px}
-/* Поле M3 «filled»: заливка, скруглены только верхние углы, линия снизу. Фокус
-   утолщает линию до акцента, не сдвигая текст. */
-/* Поле добавления канала — той же пилюлей, что поиск и кнопки рядом */
+/* Поле добавления канала: заливка без рамки и то же скругление, что у поиска */
 .channel-form input{flex:1;min-width:0;min-height:44px;padding:var(--sp-2) var(--sp-4);border:0;
-  border-radius:var(--r-pill);background:var(--surf-hi);color:var(--fg);font:inherit;font-size:16px}
+  border-radius:var(--radius);background:var(--surf-hi);color:var(--fg);font:inherit;font-size:16px}
 .channel-form input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--acc)}
 .channel-form input::placeholder{color:var(--faint)}
 .channel-state{min-height:0;margin:0 0 var(--sp-2);color:var(--dim);font-size:12.5px}
@@ -491,7 +480,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* Отступ внутри кнопки: выбранная кнопка с заливкой не должна упираться текстом в край */
 .feed-tools .quiet-btn{padding-left:var(--sp-3);padding-right:var(--sp-3)}
 #meTabs{margin:var(--sp-4) 0 var(--sp-5)}
-#readToggle[aria-pressed=true],#unreadBtn[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
+#readToggle[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
 .quiet-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
   border-radius:var(--radius);background:none;color:var(--dim);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
@@ -636,7 +625,7 @@ body.view-solo .search{display:none}
   #appShell{padding-bottom:calc(var(--sp-8) + env(safe-area-inset-bottom))}
   /* снэкбар над нижней панелью, иначе панель его закрывает */
   .undo-bar{bottom:calc(80px + env(safe-area-inset-bottom))}
-  /* шапка: поиск, название, непрочитанные — один ряд */
+  /* шапка: поиск и название — один ряд */
   #sectionTabs{display:none}
   #meBtn{display:none}
   .bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand qtoggle extra";
@@ -656,7 +645,6 @@ body.view-solo .search{display:none}
   .quiet-btn,.toggle,.btn,.act-btn,.undo-btn,.seg button,.auth-modes button,.empty-action,.sync-status button{min-height:44px}
   header{padding:var(--sp-2) var(--sp-4);padding-top:calc(var(--sp-2) + env(safe-area-inset-top))}
   .bar{gap:var(--sp-2)}
-  #unreadBtn .u-count:empty{display:none}
   .seg button{padding:var(--sp-2) var(--sp-3);font-size:13px}
   main{padding-left:var(--sp-4);padding-right:var(--sp-4)}
   .tabs-wrap{padding:var(--sp-3) var(--sp-4) var(--sp-2)}
@@ -756,13 +744,11 @@ body.view-solo .search{display:none}
   <div class="feed-tools">
     <button id="unsubBtn" class="quiet-btn" type="button" hidden>Убрать из ленты</button>
     <button id="collEditBtn" class="quiet-btn" type="button" hidden>Изменить коллекцию</button>
-    <button id="unreadBtn" class="quiet-btn" type="button" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
-    <button id="readToggle" class="quiet-btn" type="button" aria-pressed="false">Показать прочитанное</button>
+    <button id="readToggle" class="quiet-btn" type="button" aria-pressed="true">Скрыть прочитанные</button>
   </div>
   <p class="fresh" id="fresh" aria-live="polite"></p>
   <p class="fresh" id="historyStatus" aria-live="polite" hidden></p>
 </div>
-    <button id="newPosts" class="new-posts" type="button" hidden></button>
     <main id="feed" aria-label="Публикации канала" tabindex="0"></main>
 
 
@@ -1029,7 +1015,7 @@ body.view-solo .search{display:none}
 
 <script>
 const $ = s => document.querySelector(s);
-const LS = {sub:'tg.subs', read:'tg.read', pending:'tg.pending', only:'tg.only', view:'tg.view', migrated:'tg.migrated', showRead:'tg.showRead'};
+const LS = {sub:'tg.subs', read:'tg.read', pending:'tg.pending', view:'tg.view', migrated:'tg.migrated', showRead:'tg.showRead'};
 const readJSON = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || ''); } catch(e) { return fallback; } };
 const subs  = () => { const v=readJSON(LS.sub,[]); return Array.isArray(v)?v.filter(c=>typeof c==='string'):[]; };
 const seen  = () => { const v=readJSON(LS.read,[]); return new Set(Array.isArray(v)?v.filter(k=>typeof k==='string'):[]); };
@@ -1072,14 +1058,12 @@ function paintFreshness(){
   const el=$('#fresh');
   if(!el) return;
   if(!lastFetched){ el.textContent=''; return; }
-  // Фильтр меняет, что видно в ленте: говорим об этом прямо, иначе кнопка кажется немой
-  const mode = onlyUnread && feedMode !== 'saved' ? 'показаны только непрочитанные. ' : '';
   if(newestPost){
     const days = Math.floor((Date.now()/1000 - newestPost)/86400);
-    el.textContent = mode+'последний пост '+(days<1?'сегодня':days<2?'вчера':new Date(newestPost*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}));
+    el.textContent = 'последний пост '+(days<1?'сегодня':days<2?'вчера':new Date(newestPost*1000).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}));
     return;
   }
-  el.textContent = mode+'обновлено только что';
+  el.textContent = 'обновлено только что';
 }
 function plural(n,one,few,many){
   const m10=n%10, m100=n%100;
@@ -1320,49 +1304,45 @@ async function pullState(){
   }catch(e){ /* продолжаем показывать уже загруженную ленту */ }
 }
 
-let tab = '', onlyUnread = localStorage.getItem(LS.only) === '1', titles = {};
+let tab = '', titles = {};
 // Коллекции пользователя и id коллекции, которую сейчас редактируем (null, если новая)
 let collections = [], collEditing = null;
 let showRead = localStorage.getItem(LS.showRead) === '1';
 let catalogCat = 'all', timer, catTimer, feedQuery='', catalogQuery='', catalogItems=new Map();
 let feedCursor=null, feedHasMore=false, feedErrors=[], feedRequestId=0, feedController=null, feedLoading=false;
 let feedPageFailed=false;
-let unreadTotal=0;
-
-const paintUnread = () => {
-  const ub=$('#unreadBtn');
-  ub.querySelector('.u-count').textContent = unreadTotal ? String(unreadTotal) : '';
-  ub.setAttribute('aria-label', unreadTotal ? 'Непрочитанные: '+unreadTotal : 'Непрочитанные');
-};
-
 // Пост прочитан, когда его проскроллили вверх: нижний край ушёл за верхнюю границу экрана.
+// Отмечаем только переход через границу, то есть на прошлом замере пост был ниже экрана.
+// Пост, который обновление вставило выше экрана, такого замера не имеет и отметки не получает.
 // Проверяем по прокрутке, а не через IntersectionObserver: он не сообщает о посте, который
 // рывком пролетел мимо экрана, так и не побывав на нём.
-const markFn = new WeakMap();
+const markFn = new WeakMap(), lastBottom = new WeakMap();
 let passedFrame = 0;
-const markPassed = () => {
+const markPassed = mark => {
   passedFrame = 0;
   for (const el of [...($('#postList')?.children || [])]) {
-    if (!el.classList.contains('post') || el.classList.contains('read')) continue;
-    if (el.getBoundingClientRect().bottom > 0) break; // дальше по списку только ниже экрана
-    markFn.get(el)?.();
+    if (!el.classList.contains('post')) continue;
+    const bottom = el.getBoundingClientRect().bottom;
+    if (mark && lastBottom.get(el) > 0 && bottom <= 0) markFn.get(el)?.();
+    lastBottom.set(el, bottom);
   }
 };
-const scheduleMarkPassed = () => { if (!passedFrame) passedFrame = requestAnimationFrame(markPassed); };
+const scheduleMarkPassed = () => { if (!passedFrame) passedFrame = requestAnimationFrame(() => markPassed(true)); };
 window.addEventListener('scroll', scheduleMarkPassed, {passive:true});
+// Высота ленты меняется и без прокрутки (картинки догрузились): записи положения пересчитываем,
+// иначе прыжок прокрутки сравнит пост с тем местом, где он стоял до загрузки картинок.
+new ResizeObserver(() => markPassed(false)).observe($('#feed'));
 
 const markRead = p => {
   const post=key(p), s=seen();
   if(s.has(post)) return;
   s.add(post); saveRead(s); queueStateOp({type:'read',post});
-  unreadTotal=Math.max(0, unreadTotal-1); paintUnread();
 };
 // обратное действие: человек перечитал пост, и он снова попадает в непрочитанные
 const markUnread = post => {
   const s = seen();
   if(!s.delete(post)) return false;
   saveRead(s); queueStateOp({type:'read',post,unread:true});
-  unreadTotal++; paintUnread();
   return true;
 };
 
@@ -1461,7 +1441,6 @@ async function loadSaved(append=false){
   if(!append){
     feedController?.abort(); feedController=new AbortController();
     feedCursor=null; feedHasMore=false; feedErrors=[]; feedPageFailed=false;
-    $('#newPosts').hidden = true;
     $('#feed').innerHTML = skeleton();
   }else{
     const more=$('#loadMore'); if(more){ more.disabled=true; more.textContent='Загружаю…'; }
@@ -1532,7 +1511,6 @@ async function load(append=false, silent=false){
     feedController?.abort(); feedController=new AbortController();
     feedCursor=null; feedHasMore=false; feedErrors=[];
     feedPageFailed=false;
-    $('#newPosts').hidden = true;
     if(!silent) box.innerHTML = skeleton();
   }else{
     const more=$('#loadMore'); if(more){ more.disabled=true; more.textContent='Загружаю…'; }
@@ -1551,7 +1529,6 @@ async function load(append=false, silent=false){
       params.set('before_ts',feedCursor.ts); params.set('before_channel',feedCursor.channel);
       params.set('before_id',feedCursor.msg_id);
     }
-    if(onlyUnread) params.set('unread','1');
     if(!showRead) params.set('hide_read','1');
     const r = await fetch('/api/feed?'+params.toString(),{
       signal:controller.signal
@@ -1563,10 +1540,9 @@ async function load(append=false, silent=false){
     newestPost=d.posts && d.posts.length ? Number(d.posts[0].ts)||0 : 0;
     titles = d.titles || {};
     feedCursor=d.next || null; feedHasMore=Boolean(d.has_more); feedErrors=d.errors || [];
-      unreadTotal=Number(d.unread)||0; paintUnread();
     feedPageFailed=false;
     renderTabs(); render(d.posts,append);
-    scheduleMarkPassed();
+    markPassed(false);
     loadAvatars(subs());
     // В пустом состоянии render() уходит раньше и #feedEnd в разметке нет.
     // Обращение к нему бросало TypeError, и человек вместо «Ничего не нашлось»
@@ -1638,50 +1614,6 @@ document.addEventListener('click', async e => {
     window.open(url, '_blank', 'noopener');
   }
 });
-
-// Опрос без перезагрузки: раз в минуту и когда вкладка снова видна спрашиваем первую
-// страницу. Если читающий наверху, новые посты встают сами. Иначе появляется кнопка,
-// и позиция в ленте не сбивается.
-const POLL_MS = 60000;
-let pollStamp = 0;
-const pollContext = () => [tab, feedQuery, onlyUnread].join('|');
-async function pollFresh(){
-  if(feedMode === 'saved') return;
-  if(document.visibilityState !== 'visible' || feedLoading || $('#viewFeed').hidden || $('#appShell').hidden) return;
-  const list = feedChannels();
-  if(!list.length) return;
-  const q = feedQuery.trim();
-  const context = pollContext();
-  pollStamp = Date.now();
-  let d;
-  try{
-    const params=new URLSearchParams({channels:list.join(','),q:q.length >= 2 ? q : ''});
-    if(onlyUnread) params.set('unread','1');
-    if(!showRead) params.set('hide_read','1');
-    const r = await fetch('/api/feed?'+params.toString());
-    if(!r.ok) return;
-    d = await r.json();
-    paintHistory(d.history);
-  }catch(e){ return; }
-  if(context !== pollContext() || feedLoading) return;
-  const shown = new Set([...($('#postList')?.children || [])].map(el => el.dataset.post).filter(Boolean));
-  // Новее верха ленты, а не просто не на экране: без прочитанных сервер дозаполняет
-  // страницу старыми постами, и счётчик врал бы «10 новых» при одной публикации.
-  const fresh = (d.posts || []).filter(p => !shown.has(key(p)) && Number(p.ts) > newestPost);
-  if(!fresh.length) return;
-  // Новые посты ленту сами не меняют: иначе прочитанное пропадало бы без предупреждения.
-  // Обновляет человек, кнопкой «Показать новые» или жестом «потянуть вниз».
-  const btn = $('#newPosts');
-  btn.textContent = 'Показать ' + fresh.length + ' ' + plural(fresh.length, 'новую публикацию', 'новые публикации', 'новых публикаций');
-  btn.hidden = false;
-}
-setInterval(pollFresh, POLL_MS);
-document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && Date.now() - pollStamp > 30000) pollFresh();
-});
-$('#newPosts').onclick = () => { window.scrollTo({top:0}); load(false, true); };
-// Высота шапки меняется с поиском и переносами строк: кнопка «Показать новые» липнет под ней
-new ResizeObserver(() => document.documentElement.style.setProperty('--head-h', $('header').offsetHeight + 'px')).observe($('header'));
 
 // Потянуть ленту вниз у её верха обновляет её. Высота индикатора идёт вполовину
 // за пальцем, поэтому порог 96 px даёт ему полные 48 px.
@@ -1846,20 +1778,18 @@ function watchGalleries(root){
 
 function render(posts,append=false){
   const box = $('#feed'), s = seen();
-  const list = onlyUnread && feedMode !== 'saved' ? posts.filter(p => !s.has(key(p))) : posts;
   if(!append){
-    if(!list.length && feedErrors.length){
+    if(!posts.length && feedErrors.length){
       const message='Не удалось обновить каналы: '+feedErrors.map(e=>e.channel).filter(Boolean).join(', ')+'. Проверь соединение и попробуй ещё раз.';
       box.innerHTML=emptyState('alert',message,['retry','Попробовать снова']);
       return;
     }
-    if(!list.length && !feedHasMore){
-      box.innerHTML = emptyState(onlyUnread?'rss':(posts.length?'rss':'search'),
-        onlyUnread ? 'Непрочитанных постов пока нет.'
-          : (posts.length || (!showRead && !feedQuery)) ? 'Всё прочитано. Новые посты появятся здесь.'
+    if(!posts.length && !feedHasMore){
+      box.innerHTML = emptyState('search',
+        (!showRead && !feedQuery) ? 'Всё прочитано. Новые посты появятся здесь.'
           : feedQuery ? 'Ничего не нашлось. Попробуй другой запрос.'
           : 'Каналов пока нет. Загляни в каталог и добавь нужные.',
-        (!onlyUnread && feedQuery ? ['clearFeed','Сбросить поиск'] : null));
+        (feedQuery ? ['clearFeed','Сбросить поиск'] : null));
       return;
     }
     box.innerHTML='<div class="feed-warning" id="feedWarning" role="status" hidden></div><div id="postList"></div>'+
@@ -1868,7 +1798,7 @@ function render(posts,append=false){
   }
   const postList=$('#postList');
   if(!postList) return;
-  if(!list.length && feedHasMore){
+  if(!posts.length && feedHasMore){
     const note=$('#feedPageNote'); note.hidden=false; note.textContent='В этой части нет непрочитанных постов.';
   }
   // делегирование: один слушатель на все посты, даже когда их перерисовывают
@@ -1883,12 +1813,12 @@ function render(posts,append=false){
   // Размер группы заранее: разделитель рисуем только там, где он скрывает
   // переход, то есть подряд стоит больше одного поста одного дня.
   const dayGroups = new Map();
-  for(const p of list){
+  for(const p of posts){
     const d = p.ts ? new Date(p.ts*1000).toDateString() : '';
     if(d) dayGroups.set(d, (dayGroups.get(d) || 0) + 1);
   }
   let lastDay = '';
-  for(const p of list){
+  for(const p of posts){
     const read = s.has(key(p));
     const el = document.createElement('article');
     el.className = 'post' + (read ? ' read' : '');
@@ -2404,22 +2334,15 @@ async function loadCatalog(append=false){
 // Прочитанное прячется из ленты при следующем открытии. То, что прочитано сейчас, остаётся
 // на экране, пока лента не перезагрузится: иначе она прыгала бы под пальцем
 const paintReadToggle=()=>{
-  const b=$('#readToggle');
-  b.textContent=showRead?'Скрыть прочитанное':'Показать прочитанное';
-  b.setAttribute('aria-pressed',String(showRead));
+  $('#readToggle').setAttribute('aria-pressed',String(!showRead));
 };
-// «Непрочитанные» и «Показать прочитанное» — два способа показать ленту, одновременно они не работают:
-// выбран один, его повторное нажатие возвращает обычную ленту, где прочитанное спрятано
-function setReadMode(mode){
-  onlyUnread = mode === 'unread';
-  showRead = mode === 'all';
-  localStorage.setItem(LS.only, onlyUnread ? '1' : '0');
+// Кнопка нажата, пока прочитанное спрятано, и нажатие показывает или прячет его
+$('#readToggle').onclick=()=>{
+  showRead = !showRead;
   localStorage.setItem(LS.showRead, showRead ? '1' : '0');
   paintReadToggle();
-  $('#unreadBtn').setAttribute('aria-pressed', String(onlyUnread));
   load();
-}
-$('#readToggle').onclick=()=>setReadMode(showRead ? '' : 'all');
+};
 paintReadToggle();
 // Отписка прямо из ленты: открыт один канал, и его можно убрать одной кнопкой с отменой
 $('#unsubBtn').onclick = () => {
@@ -2644,7 +2567,7 @@ function show(which, opts={}){
   $('#tabCat').tabIndex = inCatalog ? 0 : -1;
   $('#tabSaved').tabIndex = saved ? 0 : -1;
   $('#meBtn').setAttribute('aria-pressed', String(me));
-  $('#unreadBtn').hidden = inCatalog || me || saved;
+  $('#readToggle').hidden = inCatalog || me || saved;
   document.querySelector('.tabs-wrap').hidden = saved || channel;
   // Поиск относится к тому экрану, где он уместен
   const placeholder = cat ? 'Поиск по каталогу' : saved ? 'Поиск по сохранённым' : 'Поиск по постам';
@@ -2689,8 +2612,6 @@ enableTabKeyboard($('#sectionTabs'));
 
 $('#tabFeed').onclick = () => show('feed');
 $('#tabCat').onclick   = () => show('cat');
-$('#unreadBtn').onclick = () => setReadMode(onlyUnread ? '' : 'unread');
-$('#unreadBtn').setAttribute('aria-pressed', String(onlyUnread));
 /* ---------- Клавиатура ленты ---------- */
 // Посты лежат во вложенном #postList, а не прямыми потомками #feed: искать
 // приходится именно там, иначе фокус никуда не двигается.
