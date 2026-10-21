@@ -670,18 +670,6 @@ class FeedAPITest(unittest.TestCase):
         self.cookie = ""
         self.assertEqual(self.register("a b", "password123")[0], 400)
 
-    def test_unread_counts_only_the_last_two_weeks(self):
-        # Старый архив догрузки не должен раздувать счётчик непрочитанного
-        profile = self.login("unread_window")
-        self.subscribe(profile)
-        before = self.request("/api/feed?channels=alpha")[1]["unread"]
-        now = int(time.time())
-        self.db.executemany(app.POST_INSERT, [fake_post("alpha", 90001, now - 30 * 86400),
-                                             fake_post("alpha", 90002, now)])
-        self.db.commit()
-        after = self.request("/api/feed?channels=alpha")[1]["unread"]
-        self.assertEqual(after - before, 1)
-
     def test_read_posts_can_be_left_out_of_the_feed(self):
         # прочитанное без hide_read возвращается как раньше, а с hide_read страница
         # приходит без него целиком, а не полупустой после фильтрации на клиенте
@@ -918,24 +906,6 @@ class FeedAPITest(unittest.TestCase):
         status, state = self.request("/api/state")
         self.assertEqual(len(state["subs"]), 200)
 
-    def test_feed_reports_how_much_is_left_unread(self):
-        # без числа фильтр «Непрочитанные» включают вслепую
-        self.register("unread_count", "long-password")
-        query = urlencode({"channels": "alpha"})
-        status, payload = self.request("/api/feed?" + query)
-        self.assertEqual(status, 200)
-        self.assertEqual(payload["unread"], 43)
-        self.request("/api/state/read", method="POST",
-                     data={"posts": ["alpha/%d" % i for i in range(1, 20, 2)]})
-        status, payload = self.request("/api/feed?" + query)
-        self.assertEqual(payload["unread"], 33)
-        # отметка чужого канала не уменьшает счётчик своей ленты
-        self.request("/api/state/read", method="POST", data={"posts": ["beta/1", "beta/2"]})
-        self.assertEqual(self.request("/api/feed?" + query)[1]["unread"], 33)
-        # без сессии счётчик не считается
-        self.cookie = ""
-        self.assertEqual(self.request("/api/feed?" + query)[1]["unread"], 0)
-
     def test_read_mark_can_be_removed(self):
         # человек перечитал пост: он снова должен попасть в «Непрочитанные»
         self.register("unread_mark", "long-password")
@@ -997,7 +967,6 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["posts"], [])
         self.assertEqual(payload["titles"], {})
-        self.assertEqual(payload["unread"], 0)
 
     def test_feed_titles_cover_only_requested_channels(self):
         self.db.execute("INSERT INTO cache VALUES ('gamma','Gamma',1)")
@@ -1089,7 +1058,7 @@ class FeedAPITest(unittest.TestCase):
                                      data={"posts": ["alpha/1"]})
         self.assertEqual(status, 200)
         self.assertIn("alpha/1", state["reads"])
-        query = urlencode({"channels": "alpha,beta", "unread": "1"})
+        query = urlencode({"channels": "alpha,beta", "hide_read": "1"})
         status, feed = self.request("/api/feed?" + query, client_id="shared-123")
         self.assertEqual(status, 200)
         self.assertNotIn(("alpha", 1), {(p["channel"], p["msg_id"]) for p in feed["posts"]})

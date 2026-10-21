@@ -59,16 +59,14 @@ The interface is in Russian; the labels quoted here are translated.
 - **The feed.** The posts of the chosen channels mixed together, in the order of
   publication. 80 entries on a page, and "Load more" continues the same
   chronology. Up to 200 channels in one feed.
-- **Unread.** A post counts as read when most of it is visible, so nothing has to
-  be clicked. The check on a read post takes the mark back if you read it again.
-  Read posts stay out of the feed on the next open: the "Show read" button
-  brings them back. New posts do not change the feed by themselves, the "Show
-  new" button or the pull-down gesture at the top of the feed refreshes it, and
-  the read posts leave the screen. Until the refresh, what you read in this
-  session stays in place. One filter for all the channels: the "Unread" button
-  above the feed, next to "Show read", shows how much is left. Only posts of the
-  last two weeks (`UNREAD_DAYS`) count, so the archive does not inflate the
-  counter.
+- **Read.** A post counts as read once you scroll it above the top of the
+  screen, so nothing has to be clicked. The `u` key takes a read mark back.
+  Read posts stay out of the feed on the next open: the "Hide read" button above
+  the feed is on by default, and turning it off brings them back. New posts do
+  not change the feed by themselves. The pull-down gesture at the top of the
+  feed refreshes it on a phone, and the read posts leave the screen. A post that the refresh puts above the screen stays unread until you
+  scroll past it. Until the refresh, what you read in this session stays in
+  place.
 - **Search.** Over the posts of the feed and over the names in the catalog. The
   search waits 320 ms after the last keystroke.
 - **Channel tabs.** A quick jump to one channel.
@@ -209,7 +207,7 @@ docker compose down              # stop
 The tests and the check of the markup run on every push in GitHub Actions:
 
 ```bash
-python3 -m unittest -v           # 134 tests: no network, no Telegram, a temporary database
+python3 -m unittest -v           # 133 tests: no network, no Telegram, a temporary database
 python3 check_ui.py              # the integrity of index.html, without a browser
 docker build -t koloda:ci .      # the image builds
 ```

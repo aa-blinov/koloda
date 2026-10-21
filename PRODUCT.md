@@ -53,8 +53,8 @@ person never reaches another.
 ## Operating Context
 
 The service is a page in a browser tab that stays open next to a chat. The feed
-is refreshed with the "Show new" button or by pulling down at the top of the
-list; nothing arrives on its own. The reader moves through the posts with the
+is refreshed by pulling down at the top of the list; nothing arrives on its
+own. The reader moves through the posts with the
 keyboard: `j` and `k` for the next and the previous post, `n` for the first
 unread, `u` to take a read mark back, `/` for the search, `?` for the list of
 the keys, `Esc` to close a dialog.
@@ -79,13 +79,12 @@ Confirmed by the code:
   publication time.
 - The catalog of TGMania: search, categories, three sorts, 40 channels on a
   page.
-- A post counts as read once it has scrolled above the top of the screen, and
-  the mark can be taken back. The posts that scrolled above the screen count as
-  read too when the next page loads, whether by scrolling to the end of the feed
-  or by the button.
+- A post counts as read once the reader has scrolled it above the top of the
+  screen, and the mark can be taken back. A post that a refresh puts above the
+  screen is not marked: it stays unread until the reader scrolls past it. Loading
+  the next page marks nothing.
 - The next page of the feed loads when the reader scrolls near its end; the
   button stays as the way to load it when that does not happen.
-- The unread counter only counts the posts of the last 14 days.
 - The search runs over the posts of the feed and over the names in the catalog.
 - A profile with a password, a session cookie for 30 days, PBKDF2-SHA256 with
   600,000 iterations and a salt of 16 bytes.
@@ -109,8 +108,9 @@ Deliberately not true, and worth knowing before a change:
 
 - The project carries no licence file.
 - There is no automatic update.
-- Nothing arrives in the browser by itself: the new posts wait for the button
-  or for the pull gesture.
+- Nothing arrives in the browser by itself: the new posts wait for the pull
+  gesture on a phone. On a desktop the feed refreshes when the page reloads or
+  the channel changes.
 - The history of a channel stops at 500 posts, and the rest is only in Telegram.
 - A private channel is not read through `t.me/s`. It needs the login of the
   reader, and the file of the session is a ready-made login into the account.
@@ -141,10 +141,9 @@ stroke. No emoji, and no Unicode symbol in place of an icon.
 - `README.md` describes what the service does, the private channels, the
   backup, the design and the limits.
 - `app.py` holds the routes, the limits and the defaults: 80 posts on a page,
-  200 channels in a feed, 500 posts of history, 14 days of unread, 30 days of
-  session.
+  200 channels in a feed, 500 posts of history, 30 days of session.
 - `index.html` holds the tokens of the palette and the whole interface.
-- `test_app.py` holds 112 tests, and `check_ui.py` checks the integrity of the
+- `test_app.py` holds 133 tests, and `check_ui.py` checks the integrity of the
   markup.
 - `docs/` holds ten screenshots of the live interface, in the dark and the
   light theme, on a desktop and on a phone.
@@ -164,7 +163,7 @@ and 0 forks, and it was created on 2026-10-15.
    to the profile on the server, and not to the browser that happened to open
    the page. A collection is a named group of the profile's own subscriptions:
    the feed can show one collection, and it is the same feed with a filter, so
-   the read marks, the unread counter and the paging work the same way inside it.
+   the read marks and the paging work the same way inside it.
    Collections are listed by name, without regard to case.
    A name is unique per profile (case and edge spaces ignored), up to 50
    collections with up to 200 channels each. Unsubscribing removes the channel
