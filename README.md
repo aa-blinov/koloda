@@ -209,7 +209,7 @@ docker compose down              # stop
 The tests and the check of the markup run on every push in GitHub Actions:
 
 ```bash
-python3 -m unittest -v           # 128 tests: no network, no Telegram, a temporary database
+python3 -m unittest -v           # 134 tests: no network, no Telegram, a temporary database
 python3 check_ui.py              # the integrity of index.html, without a browser
 docker build -t koloda:ci .      # the image builds
 ```
@@ -232,15 +232,18 @@ frames of an album and the stale addresses.
 
 The user paths are described in `docs/user-paths.md`, each with an ID. The
 browser check walks the paths that can be checked on a running stand. It needs
-Playwright and Chrome, the internet for the channels, and a stand without mail:
+Playwright and Chrome, the internet for the channels, and the data directory of
+the stand: a profile needs a confirmed address, so the check creates its profiles
+in the stand's database and signs in over HTTP like a reader does:
 
 ```bash
-python3 ui_paths_check.py http://127.0.0.1:8090                 # every path for its device
-python3 ui_paths_check.py http://127.0.0.1:8090 --only C1,F2   # some paths
+python3 ui_paths_check.py http://127.0.0.1:8090 --data-dir ./data                # every path for its device
+python3 ui_paths_check.py http://127.0.0.1:8090 --data-dir ./data --only C1,F2   # some paths
+python3 ui_paths_check.py http://127.0.0.1:8090 --data-dir ./data --device both  # desktop and phone
 ```
 
-Each check creates its own profile through the API and prints PASS, FAIL or SKIP.
-A path that needs posts which the stand does not have is SKIP, not PASS.
+Each check creates its own profile and prints PASS, FAIL or SKIP. A path that
+needs posts which the stand does not have is SKIP, not PASS.
 
 | Path | What it holds |
 | --- | --- |

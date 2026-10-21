@@ -114,6 +114,9 @@ body{
 ::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:var(--r-pill);border:3px solid var(--bg)}
 ::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover)}
 :focus-visible{outline:2px solid color-mix(in srgb, var(--fg) 85%, transparent); outline-offset:2px; border-radius:var(--radius)}
+/* Подсветку тапа браузер рисует голубой квадратом, она не из темы: отключаем, а нажатие показываем своим */
+*{-webkit-tap-highlight-color:transparent}
+:is(button,a,[role=button]):active{opacity:.72}
 svg.i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
@@ -193,6 +196,8 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 .hist-bar{height:4px;margin-top:var(--sp-2);border-radius:var(--radius);background:var(--raise);overflow:hidden}
 .hist-bar i{display:block;height:100%;background:var(--acc)}
 .fresh:empty{display:none}
+/* Ссылка в такой подписи (например, «Открыть в Telegram» у публикации без текста) — цель для пальца, не строка текста */
+.fresh a{display:inline-flex;align-items:center;min-height:44px;padding:0 var(--sp-2)}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:var(--sp-3) var(--sp-5) var(--sp-2)}
 .tabs-toggle{display:flex;align-items:center;gap:var(--sp-2);width:100%;
   min-height:44px;padding:var(--sp-3) var(--sp-4);font:inherit;font-size:14px;text-align:left;cursor:pointer;
@@ -354,6 +359,10 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .filters{display:flex;gap:var(--sp-2);overflow-x:auto;padding:var(--sp-1) 0 var(--sp-4);scrollbar-width:none}
 .filters::-webkit-scrollbar{display:none}
 .filter-scroll{position:relative}
+/* Развёрнутый ряд категорий: все чипы в несколько строк, кнопка «Свернуть» под ними */
+.filters.wrap{flex-wrap:wrap;overflow-x:visible}
+.cat-expand{margin:0 0 var(--sp-3)}
+.cat-expand[hidden]{display:none}
 .filter-scroll:not([data-end="true"])::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:12px;width:28px;
   pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg))}
 .filters button{flex:0 0 auto;font:inherit;font-size:13px;min-height:44px;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);
@@ -543,6 +552,9 @@ body.view-solo .search{display:none}
 .coll-pick-item input{width:20px;height:20px;margin:0;accent-color:var(--acc)}
 .coll-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-4)}
 #collDelete{margin-right:auto}
+.coll-new-row{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3)}
+.coll-new-row .coll-name{flex:1 1 auto;min-width:0}
+#chanCollAdd{width:auto;min-width:0;height:auto;min-height:44px;padding:var(--sp-2) var(--sp-4)}
 /* На телефоне .channel-action становится квадратом под иконку: эта кнопка с текстом на всю ширину */
 .channel-action.coll-new{width:100%;min-width:0;height:auto;min-height:44px;padding:var(--sp-3) var(--sp-4)}
   /* Настройки оформления в оверлее профиля */
@@ -755,8 +767,10 @@ body.view-solo .search{display:none}
     <p class="ch-meta" id="chMeta"></p>
     <div class="ch-actions">
       <button type="button" class="channel-action" id="chAction" aria-pressed="false"></button>
+      <button type="button" class="quiet-btn" id="chColl" hidden>В коллекцию</button>
       <a class="quiet-btn" id="chTg" href="#" target="_blank" rel="noopener">Открыть в Telegram</a>
     </div>
+    <p class="chan-hint" id="chCollState" hidden></p>
     <p class="channel-state" id="chState" role="status" aria-live="polite"></p>
     <p class="fresh" id="chHistory" aria-live="polite" hidden></p>
     <div id="chList"></div>
@@ -784,6 +798,7 @@ body.view-solo .search{display:none}
     </form>
     <p class="channel-state" id="channelState" role="status" aria-live="polite"></p>
     <div class="filter-scroll" id="filterScroll"><div class="filters" id="cats" role="group" aria-label="Категории"></div></div>
+    <button class="quiet-btn cat-expand" id="catExpand" type="button" aria-expanded="false" hidden>Все категории</button>
     <div id="catList"></div>
   </main>
 </section>
@@ -958,6 +973,21 @@ body.view-solo .search{display:none}
     </div>
   </form>
 </div>
+<div class="ov" id="chanCollOvl" role="dialog" aria-modal="true" aria-labelledby="chanCollTitle" aria-hidden="true">
+  <div class="dlg dlg-channels">
+    <h2 id="chanCollTitle">В коллекции</h2>
+    <p class="chan-hint" id="chanCollName"></p>
+    <div class="chan-list" id="chanCollList"></div>
+    <form class="coll-new-row" id="chanCollNewForm">
+      <input class="coll-name" id="chanCollNew" type="text" maxlength="32" autocomplete="off" placeholder="Новая коллекция" aria-label="Название новой коллекции">
+      <button class="channel-action" id="chanCollAdd" type="submit">Создать</button>
+    </form>
+    <p class="channel-state" id="chanCollMsg" role="alert"></p>
+    <div class="account-actions">
+      <button class="btn" id="chanCollDone" type="button">Готово</button>
+    </div>
+  </div>
+</div>
 
 <div class="boot-screen" id="bootScreen" role="status"><svg class="i brand-mark" aria-hidden="true"><use href="#i-send"/></svg><span>Колода</span></div>
 <main class="auth-screen" id="authScreen" hidden>
@@ -1114,6 +1144,8 @@ const CAT_RU = {'News & Media':'Новости и медиа','Career & Jobs':'�
   'IT':'Айти','Programming':'Программирование','Startups':'Стартапы','E-commerce':'Интернет-магазины',
   'Investing':'Инвестиции','Cryptocurrency':'Криптовалюта','Trading':'Трейдинг','Forex':'Форекс',
   'Crypto & Finance':'Крипто и финансы','Technology':'Технологии','Tech':'Технологии',
+  'Bots & Tools':'Боты и инструменты','Business & Marketing':'Бизнес и маркетинг',
+  'Deals & Coupons':'Скидки и купоны','Education & Learning':'Образование и обучение',
   'Science & Technology':'Наука и технологии','Health':'Здоровье','Wellness':'Здоровье и жизнь',
   'Gaming':'Игры','Movies & TV':'Кино и сериалы','Fashion':'Мода','Beauty':'Красота'};
 const catRu = value => CAT_RU[String(value||'').trim()] || String(value||'').trim();
@@ -1893,7 +1925,24 @@ function render(posts,append=false){
   showFeedWarning();
   const more=$('#loadMore');
   if(more){ more.hidden=!feedHasMore; more.textContent='Загрузить ещё'; }
+  scheduleLoadMore();
 }
+
+// Следующая страница подгружается, когда прокрутили почти до конца ленты. Кнопка «Загрузить ещё»
+// остаётся запасным вариантом: при ошибке страницы автоматически не повторяем.
+let loadMoreFrame = 0;
+function scheduleLoadMore(){
+  if(loadMoreFrame) return;
+  loadMoreFrame = requestAnimationFrame(() => {
+    loadMoreFrame = 0;
+    const more = $('#loadMore');
+    if(!more || more.hidden || more.disabled || feedPageFailed) return;
+    if(feedLoading){ setTimeout(scheduleLoadMore, 300); return; }
+    if(more.getBoundingClientRect().top < window.innerHeight + 400) more.click();
+  });
+}
+window.addEventListener('scroll', scheduleLoadMore, {passive:true});
+window.addEventListener('resize', scheduleLoadMore);
 
 /* Каналы живут на отдельном экране: кнопка в ленте его открывает, а выбранный
    канал остаётся подписью на кнопке — как было подписью в меню. */
@@ -1935,6 +1984,24 @@ function renderTabs(){
       b.onclick = () => { tab = val; closeChannels(); load(); };
       box.appendChild(b);
     };
+    // строка канала: выбрать ленту и отдельно «В коллекцию» с числом коллекций, где канал уже есть
+    const chanRow = c => {
+      const row = document.createElement('div');
+      row.className = 'coll-row';
+      const pick = document.createElement('button');
+      pick.type = 'button'; pick.className = 'chan-item';
+      if(c === selected) pick.setAttribute('aria-current','true');
+      pick.textContent = titles[c] || c;
+      pick.onclick = () => { tab = c; closeChannels(); load(); };
+      const inCount = channelInCollections(c).length;
+      const toColl = document.createElement('button');
+      toColl.type = 'button'; toColl.className = 'quiet-btn';
+      toColl.textContent = inCount ? 'В коллекциях: ' + inCount : 'В коллекцию';
+      toColl.setAttribute('aria-label', 'Коллекции канала ' + (titles[c] || c));
+      toColl.onclick = () => openChanColl(c);
+      row.append(pick, toColl);
+      box.appendChild(row);
+    };
     if(list.length > 1) mk('Все каналы', '');
     box.appendChild(heading('Коллекции', 'Группы каналов из твоих подписок.'));
     collections.forEach(c => {
@@ -1964,7 +2031,7 @@ function renderTabs(){
       add.onclick = () => openCollection(null);
       box.appendChild(add);
       box.appendChild(heading('Каналы'));
-      list.forEach(c => mk(titles[c] || c, c));
+      list.forEach(c => chanRow(c));
     } else if(collections.length){
       // без подписок новую коллекцию не из чего собрать: говорим, что делать
       const hint = document.createElement('p');
@@ -2140,6 +2207,104 @@ $('#collDelete').onclick = async () => {
 $('#collCancel').onclick = closeCollection;
 $('#collEditBtn').onclick = () => { const coll = collectionOf(tab); if(coll) openCollection(coll.id); };
 $('#collOvl').onclick = e => { if(e.target === e.currentTarget) closeCollection(); };
+
+// Быстрое «В коллекцию»: со страницы канала и из списка каналов. Галочка сохраняет сразу
+let chanCollChannel = '', chanCollFocus = null, chanCollInert = [];
+const channelInCollections = name => collections.filter(c => c.channels.includes(name)).map(c => c.name);
+function paintChannelCollections(){
+  const on = subs().includes(channelName);
+  $('#chColl').hidden = !on;
+  const hint = $('#chCollState');
+  hint.hidden = !on;
+  const mine = channelInCollections(channelName);
+  hint.textContent = mine.length ? 'В коллекциях: ' + mine.join(', ') : 'Пока ни в одной коллекции';
+}
+async function refreshChannelCollections(){
+  await loadCollections();
+  paintChannelCollections();
+}
+function paintChanColl(){
+  const list = $('#chanCollList');
+  list.innerHTML = '';
+  if(!collections.length){
+    const hint = document.createElement('p');
+    hint.className = 'chan-hint';
+    hint.textContent = 'Коллекций пока нет. Создай первую ниже.';
+    list.appendChild(hint);
+  }
+  collections.forEach(c => {
+    const row = document.createElement('label');
+    row.className = 'coll-pick-item';
+    const box = document.createElement('input');
+    box.type = 'checkbox'; box.value = String(c.id); box.checked = c.channels.includes(chanCollChannel);
+    box.onchange = () => toggleInCollection(c.id, box);
+    const name = document.createElement('span');
+    name.textContent = c.name;
+    row.append(box, name);
+    list.appendChild(row);
+  });
+}
+function openChanColl(channel){
+  chanCollChannel = channel;
+  chanCollFocus = document.activeElement;
+  const background = [$('header'), $('#viewFeed'), $('#viewCat'), $('#viewChannel'), $('#channelsOvl')];
+  chanCollInert = background.map(el => [el, el.inert]); background.forEach(el => { el.inert = true; });
+  $('#chanCollName').textContent = titles[channel] || channel;
+  $('#chanCollNew').value = '';
+  $('#chanCollMsg').textContent = '';
+  paintChanColl();
+  const ovl = $('#chanCollOvl');
+  ovl.classList.add('open'); ovl.setAttribute('aria-hidden', 'false');
+  loadCollections().then(() => { if(chanCollChannel === channel && ovl.classList.contains('open')) paintChanColl(); });
+  requestAnimationFrame(() => ($('#chanCollList input') || $('#chanCollNew')).focus({preventScroll:true}));
+}
+function closeChanColl(){
+  const ovl = $('#chanCollOvl');
+  ovl.classList.remove('open'); ovl.setAttribute('aria-hidden', 'true');
+  chanCollInert.forEach(([el, was]) => { el.inert = was; });
+  chanCollFocus?.isConnected && chanCollFocus.focus?.({preventScroll:true});
+  paintChannelCollections();
+  renderTabs();
+}
+async function toggleInCollection(id, box){
+  const coll = collections.find(c => c.id === id);
+  if(!coll) return;
+  const channels = box.checked
+    ? [...new Set([...coll.channels, chanCollChannel])]
+    : coll.channels.filter(name => name !== chanCollChannel);
+  box.disabled = true;
+  try{
+    await collectionRequest('/api/collections/save', {id, name: coll.name, channels});
+    await loadCollections();
+    $('#chanCollMsg').textContent = '';
+    paintChannelCollections();
+    renderTabs();
+    if(tab === 'c:' + id) load();
+  }catch(err){
+    box.checked = !box.checked;
+    $('#chanCollMsg').textContent = err.message;
+    if(err.status === 404){ await loadCollections(); paintChanColl(); }
+  }finally{ box.disabled = false; }
+}
+$('#chanCollNewForm').onsubmit = async e => {
+  e.preventDefault();
+  const name = $('#chanCollNew').value;
+  $('#chanCollAdd').disabled = true;
+  try{
+    await collectionRequest('/api/collections/save', {name, channels: [chanCollChannel]});
+    $('#chanCollNew').value = '';
+    $('#chanCollMsg').textContent = '';
+    await loadCollections();
+    paintChanColl();
+    paintChannelCollections();
+    renderTabs();
+    [...document.querySelectorAll('#chanCollList input')].at(-1)?.focus?.({preventScroll:true});
+  }catch(err){ $('#chanCollMsg').textContent = err.message; }
+  finally{ $('#chanCollAdd').disabled = false; }
+};
+$('#chanCollDone').onclick = closeChanColl;
+$('#chanCollOvl').onclick = e => { if(e.target === e.currentTarget) closeChanColl(); };
+$('#chColl').onclick = () => openChanColl(channelName);
 // стрелками по списку: на экране каналов это дешевле, чем тянуться к краю
 $('#chanList').addEventListener('keydown', e => {
   if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
@@ -2271,6 +2436,7 @@ function paintChannelAction(){
   b.innerHTML = '<span class="channel-action-text">'+(on?'Убрать':'Добавить')+'</span>'+
     '<svg class="i" aria-hidden="true"><use href="#'+(on?'i-check':'i-plus')+'"/></svg>';
   b.setAttribute('aria-label', on ? 'Убрать из ленты' : 'Добавить в ленту');
+  paintChannelCollections();
 }
 // Публикации канала по страницам. Конец списка говорит прямо: это не конец канала,
 // а конец того, что приложение сохранило. Старые посты есть в Telegram.
@@ -2287,6 +2453,7 @@ async function loadChannel(append=false){
     $('#chTg').href = 'https://t.me/' + encodeURIComponent(name);
     $('#chEndTg').href = 'https://t.me/' + encodeURIComponent(name);
     paintChannelAction();
+    refreshChannelCollections();
   }
   more.hidden = true; end.hidden = true;
   try{
@@ -2364,33 +2531,55 @@ $('#channelForm').addEventListener('submit',async e=>{
   finally{ button.disabled=false; button.textContent='Добавить канал'; }
 });
 
+// Категории в чипах: по русским названиям, «Все» всегда первой. Если список не пришёл,
+// ряд не пустеет: остаётся «Все» и кнопка повтора, а поиск работает как раньше.
 async function loadCategories(){
   const row = $('#cats');
   row.innerHTML = '';
-  try{
-    const d = await (await fetch('/api/categories')).json();
-    const mk = (label, val) => {
-      const b = document.createElement('button');
-      b.textContent = label; b.setAttribute('aria-pressed', String(val === catalogCat));
-      b.onclick = () => {
-        catalogCat = val;
-        row.querySelectorAll('button').forEach(item =>
-          item.setAttribute('aria-pressed', String(item === b)));
-        loadCatalog();
-      };
-      row.appendChild(b);
+  const mk = (label, val) => {
+    const b = document.createElement('button');
+    b.textContent = label; b.setAttribute('aria-pressed', String(val === catalogCat));
+    b.onclick = () => {
+      catalogCat = val;
+      row.querySelectorAll('button').forEach(item =>
+        item.setAttribute('aria-pressed', String(item === b)));
+      loadCatalog();
     };
+    row.appendChild(b);
+  };
+  try{
+    const r = await fetch('/api/categories');
+    if(!r.ok) throw new Error('categories unavailable');
+    const d = await r.json();
+    const items = (d.categories || []).map(c => ({slug: c.slug, label: catRu(c.name)}))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+    if(catalogCat !== 'all' && !items.some(c => c.slug === catalogCat)) catalogCat = 'all';
     mk('Все', 'all');
-    (d.categories || []).forEach(c => mk(catRu(c.name), c.slug));
-    requestAnimationFrame(updateFilterScroll);
-  }catch(e){ /* категории необязательны: поиск работает и без них */ }
+    items.forEach(c => mk(c.label, c.slug));
+  }catch(e){
+    mk('Все', 'all');
+    const retry = document.createElement('button');
+    retry.type = 'button'; retry.className = 'quiet-btn'; retry.id = 'catRetry';
+    retry.textContent = 'Категории не загрузились, повторить';
+    retry.onclick = () => loadCategories();
+    row.appendChild(retry);
+  }
+  requestAnimationFrame(updateFilterScroll);
 }
 
 function updateFilterScroll(){
-  const wrap=$('#filterScroll'), row=$('#cats');
+  const wrap=$('#filterScroll'), row=$('#cats'), expand=$('#catExpand');
   if(!wrap || !row) return;
-  wrap.dataset.end=String(row.scrollWidth<=row.clientWidth+1 || row.scrollLeft+row.clientWidth>=row.scrollWidth-1);
+  const overflow = row.scrollWidth > row.clientWidth + 1;
+  const expanded = row.classList.contains('wrap');
+  wrap.dataset.end=String(!overflow || expanded || row.scrollLeft+row.clientWidth>=row.scrollWidth-1);
+  if(expand){
+    expand.hidden = !overflow && !expanded;
+    expand.textContent = expanded ? 'Свернуть категории' : 'Все категории';
+    expand.setAttribute('aria-expanded', String(expanded));
+  }
 }
+$('#catExpand').onclick = () => { $('#cats').classList.toggle('wrap'); updateFilterScroll(); };
 $('#cats').addEventListener('scroll',updateFilterScroll,{passive:true});
 window.addEventListener('resize',updateFilterScroll);
 
@@ -2807,6 +2996,16 @@ document.addEventListener('keydown',e=>{
   if(!nav.length) return;
     if(e.shiftKey&&document.activeElement===nav[0]){e.preventDefault();nav.at(-1).focus();}
     else if(!e.shiftKey&&document.activeElement===nav.at(-1)){e.preventDefault();nav[0].focus();}
+    return;
+  }
+  // быстрое «В коллекцию» поверх списка или страницы канала: Escape и Tab относятся к нему
+  if($('#chanCollOvl').classList.contains('open')){
+    if(e.key==='Escape'){e.preventDefault();closeChanColl();return;}
+    if(e.key!=='Tab')return;
+    const items=[...$('#chanCollOvl').querySelectorAll('input,button')].filter(el=>el.offsetParent!==null&&!el.disabled);
+    if(!items.length)return;
+    if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
+    else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
     return;
   }
   // редактор коллекции поверх списка каналов: Escape и Tab относятся к нему

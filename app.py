@@ -1128,17 +1128,61 @@ def search_catalog(q="", category="", limit=CATALOG_PAGE, last_posts=None, offse
     return out
 
 
-def catalog_categories():
-    """Категории собираем из ответа поиска: отдельного эндпоинта у TGMania нет."""
-    seen, out = set(), []
-    for c in search_catalog(limit=50):
+CATEGORY_TTL = 24 * 60 * 60  # секунд: список категорий пересобираем раз в сутки
+CATEGORY_PAGES = 40          # страниц выдачи TGMania на один обход, по 50 каналов
+CATEGORY_CACHE = {"items": None, "built": 0.0, "busy": False}  # в памяти: после перезапуска соберётся заново
+_category_lock = threading.Lock()
+
+
+def category_items(channels):
+    """Категории из каналов: одна запись на название. TGMania отдаёт одну категорию с разными
+    slug (например, `bots` и `bots-tools`), оба фильтруют одно и то же, берём самый частый."""
+    counts = {}
+    for c in channels:
         name = c["cat"]
         slug = c["cat_slug"] or name.lower().replace(" ", "-").replace("&", "and")
-        if not name or not slug or slug in seen:
-            continue
-        seen.add(slug)
-        out.append({"name": name, "slug": slug})
-    return sorted(out, key=lambda x: x["name"])
+        if name and slug:
+            counts[(name, slug)] = counts.get((name, slug), 0) + 1
+    best = {}
+    for (name, slug), n in counts.items():
+        if name not in best or n > best[name][1]:
+            best[name] = (slug, n)
+    return sorted(({"name": name, "slug": slug} for name, (slug, _) in best.items()), key=lambda x: x["name"])
+
+
+def build_categories():
+    """Проходит страницы выдачи TGMania и собирает все категории, которые она отдаёт."""
+    channels = []
+    for page in range(CATEGORY_PAGES):
+        found = search_catalog(limit=50, offset=page * 50)
+        if not found:
+            break
+        channels.extend(found)
+    return category_items(channels)
+
+
+def refresh_categories():
+    try:
+        items = build_categories()
+        if items:
+            CATEGORY_CACHE.update(items=items, built=time.time())
+    except Exception:
+        pass  # TGMania не ответила: остаётся прежний список
+    finally:
+        CATEGORY_CACHE["busy"] = False
+
+
+def catalog_categories():
+    """Список категорий для чипов. Собирается в фоне и живёт сутки. Пока первый обход не готов,
+    отдаём категории первой страницы выдачи, чтобы первый заход не ждал двадцать запросов."""
+    with _category_lock:
+        stale = time.time() - CATEGORY_CACHE["built"] > CATEGORY_TTL
+        if (CATEGORY_CACHE["items"] is None or stale) and not CATEGORY_CACHE["busy"]:
+            CATEGORY_CACHE["busy"] = True
+            threading.Thread(target=refresh_categories, daemon=True, name="categories").start()
+    if CATEGORY_CACHE["items"] is not None:
+        return CATEGORY_CACHE["items"]
+    return category_items(search_catalog(limit=50))
 
 
 ACCOUNT_RE = re.compile(r"^[A-Za-zА-Яа-яЁё0-9_-]{3,32}$")
@@ -1376,7 +1420,9 @@ def string_list(data, key):
 
 
 def list_collections(db, cid):
-    rows = db.execute("SELECT id, name FROM collections WHERE profile=? ORDER BY id", (cid,)).fetchall()
+    # по названию без учёта регистра: порядок одинаковый в интерфейсе и в API
+    rows = sorted(db.execute("SELECT id, name FROM collections WHERE profile=?", (cid,)).fetchall(),
+                  key=lambda row: row[1].casefold())
     channels = {}
     for collection, channel in db.execute(
             "SELECT cc.collection, cc.channel FROM collection_channels cc "
@@ -1618,14 +1664,16 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(password, str) or not 8 <= len(password) <= 128:
                     return self._send(400, json.dumps({"error": "Пароль должен быть от 8 до 128 символов"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if email and not valid_email(email):
+                # почта обязательна: без неё профиль не создаём, потому что без письма нельзя
+                # ни подтвердить вход, ни восстановить пароль
+                if not email:
+                    return self._send(400, json.dumps({"error": "Для профиля нужна почта"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if not valid_email(email):
                     return self._send(400, json.dumps({"error": "Введи действующий адрес почты"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if email and not SMTP_ENABLED:
+                if not SMTP_ENABLED:
                     return self._send(503, json.dumps({"error": "Отправка писем пока недоступна"}, ensure_ascii=False),
-                                      "application/json; charset=utf-8")
-                if not email and SMTP_ENABLED:
-                    return self._send(400, json.dumps({"error": "Для профиля нужна почта"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 if db.execute("SELECT 1 FROM accounts WHERE username=? COLLATE NOCASE",
                               (username,)).fetchone():
@@ -1643,21 +1691,14 @@ class Handler(BaseHTTPRequestHandler):
                                (profile, int(time.time())))
                     db.execute("INSERT INTO accounts "
                                "(username,profile,salt,digest,created,email,email_verified) "
-                               "VALUES (?,?,?,?,?,?,?)",
-                               (username, profile, salt, digest, int(time.time()),
-                                email or None,   # пустая почта = NULL, иначе ломается accounts_email
-                                0 if email else 1))
-                    token = issue_auth_token(db, profile, "email_verify", email) if email else ""
+                               "VALUES (?,?,?,?,?,?,0)",
+                               (username, profile, salt, digest, int(time.time()), email))
+                    token = issue_auth_token(db, profile, "email_verify", email)
                     db.commit()
                 except sqlite3.IntegrityError:
                     db.rollback()
                     return self._send(409, json.dumps({"error": "Не удалось создать профиль. Попробуй другое имя."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if not email:
-                    cookie = create_session(db, profile)
-                    return self._send(201, json.dumps({"account": {"username": username,
-                                      "email": None, "email_verified": False}}, ensure_ascii=False),
-                                      "application/json; charset=utf-8", [("Set-Cookie", cookie)])
                 try:
                     send_verification_email(email, token)
                 except Exception:

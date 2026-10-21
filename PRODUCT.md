@@ -79,14 +79,19 @@ Confirmed by the code:
   publication time.
 - The catalog of TGMania: search, categories, three sorts, 40 channels on a
   page.
-- A post counts as read when most of it is visible, and the mark can be taken
-  back.
+- A post counts as read once it has scrolled above the top of the screen, and
+  the mark can be taken back. The posts that scrolled above the screen count as
+  read too when the next page loads, whether by scrolling to the end of the feed
+  or by the button.
+- The next page of the feed loads when the reader scrolls near its end; the
+  button stays as the way to load it when that does not happen.
 - The unread counter only counts the posts of the last 14 days.
 - The search runs over the posts of the feed and over the names in the catalog.
 - A profile with a password, a session cookie for 30 days, PBKDF2-SHA256 with
   600,000 iterations and a salt of 16 bytes.
-- The confirmation of the address and the reset of the password go by letter;
-  the tokens live 24 hours and 30 minutes.
+- A profile needs an address. The confirmation of the address and the reset of
+  the password go by letter; the tokens live 24 hours and 30 minutes. Without an
+  address the registration is refused.
 - The private channels arrive through a login by QR, up to 40 messages per
   channel, refreshed every 15 minutes at the most.
 - The media of a private channel comes over MTProto: up to 15 MB, of the types
@@ -160,6 +165,7 @@ and 0 forks, and it was created on 2026-10-15.
    the page. A collection is a named group of the profile's own subscriptions:
    the feed can show one collection, and it is the same feed with a filter, so
    the read marks, the unread counter and the paging work the same way inside it.
+   Collections are listed by name, without regard to case.
    A name is unique per profile (case and edge spaces ignored), up to 50
    collections with up to 200 channels each. Unsubscribing removes the channel
    from every collection, and a collection can be empty.
