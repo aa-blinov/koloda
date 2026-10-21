@@ -1940,6 +1940,37 @@ class GuestNavigationTest(unittest.TestCase):
         self.assertNotIn("appShell", nesting.parents["authScreen"])
 
 
+class AvatarRetryTest(unittest.TestCase):
+    """Канал, который t.me не отдал или где нет фото, отмечается проверенным: его не спрашивают
+    на каждом заходе, иначе каталог ждёт один и тот же таймаут снова и снова."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="avatar-retry-")
+        self.patcher = patch.object(app, "DB", self.temp.name + "/feed.db")
+        self.patcher.start()
+        self.db = app.connect()
+
+    def tearDown(self):
+        self.db.close()
+        self.patcher.stop()
+        self.temp.cleanup()
+
+    def test_failed_and_photoless_channels_are_not_asked_again_at_once(self):
+        def fetch(channel):
+            if channel == "slow":
+                raise TimeoutError("t.me не ответил")
+            return "" if channel == "nophoto" else "https://cdn.telesco.pe/file/a.jpg"
+
+        with patch.object(app, "fetch_avatar", side_effect=fetch) as first:
+            avatars, checked = app.channel_avatars(self.db, ["slow", "nophoto", "good"])
+        self.assertEqual(first.call_count, 3)
+        self.assertEqual(avatars, {"good": "https://cdn.telesco.pe/file/a.jpg"})
+        self.assertEqual(sorted(checked), ["good", "nophoto", "slow"])
+        with patch.object(app, "fetch_avatar") as second:
+            app.channel_avatars(self.db, ["slow", "nophoto", "good"])
+        second.assert_not_called()
+
+
 class FreshMediaPlaceholderTest(unittest.TestCase):
     """Кадр с протухшей ссылкой ждёт свежую пустым: битой картинки с подписью быть не должно."""
 
