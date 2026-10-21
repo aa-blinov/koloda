@@ -101,6 +101,18 @@ CREATE TABLE IF NOT EXISTS user_subs (
     channel TEXT NOT NULL,
     PRIMARY KEY (profile, channel)
 );
+CREATE TABLE IF NOT EXISTS collections (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile TEXT    NOT NULL,
+    name    TEXT    NOT NULL,
+    created INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS collections_profile ON collections (profile);
+CREATE TABLE IF NOT EXISTS collection_channels (
+    collection INTEGER NOT NULL,
+    channel    TEXT    NOT NULL,
+    PRIMARY KEY (collection, channel)
+);
 CREATE TABLE IF NOT EXISTS user_reads (
     profile TEXT    NOT NULL,
     post    TEXT    NOT NULL,
@@ -178,7 +190,15 @@ REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт кана
 BACKFILL_CAP = 500    # постов истории на канал; дальше только в Telegram
 BACKFILL_PAUSE = 4    # секунд между страницами истории: не дёргаем t.me
 BACKFILL_IDLE = 5     # секунд ждать, когда догружать нечего: новая подписка начнётся не позже
+MEDIA_SWEEP_EVERY = int(os.environ.get("MEDIA_SWEEP_EVERY", 6 * 3600))  # секунд между проходами одного канала
+MEDIA_WINDOW_DAYS = 3       # на сколько дней назад освежаем ссылки: старше кадры уже не открываем
+MEDIA_SWEEP_MAX_PAGES = 12  # страниц на проход, около двухсот постов; дальше хватит запроса на пост
+MEDIA_PAUSE = 3       # секунд между страницами и каналами: не дёргаем t.me
+MEDIA_IDLE = 60       # секунд ждать, когда все подписанные каналы свежие
 UNREAD_DAYS = 14        # непрочитанное считаем за две недели: старый архив счётчик не раздувает
+COLLECTION_NAME_MAX = 32       # символов в названии коллекции
+COLLECTION_CHANNELS_CAP = 200  # каналов в одной коллекции, как и подписок в ленте
+COLLECTIONS_CAP = 50           # коллекций на профиль
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 MIN_GZIP = 1024        # меньше килобайта сжатие не окупает служебных байт заголовка
@@ -604,11 +624,25 @@ MEDIA_RECHECK = 600     # секунд: один пост в t.me чаще не 
 _media_checked = {}     # (канал, msg_id) -> когда последний раз ходили в t.me
 
 
+def store_media(db, channel, posts):
+    """Свежие медиа и карточки ссылок всех постов страницы. Пишем только посты, которые уже
+    в базе: новые приходят через синхронизацию. Страница стоит одного запроса, поэтому все её
+    посты помечаем проверенными, и соседние протухшие кадры не идут в t.me повторно."""
+    now = time.time()
+    for p in posts:
+        _media_checked[(channel, p["msg_id"])] = now
+        db.execute("UPDATE posts SET media=?, preview=?, sticker=? WHERE channel=? AND msg_id=?",
+                   (p["media"], p["preview"], p["sticker"], channel, p["msg_id"]))
+    db.commit()
+
+
 def refresh_media(db, channel, msg_id):
     """Свежие медиа и карточка ссылки одного поста или None, если поста нет в базе.
     Страница до msg_id + 1 захватывает сам пост и более старые, поэтому работает и для
     постов, которых нет на первой странице канала. Картинка карточки ссылки мёртвая
-    по тем же причинам, что и кадры, поэтому обновляется в той же записи."""
+    по тем же причинам, что и кадры, поэтому обновляется в той же записи. Всю страницу
+    пишем сразу: на ней около двадцати постов, и соседние протухшие кадры не должны
+    снова идти в t.me."""
     row = db.execute("SELECT media, preview, sticker FROM posts WHERE channel=? AND msg_id=?",
                      (channel, msg_id)).fetchone()
     if row is None:
@@ -622,14 +656,66 @@ def refresh_media(db, channel, msg_id):
         _media_checked.clear()
     _media_checked[key] = time.time()
     _, posts = fetch_channel(channel, before=msg_id + 1)
+    store_media(db, channel, posts)
     fresh = next((p for p in posts if p["msg_id"] == msg_id), None)
     if fresh is None:  # пост удалили или t.me не отдал его на этой странице
         return stored
-    db.execute("UPDATE posts SET media=?, preview=?, sticker=? WHERE channel=? AND msg_id=?",
-               (fresh["media"], fresh["preview"], fresh["sticker"], channel, msg_id))
-    db.commit()
     return {"media": json.loads(fresh["media"] or "[]"), "preview": json.loads(fresh["preview"] or "null"),
             "sticker": fresh["sticker"]}
+
+
+# Фон освежает ссылки подписанных публичных каналов. Без него кадр, который никто не открыл,
+# стоит протухшим до клика, а потом идёт в t.me по одному посту. Время последнего прохода
+# держим в памяти: после перезапуска каналы пройдут заново, один раз на канал.
+_media_swept = {}  # канал -> когда последний раз проходили
+
+
+def media_sweep(db, channel):
+    """Страницы канала от свежих к старым, пока не дойдём до окна. Ошибка t.me поднимается наверх."""
+    cutoff = time.time() - MEDIA_WINDOW_DAYS * 86400
+    before = None
+    for _ in range(MEDIA_SWEEP_MAX_PAGES):
+        _, posts = fetch_channel(channel, before=before)
+        if not posts:
+            return
+        store_media(db, channel, posts)
+        oldest = min(posts, key=lambda p: p["msg_id"])
+        if oldest["ts"] < cutoff:
+            return
+        before = oldest["msg_id"]
+        time.sleep(MEDIA_PAUSE)
+
+
+def media_step(db):
+    """Один канал за проход. False, если все подписанные каналы проверены недавно."""
+    now = time.time()
+    channels = public_channels([r[0] for r in db.execute("SELECT DISTINCT channel FROM user_subs")])
+    due = [c for c in channels if now - _media_swept.get(c, 0) >= MEDIA_SWEEP_EVERY]
+    if not due:
+        return False
+    channel = min(due, key=lambda c: _media_swept.get(c, 0))
+    _media_swept[channel] = now
+    try:
+        media_sweep(db, channel)
+    except Exception as exc:
+        # t.me ответил ошибкой или попросил подождать: канал вернётся на следующем круге
+        print("фон медиа: " + type(exc).__name__, file=sys.stderr, flush=True)
+    return True
+
+
+def _media_loop():
+    while True:
+        worked = False
+        try:
+            db = connect()
+            try:
+                worked = media_step(db)
+                db.commit()
+            finally:
+                db.close()
+        except Exception as exc:
+            print("фон медиа: " + type(exc).__name__, file=sys.stderr, flush=True)
+        time.sleep(MEDIA_PAUSE if worked else MEDIA_IDLE)
 
 
 # Приватные каналы обновляются в фоне, как публичные: раз в PRIVATE_TTL секунд и только
@@ -1289,6 +1375,69 @@ def string_list(data, key):
     return value if isinstance(value, list) else []
 
 
+def list_collections(db, cid):
+    rows = db.execute("SELECT id, name FROM collections WHERE profile=? ORDER BY id", (cid,)).fetchall()
+    channels = {}
+    for collection, channel in db.execute(
+            "SELECT cc.collection, cc.channel FROM collection_channels cc "
+            "JOIN collections c ON c.id = cc.collection WHERE c.profile=? ORDER BY cc.channel", (cid,)):
+        channels.setdefault(collection, []).append(channel)
+    return [{"id": cid_, "name": name, "channels": channels.get(cid_, [])} for cid_, name in rows]
+
+
+def save_collection(db, cid, data):
+    """Создаёт коллекцию или меняет её название и список каналов. Каналы берём только из подписок."""
+    name = data.get("name")
+    name = name.strip() if isinstance(name, str) else ""
+    if not 1 <= len(name) <= COLLECTION_NAME_MAX or not name.isprintable():
+        raise ValueError("Название коллекции: от 1 до 32 символов")
+    channels = list(dict.fromkeys(string_list(data, "channels")))
+    if len(channels) > COLLECTION_CHANNELS_CAP or not all(valid_feed_channel(c) for c in channels):
+        raise ValueError("неверный список каналов")
+    subs = {r[0] for r in db.execute("SELECT channel FROM user_subs WHERE profile=?", (cid,))}
+    if not set(channels) <= subs:
+        raise ValueError("канала нет в подписках")
+    collection = data.get("id")
+    # одинаковые названия в списке не отличить друг от друга; свою же коллекцию можно не менять
+    taken = {n.casefold() for i, n in db.execute("SELECT id, name FROM collections WHERE profile=?", (cid,))
+             if i != collection}
+    if name.casefold() in taken:
+        raise ValueError("коллекция с таким названием уже есть")
+    if collection is None:
+        count = db.execute("SELECT COUNT(*) FROM collections WHERE profile=?", (cid,)).fetchone()[0]
+        if count >= COLLECTIONS_CAP:
+            raise ValueError("коллекций не больше 50")
+        collection = db.execute("INSERT INTO collections (profile, name, created) VALUES (?,?,?)",
+                                (cid, name, int(time.time()))).lastrowid
+    else:
+        if not isinstance(collection, int) or isinstance(collection, bool):
+            raise KeyError(collection)
+        cur = db.execute("UPDATE collections SET name=? WHERE id=? AND profile=?", (name, collection, cid))
+        if not cur.rowcount:
+            raise KeyError(collection)
+    db.execute("DELETE FROM collection_channels WHERE collection=?", (collection,))
+    db.executemany("INSERT INTO collection_channels VALUES (?,?)", [(collection, c) for c in channels])
+    db.commit()
+    return next(c for c in list_collections(db, cid) if c["id"] == collection)
+
+
+def delete_collection(db, cid, collection):
+    if not isinstance(collection, int) or isinstance(collection, bool):
+        raise KeyError(collection)
+    cur = db.execute("DELETE FROM collections WHERE id=? AND profile=?", (collection, cid))
+    if not cur.rowcount:
+        raise KeyError(collection)
+    db.execute("DELETE FROM collection_channels WHERE collection=?", (collection,))
+    db.commit()
+
+
+def prune_collections(db, cid):
+    """Канал, с которого сняли подписку, уходит и из коллекций."""
+    db.execute("DELETE FROM collection_channels WHERE collection IN "
+               "(SELECT id FROM collections WHERE profile=?) "
+               "AND channel NOT IN (SELECT channel FROM user_subs WHERE profile=?)", (cid, cid))
+
+
 def save_state(db, cid, data):
     subs = [c for c in string_list(data, "subs") if valid_channel(c)][:200]
     reads = [r for r in string_list(data, "reads") if valid_post_key(r)][:20000]
@@ -1297,6 +1446,7 @@ def save_state(db, cid, data):
     db.execute("DELETE FROM user_subs WHERE profile=?", (cid,))
     db.execute("DELETE FROM user_reads WHERE profile=?", (cid,))
     db.executemany("INSERT OR IGNORE INTO user_subs VALUES (?,?)", [(cid, c) for c in subs])
+    prune_collections(db, cid)
     db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)", [(cid, r) for r in reads])
     db.execute("UPDATE profiles SET initialized=1 WHERE code=?", (cid,))
     db.commit()
@@ -1341,6 +1491,7 @@ def update_subscription(db, cid, channel, subscribed):
         db.execute("INSERT OR IGNORE INTO user_subs VALUES (?,?)", (cid, channel))
     else:
         db.execute("DELETE FROM user_subs WHERE profile=? AND channel=?", (cid, channel))
+        prune_collections(db, cid)
     db.execute("UPDATE profiles SET initialized=1 WHERE code=?", (cid,))
     db.commit()
     return load_state(db, cid)
@@ -2240,6 +2391,41 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(state, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
+            if path == "/api/collections":
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if self.command != "GET":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                return self._send(200, json.dumps({"collections": list_collections(db, cid)}, ensure_ascii=False),
+                                  "application/json; charset=utf-8")
+            if path in ("/api/collections/save", "/api/collections/delete"):
+                cid = client_id(self, db)
+                if not cid:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
+                data = self._read_json()
+                if isinstance(data, int) or not isinstance(data, dict):
+                    return self._send(400, json.dumps({"error": "неверные данные коллекции"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                try:
+                    if path.endswith("/save"):
+                        body = {"collection": save_collection(db, cid, data)}
+                    else:
+                        delete_collection(db, cid, data.get("id"))
+                        body = {"ok": True}
+                except KeyError:
+                    return self._send(404, json.dumps({"error": "коллекции нет"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                except ValueError as exc:
+                    return self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                return self._send(200, json.dumps(body, ensure_ascii=False), "application/json; charset=utf-8")
             if path == "/api/state/read":
                 cid = client_id(self, db)
                 if not cid:
@@ -2462,4 +2648,5 @@ if __name__ == "__main__":
     # там свой сервер и никаких фоновых запросов к t.me
     threading.Thread(target=_backfill_loop, daemon=True, name="backfill").start()
     threading.Thread(target=_private_loop, daemon=True, name="private").start()
+    threading.Thread(target=_media_loop, daemon=True, name="media").start()
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

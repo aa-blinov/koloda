@@ -157,12 +157,21 @@ and 0 forks, and it was created on 2026-10-15.
    never reach.
 2. **The profile owns the feed.** The subscriptions and the read marks belong
    to the profile on the server, and not to the browser that happened to open
-   the page.
+   the page. A collection is a named group of the profile's own subscriptions:
+   the feed can show one collection, and it is the same feed with a filter, so
+   the read marks, the unread counter and the paging work the same way inside it.
+   A name is unique per profile (case and edge spaces ignored), up to 50
+   collections with up to 200 channels each. Unsubscribing removes the channel
+   from every collection, and a collection can be empty.
 3. **A failure names itself.** A dead channel, a letter that did not go, an
    error of Telegram: each says what happened and what is left to do.
 4. **The service does not carry the media.** The photos and the video of the
    public posts come straight from the CDN of Telegram, and the server stays out
-   of the hot path.
+   of the hot path. A link that has expired is replaced by a fresh one from the
+   same post, and until it arrives the frame stays empty: a broken picture with
+   its caption is never shown. In the background the server walks the pages of
+   every subscribed public channel back to three days, about once in six hours,
+   so the links of recent posts are refreshed before anyone opens them.
 5. **The private data of one profile never reaches another.** The private posts
    live in a table keyed by the profile, and their media is given to the
    subscribers of that channel alone.

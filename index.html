@@ -531,6 +531,20 @@ body.view-solo .search{display:none}
 .ov .dlg-channels{width:min(460px,100%);max-height:min(74vh,640px);padding:0 var(--sp-5) var(--sp-5)}
 .ov .dlg-channels h2{padding-top:var(--sp-5);margin-bottom:var(--sp-3)}
 .ov .dlg-channels .chan-list{flex:0 1 auto;min-height:0}
+/* Коллекции в списке каналов: строка с названием и «Изменить», редактор с галочками по подпискам */
+.coll-row{display:flex;align-items:center;gap:var(--sp-2)}
+.coll-row .chan-item{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.coll-count{margin-left:var(--sp-2);color:var(--dim);font-size:12.5px;font-weight:400}
+.coll-label{display:block;margin-top:var(--sp-4);font-size:13px;font-weight:600}
+.coll-name{width:100%;min-height:48px;padding:var(--sp-3) 0;border:0;border-radius:0;background:transparent;
+  color:var(--fg);font:inherit;font-size:16px}
+.coll-name:focus{outline:none;box-shadow:inset 0 -2px 0 var(--dim)}
+.coll-pick-item{display:flex;align-items:center;gap:var(--sp-3);min-height:44px;padding:0 var(--sp-3);cursor:pointer}
+.coll-pick-item input{width:20px;height:20px;margin:0;accent-color:var(--acc)}
+.coll-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-4)}
+#collDelete{margin-right:auto}
+/* На телефоне .channel-action становится квадратом под иконку: эта кнопка с текстом на всю ширину */
+.channel-action.coll-new{width:100%;min-width:0;height:auto;min-height:44px;padding:var(--sp-3) var(--sp-4)}
   /* Настройки оформления в оверлее профиля */
   .dlg .settings{margin-top:var(--sp-5);padding-top:var(--sp-4);border-top:1px solid var(--line)}
   .dlg .settings h3{font-size:14px;margin:0 0 var(--sp-2)}
@@ -722,6 +736,7 @@ body.view-solo .search{display:none}
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
   <button id="unsubBtn" class="quiet-btn" type="button" hidden>Убрать из ленты</button>
+  <button id="collEditBtn" class="quiet-btn" type="button" hidden>Изменить коллекцию</button>
   <button id="unreadBtn" class="quiet-btn" type="button" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
   <button id="readToggle" class="quiet-btn" type="button" aria-pressed="false">Показать прочитанное</button>
   <p class="fresh" id="fresh" aria-live="polite"></p>
@@ -927,6 +942,21 @@ body.view-solo .search{display:none}
       <button class="btn" id="chanClose" type="button">Готово</button>
     </div>
   </div>
+</div>
+<div class="ov" id="collOvl" role="dialog" aria-modal="true" aria-labelledby="collTitle" aria-hidden="true">
+  <form class="dlg dlg-channels" id="collForm">
+    <h2 id="collTitle">Новая коллекция</h2>
+    <label class="coll-label" for="collName">Название</label>
+    <input class="coll-name" id="collName" type="text" maxlength="32" autocomplete="off" required>
+    <p class="chan-hint">Отметь каналы из подписок. Без отметки канал в коллекцию не попадёт.</p>
+    <div class="chan-list" id="collPick"></div>
+    <p class="channel-state" id="collMsg" role="alert"></p>
+    <div class="coll-actions">
+      <button class="quiet-btn" id="collDelete" type="button" hidden>Удалить</button>
+      <button class="quiet-btn" id="collCancel" type="button">Отмена</button>
+      <button class="btn" id="collSave" type="submit">Сохранить</button>
+    </div>
+  </form>
 </div>
 
 <div class="boot-screen" id="bootScreen" role="status"><svg class="i brand-mark" aria-hidden="true"><use href="#i-send"/></svg><span>Колода</span></div>
@@ -1251,6 +1281,8 @@ async function pullState(){
 }
 
 let tab = '', onlyUnread = localStorage.getItem(LS.only) === '1', titles = {};
+// Коллекции пользователя и id коллекции, которую сейчас редактируем (null, если новая)
+let collections = [], collEditing = null;
 let showRead = localStorage.getItem(LS.showRead) === '1';
 let catalogCat = 'all', timer, catTimer, feedQuery='', catalogQuery='', catalogItems=new Map();
 let feedCursor=null, feedHasMore=false, feedErrors=[], feedRequestId=0, feedController=null, feedLoading=false;
@@ -1440,13 +1472,19 @@ async function loadSaved(append=false){
 async function load(append=false, silent=false){
   if(feedMode === 'saved') return loadSaved(append);
   const box = $('#feed');
-  const list = tab ? subs().filter(c => c === tab) : subs();
+  const list = feedChannels();
   if(!list.length){
     feedController?.abort(); feedRequestId++; feedLoading=false;
     feedCursor=null; feedHasMore=false; feedErrors=[];
-    box.innerHTML = tab
-      ? emptyState('rss', 'У канала @'+tab+' пока нет постов.')
-      : emptyState('grid', 'Каналов пока нет. Открой каталог, выбери нужные, и они появятся в ленте.', ['cat','Открыть каталог']);
+    const coll = collectionOf(tab);
+    box.innerHTML = coll
+      ? emptyState('rss', coll.channels.length
+          ? 'Каналы коллекции «'+coll.name+'» сейчас не в подписках.'
+          : 'В коллекции «'+coll.name+'» пока нет каналов. Нажми «Изменить» и отметь нужные.')
+      : tab
+        ? emptyState('rss', 'У канала @'+tab+' пока нет постов.')
+        : emptyState('grid', 'Каналов пока нет. Открой каталог, выбери нужные, и они появятся в ленте.', ['cat','Открыть каталог']);
+    renderTabs();   // без списка каналов дальше не идём, а метка раздела должна смениться
     return;
   }
   if(append && (feedLoading || !feedHasMore)) return;
@@ -1570,7 +1608,7 @@ const pollContext = () => [tab, feedQuery, onlyUnread].join('|');
 async function pollFresh(){
   if(feedMode === 'saved') return;
   if(document.visibilityState !== 'visible' || feedLoading || $('#viewFeed').hidden || $('#appShell').hidden) return;
-  const list = tab ? subs().filter(c => c === tab) : subs();
+  const list = feedChannels();
   if(!list.length) return;
   const q = feedQuery.trim();
   const context = pollContext();
@@ -1859,11 +1897,31 @@ function render(posts,append=false){
 
 /* Каналы живут на отдельном экране: кнопка в ленте его открывает, а выбранный
    канал остаётся подписью на кнопке — как было подписью в меню. */
+// Коллекция в фильтре ленты хранится как 'c:<id>', чтобы её не спутать с именем канала
+const collectionOf = key => key.startsWith('c:') ? collections.find(c => 'c:' + c.id === key) : undefined;
+// Каналы, которые сейчас видно в ленте: все подписки, один канал или каналы коллекции
+function feedChannels(){
+  if(tab.startsWith('c:')){
+    const coll = collectionOf(tab);
+    return coll ? coll.channels.filter(c => subs().includes(c)) : [];
+  }
+  return tab ? subs().filter(c => c === tab) : subs();
+}
+// Коллекции грузим, когда открывают список каналов: список короткий, и так он всегда свежий
+async function loadCollections(){
+  try{
+    const r = await fetch('/api/collections');
+    if(r.ok) collections = (await r.json()).collections || [];
+  }catch(e){ /* без коллекций лента работает как раньше */ }
+}
 function renderTabs(){
   const list = subs(), box = $('#chanList');
-  const selected = list.length === 1 ? list[0] : tab;
+  // коллекцию удалили: возвращаемся к общей ленте, а не показываем пустой экран
+  if(tab.startsWith('c:') && !collectionOf(tab)) tab = '';
+  const coll = collectionOf(tab);
+  const selected = coll ? '' : (list.length === 1 ? list[0] : tab);
   box.innerHTML = '';
-  if(!list.length){
+  if(!list.length && !collections.length){
     const hint = document.createElement('p');
     hint.className = 'chan-hint';
     hint.textContent = 'Каналов пока нет. Открой каталог, выбери нужные, и они появятся здесь.';
@@ -1878,11 +1936,48 @@ function renderTabs(){
       box.appendChild(b);
     };
     if(list.length > 1) mk('Все каналы', '');
-    list.forEach(c => mk(titles[c] || c, c));
+    box.appendChild(heading('Коллекции', 'Группы каналов из твоих подписок.'));
+    collections.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'coll-row';
+      const open = document.createElement('button');
+      open.type = 'button'; open.className = 'chan-item';
+      if('c:' + c.id === tab) open.setAttribute('aria-current', 'true');
+      open.textContent = c.name;
+      const count = document.createElement('span');
+      count.className = 'coll-count';
+      count.textContent = c.channels.length ? String(c.channels.length) : 'нет каналов';
+      open.append(' ', count);
+      open.onclick = () => { tab = 'c:' + c.id; closeChannels(); load(); };
+      const edit = document.createElement('button');
+      edit.type = 'button'; edit.className = 'quiet-btn';
+      edit.textContent = 'Изменить';
+      edit.setAttribute('aria-label', 'Изменить коллекцию ' + c.name);
+      edit.onclick = () => openCollection(c.id);
+      row.append(open, edit);
+      box.appendChild(row);
+    });
+    if(list.length){
+      const add = document.createElement('button');
+      add.type = 'button'; add.className = 'channel-action coll-new';
+      add.textContent = 'Новая коллекция';
+      add.onclick = () => openCollection(null);
+      box.appendChild(add);
+      box.appendChild(heading('Каналы'));
+      list.forEach(c => mk(titles[c] || c, c));
+    } else if(collections.length){
+      // без подписок новую коллекцию не из чего собрать: говорим, что делать
+      const hint = document.createElement('p');
+      hint.className = 'chan-hint';
+      hint.textContent = 'Чтобы собрать новую коллекцию, сначала подпишись на каналы в каталоге.';
+      box.appendChild(hint);
+    }
   }
-  $('#tabsToggleLabel').textContent = selected ? (titles[selected] || selected) : 'Все каналы';
+  $('#tabsToggleLabel').textContent = coll ? coll.name : (selected ? (titles[selected] || selected) : 'Все каналы');
   $('#unsubBtn').hidden = !selected;
-  $('#feed').setAttribute('aria-label', selected ? 'Публикации канала ' + (titles[selected] || selected) : 'Публикации');
+  $('#collEditBtn').hidden = !coll;
+  $('#feed').setAttribute('aria-label', coll ? 'Публикации коллекции ' + coll.name
+    : selected ? 'Публикации канала ' + (titles[selected] || selected) : 'Публикации');
   paintTelegramChannels();
 }
 
@@ -1943,6 +2038,7 @@ function openChannels(){
   const background=[$('header'),$('#viewFeed'),$('#viewCat')];
   channelsInert=background.map(el=>[el,el.inert]); background.forEach(el=>{el.inert=true;});
   renderTabs();
+  loadCollections().then(() => { if($('#channelsOvl').classList.contains('open')) renderTabs(); });
   const ovl=$('#channelsOvl');
   ovl.classList.add('open'); ovl.setAttribute('aria-hidden','false');
   paintTabbar();   // после open: иначе активным остаётся раздел, а не экран
@@ -1962,6 +2058,88 @@ $('#tabsToggle').onclick = openChannels;
 $('#chanClose').onclick = closeChannels;
 $('#channelsOvl').onclick = e => { if(e.target===e.currentTarget) closeChannels(); };
 $('#chanCatalog').onclick = () => { closeChannels(); show('cat'); };
+// Редактор коллекции: название и галочки по подпискам. Сохранение и удаление идут через сервер
+let collFocus = null, collInert = [];
+function openCollection(id){
+  const coll = id == null ? null : collections.find(c => c.id === id);
+  collEditing = coll ? coll.id : null;
+  $('#collTitle').textContent = coll ? 'Коллекция' : 'Новая коллекция';
+  $('#collName').value = coll ? coll.name : '';
+  $('#collMsg').textContent = '';
+  $('#collDelete').hidden = !coll;
+  const picked = new Set(coll ? coll.channels : []);
+  const pick = $('#collPick');
+  pick.innerHTML = '';
+  subs().forEach(c => {
+    const row = document.createElement('label');
+    row.className = 'coll-pick-item';
+    const check = document.createElement('input');
+    check.type = 'checkbox'; check.value = c; check.checked = picked.has(c);
+    const name = document.createElement('span');
+    name.textContent = titles[c] || c;
+    row.append(check, name);
+    pick.appendChild(row);
+  });
+  const ovl = $('#collOvl');
+  // как у списка каналов: фон неактивен, а фокус вернётся туда, откуда открыли редактор
+  collFocus = document.activeElement;
+  const background = [$('header'), $('#viewFeed'), $('#viewCat')];
+  collInert = background.map(el => [el, el.inert]); background.forEach(el => { el.inert = true; });
+  ovl.classList.add('open'); ovl.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => $('#collName').focus({preventScroll:true}));
+}
+function closeCollection(){
+  const ovl = $('#collOvl');
+  ovl.classList.remove('open'); ovl.setAttribute('aria-hidden', 'true');
+  collInert.forEach(([el, was]) => { el.inert = was; });
+  collFocus?.isConnected && collFocus.focus?.({preventScroll:true});
+}
+async function collectionRequest(path, body){
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if(!r.ok){
+    const err = new Error(data.error || 'Не удалось изменить коллекцию');
+    err.status = r.status;   // 404: коллекцию уже удалили в другом месте, список надо перечитать
+    throw err;
+  }
+  return data;
+}
+$('#collForm').onsubmit = async e => {
+  e.preventDefault();
+  const body = {name: $('#collName').value, channels: [...document.querySelectorAll('#collPick input:checked')].map(i => i.value)};
+  if(collEditing != null) body.id = collEditing;
+  $('#collSave').disabled = true;
+  try{
+    const data = await collectionRequest('/api/collections/save', body);
+    const id = data.collection.id, created = collEditing == null;
+    await loadCollections();
+    closeCollection();
+    if(created){ tab = 'c:' + id; closeChannels(); load(); }   // новая коллекция сразу открывается
+    else { renderTabs(); if(tab === 'c:' + id) load(); }
+  }catch(err){
+    $('#collMsg').textContent = err.message;
+    if(err.status === 404){ await loadCollections(); renderTabs(); }
+  }
+  finally{ $('#collSave').disabled = false; }
+};
+$('#collDelete').onclick = async () => {
+  if(collEditing == null || !confirm('Удалить коллекцию? Каналы останутся в ленте.')) return;
+  try{
+    await collectionRequest('/api/collections/delete', {id: collEditing});
+  }catch(err){
+    if(err.status !== 404){ $('#collMsg').textContent = err.message; return; }
+    // уже удалена в другом месте: закрываем редактор и показываем актуальный список
+  }
+  const wasOpen = tab === 'c:' + collEditing;
+  if(wasOpen) tab = '';
+  closeCollection();
+  await loadCollections();
+  renderTabs();
+  if(wasOpen) load();
+};
+$('#collCancel').onclick = closeCollection;
+$('#collEditBtn').onclick = () => { const coll = collectionOf(tab); if(coll) openCollection(coll.id); };
+$('#collOvl').onclick = e => { if(e.target === e.currentTarget) closeCollection(); };
 // стрелками по списку: на экране каналов это дешевле, чем тянуться к краю
 $('#chanList').addEventListener('keydown', e => {
   if(e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
@@ -2629,6 +2807,16 @@ document.addEventListener('keydown',e=>{
   if(!nav.length) return;
     if(e.shiftKey&&document.activeElement===nav[0]){e.preventDefault();nav.at(-1).focus();}
     else if(!e.shiftKey&&document.activeElement===nav.at(-1)){e.preventDefault();nav[0].focus();}
+    return;
+  }
+  // редактор коллекции поверх списка каналов: Escape и Tab относятся к нему
+  if($('#collOvl').classList.contains('open')){
+    if(e.key==='Escape'){e.preventDefault();closeCollection();return;}
+    if(e.key!=='Tab')return;
+    const items=[...$('#collOvl').querySelectorAll('input,button')].filter(el=>el.offsetParent!==null&&!el.disabled);
+    if(!items.length)return;
+    if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
+    else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
     return;
   }
   if($('#channelsOvl').classList.contains('open')){
