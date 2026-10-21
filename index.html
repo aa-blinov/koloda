@@ -137,7 +137,7 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 /* .seg задаёт display:flex, а он перебивает [hidden] из браузера */
 #sortTabs[hidden]{display:none}
 /* Сегменты M3: одна контурная пилюля, выбранный отрезок заливается тоном контейнера */
-.seg{display:flex;gap:2px;padding:var(--sp-1);border:1px solid var(--edge);border-radius:var(--radius)}
+.seg{display:flex;gap:2px;padding:var(--sp-1);border:0;border-radius:var(--radius)}
 .seg button{min-height:38px;padding:var(--sp-2) var(--sp-4);border:0;border-radius:var(--radius);background:none;
   color:var(--fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:var(--sp-2)}
 .toggle{flex:0 0 auto;font:inherit;font-size:14px;font-weight:500;min-height:40px;padding:var(--sp-2) var(--sp-4);
@@ -199,9 +199,10 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);
 /* Ссылка в такой подписи (например, «Открыть в Telegram» у публикации без текста) — цель для пальца, не строка текста */
 .fresh a{display:inline-flex;align-items:center;min-height:44px;padding:0 var(--sp-2)}
 .tabs-wrap{position:relative;max-width:748px;margin:0 auto;padding:var(--sp-3) var(--sp-5) var(--sp-2)}
+/* Выбор раздела — поле Monos: без заливки и рамки, одна линия снизу */
 .tabs-toggle{display:flex;align-items:center;gap:var(--sp-2);width:100%;
-  min-height:44px;padding:var(--sp-3) var(--sp-4);font:inherit;font-size:14px;text-align:left;cursor:pointer;
-  background:var(--surf-hi);border:0;border-radius:var(--radius);color:var(--fg)}
+  min-height:44px;padding:var(--sp-3);font:inherit;font-size:14px;text-align:left;cursor:pointer;
+  background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;color:var(--fg)}
 .tabs-toggle svg.i{flex:0 0 auto;color:var(--dim)}
 .tabs-toggle .tabs-caret{margin-left:auto;transition:transform .16s}
 .tabs-toggle[aria-expanded=true] .tabs-caret{transform:rotate(180deg)}
@@ -422,7 +423,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 .auth-card h1{font-size:28px;line-height:36px;font-weight:700;letter-spacing:-0.025em}
 .auth-card>p{margin-top:var(--sp-2);color:var(--dim);font-size:14px;line-height:1.55}
 .auth-modes{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:var(--sp-1);margin:var(--sp-5) 0 var(--sp-4);
-  border:1px solid var(--edge);border-radius:var(--radius)}
+  border:0;border-radius:var(--radius)}
 .auth-modes button{min-height:38px;border:0;border-radius:var(--radius);background:none;color:var(--fg);
   font:inherit;font-size:14px;font-weight:500;cursor:pointer}
 .auth-form{display:grid;gap:var(--sp-2)}
@@ -472,25 +473,28 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
    второстепенные обведены или тональны, текстовые без рамки. Слой состояния
    считается по спецификации: 8% на наведении, 12% при нажатии. */
 .btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-5);border:0;
-  border-radius:var(--radius);cursor:pointer;background:var(--acc);color:var(--acc-ink);
+  border-radius:var(--radius);cursor:pointer;background:none;color:var(--fg);
   text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
   transition:background .2s var(--ease)}
-.btn:hover{background:color-mix(in srgb,var(--acc-ink) 8%,var(--acc))}
-.btn:active{background:color-mix(in srgb,var(--acc-ink) 12%,var(--acc))}
-/* обведённые: переключатели, чипы фильтров, кнопки каталога */
+.btn:hover{opacity:.7}
+.btn:active{opacity:.55}
+/* без рамки: выбранный вариант отмечается фоном (см. ниже), остальное — текстом */
 .toggle,.channel-action,.chan-action,.channel-preview-label,.filters button{
-  background:none;border:1px solid var(--edge);color:var(--fg);transition:background .2s var(--ease)}
+  background:none;border:0;color:var(--fg);transition:background .2s var(--ease)}
 /* текстовые кнопки без рамки и заливки: первая кнопка диалога, ссылки-действия */
 #meTabs button,#sortTabs button{flex:1 1 0;justify-content:center}
 /* Текстовые кнопки в ленте сдвинуты на свой внутренний отступ, чтобы текст встал на линию колонки */
-.tabs-wrap>.quiet-btn{margin-left:calc(var(--sp-3) * -1)}
+/* Тулбар ленты: текстовые действия с отступом 24 px, чтобы два соседних не читались как одна фраза */
+.feed-tools{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-5);margin-top:var(--sp-3)}
+/* Отступ внутри кнопки: выбранная кнопка с заливкой не должна упираться текстом в край */
+.feed-tools .quiet-btn{padding-left:var(--sp-3);padding-right:var(--sp-3)}
 #meTabs{margin:var(--sp-4) 0 var(--sp-5)}
 #readToggle[aria-pressed=true],#unreadBtn[aria-pressed=true]{background:var(--sec-cont);color:var(--on-sec-cont)}
 .quiet-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;min-height:40px;padding:var(--sp-2) var(--sp-3);border:0;
-  border-radius:var(--radius);background:none;color:var(--acc);cursor:pointer}
+  border-radius:var(--radius);background:none;color:var(--dim);cursor:pointer}
 .toggle:hover,.channel-action:hover,.chan-action:hover,.channel-preview-label:hover,
 .filters button:hover,.chan-item:hover,.seg button:hover,.auth-modes button:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
-.quiet-btn:hover,.empty-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.quiet-btn:hover,.empty-action:hover{opacity:.7}
 /* Выбранное: тональный контейнер без рамки, как сегмент и чип в M3. Идёт после
    наведения и нажатия, поэтому перекрывает их при той же специфичности. */
 .seg button[aria-selected=true],.seg button[aria-pressed=true],.auth-modes button[aria-pressed=true],
@@ -499,7 +503,7 @@ main{max-width:748px;margin:0 auto;padding:0 var(--sp-5) var(--sp-8)}
 /* Нажатие: слой 12% поверх фона. Палец на кнопке виден, даже когда кнопка без заливки */
 .toggle:active,.channel-action:active,.chan-action:active,.channel-preview-label:active,
 .filters button:active,.chan-item:active,.seg button:active,.auth-modes button:active{background:color-mix(in srgb,var(--fg) 12%,transparent)}
-.quiet-btn:active,.empty-action:active{background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.quiet-btn:active,.empty-action:active{opacity:.55}
 /* Отключённая кнопка обязана отличаться: её гасят одиннадцать раз, и без этого
    «Загружаю…» выглядит живой кнопкой, на которую смело жмут. */
 :disabled{cursor:default;opacity:.38}
@@ -747,10 +751,12 @@ body.view-solo .search{display:none}
     <span id="tabsToggleLabel">Все каналы</span>
     <svg class="i tabs-caret"><use href="#i-chevron"/></svg>
   </button>
-  <button id="unsubBtn" class="quiet-btn" type="button" hidden>Убрать из ленты</button>
-  <button id="collEditBtn" class="quiet-btn" type="button" hidden>Изменить коллекцию</button>
-  <button id="unreadBtn" class="quiet-btn" type="button" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
-  <button id="readToggle" class="quiet-btn" type="button" aria-pressed="false">Показать прочитанное</button>
+  <div class="feed-tools">
+    <button id="unsubBtn" class="quiet-btn" type="button" hidden>Убрать из ленты</button>
+    <button id="collEditBtn" class="quiet-btn" type="button" hidden>Изменить коллекцию</button>
+    <button id="unreadBtn" class="quiet-btn" type="button" aria-pressed="false"><span class="u-label">Непрочитанные</span><span class="u-count"></span></button>
+    <button id="readToggle" class="quiet-btn" type="button" aria-pressed="false">Показать прочитанное</button>
+  </div>
   <p class="fresh" id="fresh" aria-live="polite"></p>
   <p class="fresh" id="historyStatus" aria-live="polite" hidden></p>
 </div>
@@ -2400,10 +2406,18 @@ const paintReadToggle=()=>{
   b.textContent=showRead?'Скрыть прочитанное':'Показать прочитанное';
   b.setAttribute('aria-pressed',String(showRead));
 };
-$('#readToggle').onclick=()=>{
-  showRead=!showRead; localStorage.setItem(LS.showRead, showRead?'1':'0');
-  paintReadToggle(); load();
-};
+// «Непрочитанные» и «Показать прочитанное» — два способа показать ленту, одновременно они не работают:
+// выбран один, его повторное нажатие возвращает обычную ленту, где прочитанное спрятано
+function setReadMode(mode){
+  onlyUnread = mode === 'unread';
+  showRead = mode === 'all';
+  localStorage.setItem(LS.only, onlyUnread ? '1' : '0');
+  localStorage.setItem(LS.showRead, showRead ? '1' : '0');
+  paintReadToggle();
+  $('#unreadBtn').setAttribute('aria-pressed', String(onlyUnread));
+  load();
+}
+$('#readToggle').onclick=()=>setReadMode(showRead ? '' : 'all');
 paintReadToggle();
 // Отписка прямо из ленты: открыт один канал, и его можно убрать одной кнопкой с отменой
 $('#unsubBtn').onclick = () => {
@@ -2673,12 +2687,7 @@ enableTabKeyboard($('#sectionTabs'));
 
 $('#tabFeed').onclick = () => show('feed');
 $('#tabCat').onclick   = () => show('cat');
-$('#unreadBtn').onclick = e => {
-  onlyUnread = !onlyUnread;
-  localStorage.setItem(LS.only, onlyUnread ? '1' : '0');
-  e.currentTarget.setAttribute('aria-pressed', String(onlyUnread));
-  load();
-};
+$('#unreadBtn').onclick = () => setReadMode(onlyUnread ? '' : 'unread');
 $('#unreadBtn').setAttribute('aria-pressed', String(onlyUnread));
 /* ---------- Клавиатура ленты ---------- */
 // Посты лежат во вложенном #postList, а не прямыми потомками #feed: искать

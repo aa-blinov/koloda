@@ -151,8 +151,9 @@ frontmatter carries both sets.
 
 ### Accent
 
-- **Accent** (`#9ec5b8`, `#05525e`): the primary button, the selected tab, the
-  link and the focus ring. It is the only colour that marks a choice.
+- **Accent** (`#9ec5b8`, `#05525e`): the link, the focus ring and the mark of
+  the current tab. It is the only colour that marks a choice. A button is text,
+  not an accent fill (Monos).
 - **Accent ink** (`#282828`, `#fbf1c7`): the text on the accent.
 - **Accent container** and **secondary container** (`#504945`, `#d5c4a1`):
   the tinted ground under a selected row.
@@ -255,12 +256,20 @@ ground.
 
 ### Buttons
 
-- **Shape:** the radius, 6 px.
-- **Primary:** the accent fill with the accent ink as text, 12 px, weight 700,
-  capitals and 0.1em of tracking, 40 px high at the least.
-- **Secondary:** the quiet button, no fill, the dim text, the same size.
-- **Focus / hover:** the accent is the focus ring; a quiet button takes the
-  text colour on hover.
+The text is the whole button (Monos). A filled or outlined button contradicts
+the type, so no button has a fill or a frame at rest.
+
+- **Shape:** the text is the button. The radius, 6 px, belongs to the focus
+  ring, the cards and the dialogs.
+- **Primary:** the foreground colour as text, 12 px, weight 700, capitals and
+  0.1em of tracking, 40 px high at the least.
+- **Secondary:** the dim text, the same size, weight 700. No fill, no frame.
+- **Hover and press:** opacity 0.7 on hover and 0.55 when pressed. The accent
+  is the focus ring and nothing else on a button.
+- **Spacing:** two text actions sit at least 24 px apart, so that they never
+  read as one phrase.
+- **Chosen option:** a toggle that picks one of several options marks the
+  chosen one with the secondary container. The others stay text.
 
 ### Inputs and fields
 
@@ -273,10 +282,10 @@ ground.
 
 ### Segmented groups
 
-- **Style:** a bordered group with a 2 px gap between the buttons, inside a
-  4 px padding, with the radius. On a phone the group goes the width of the
-  page and the radius becomes the pill.
-- **Selected:** the secondary container, with the foreground on it.
+- **Style:** no frame on the group. The options are text with a 2 px gap
+  between them. On a phone the group goes the width of the page.
+- **Selected:** the secondary container under the chosen option, with the
+  foreground on it.
 
 ### The post card
 
