@@ -61,6 +61,25 @@ def feed_server():
             app.DB = previous
 
 
+def register_with_mail(base, username, password="long-password-1"):
+    """Регистрация с почтой по HTTP и подтверждение по ссылке из письма (письмо перехватываем).
+    Возвращает cookie сессии, которую выдаёт подтверждение."""
+    sent = {}
+    with patch.object(app, "SMTP_ENABLED", True), \
+            patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(token=t)):
+        request = Request(base + "/api/auth/register", method="POST",
+                          data=json.dumps({"username": username, "password": password,
+                                           "email": username + "@example.com"}).encode(),
+                          headers={"Content-Type": "application/json"})
+        with urlopen(request, timeout=5) as response:
+            assert response.status == 202, response.status
+    verify = Request(base + "/api/auth/verify", method="POST",
+                     data=json.dumps({"token": sent["token"]}).encode(),
+                     headers={"Content-Type": "application/json"})
+    with urlopen(verify, timeout=5) as response:
+        return response.headers.get("Set-Cookie", "").split(";", 1)[0]
+
+
 class FeedAPITest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="telegram-lenta-test-")
@@ -218,7 +237,7 @@ class FeedAPITest(unittest.TestCase):
 
     def test_saved_post_shows_in_saved_list_and_feed_flag(self):
         self.cookie = ""
-        status, _ = self.request("/api/auth/register", "POST", {"username": "saver", "password": "long-password"})
+        status, _ = self.register("saver", "long-password")
         self.assertEqual(status, 201)
         channel, msg_id = self.db.execute(
             "SELECT channel,msg_id FROM posts WHERE channel='alpha' ORDER BY ts DESC LIMIT 1").fetchone()
@@ -237,19 +256,19 @@ class FeedAPITest(unittest.TestCase):
 
     def test_saved_post_rejects_a_bad_channel_name(self):
         self.cookie = ""
-        self.request("/api/auth/register", "POST", {"username": "saver2", "password": "long-password"})
+        self.register("saver2", "long-password")
         status, _ = self.request("/api/saved", "POST", {"channel": "bad name!", "msg_id": 1, "on": True})
         self.assertEqual(status, 400)
 
     def test_saving_an_unknown_post_is_refused(self):
         self.cookie = ""
-        self.request("/api/auth/register", "POST", {"username": "saver3", "password": "long-password"})
+        self.register("saver3", "long-password")
         status, _ = self.request("/api/saved", "POST", {"channel": "alpha", "msg_id": 999999, "on": True})
         self.assertEqual(status, 404)
 
     def test_saved_list_searches_text_and_pages_without_gaps(self):
         self.cookie = ""
-        self.request("/api/auth/register", "POST", {"username": "saver4", "password": "long-password"})
+        self.register("saver4", "long-password")
         posts = self.db.execute("SELECT channel,msg_id FROM posts ORDER BY ts DESC, msg_id DESC").fetchall()
         self.assertGreaterEqual(len(posts), 81)
         self.db.execute("UPDATE posts SET text=? WHERE channel=? AND msg_id=?", ("уникальныйтекст", *posts[0]))
@@ -351,10 +370,24 @@ class FeedAPITest(unittest.TestCase):
         self.cookie = ""
         self.assertEqual(self.request("/api/history")[0], 401)
 
-    def login(self, name):
+    def register(self, name, password="long-password"):
+        """Регистрация с почтой, подтверждение и вход: без почты профиль не создаём."""
         self.cookie = ""
-        status, _ = self.request("/api/auth/register", method="POST",
-                                 data={"username": name, "password": "password123"})
+        # почта случайная и ASCII: имя может быть кириллическим, а адрес должен пройти проверку
+        email = "reg%s@example.com" % os.urandom(4).hex()
+        with patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email"):
+            status, payload = self.request("/api/auth/register", method="POST", data={
+                "username": name, "password": password, "email": email})
+        if status == 202:
+            self.db.execute("UPDATE accounts SET email_verified=1 WHERE username=?", (name,))
+            self.db.commit()
+            status, payload = self.request("/api/auth/login", method="POST",
+                                           data={"username": name, "password": password})
+            status = 201 if status == 200 else status  # профиль создан и вход выполнен
+        return status, payload
+
+    def login(self, name):
+        status, _ = self.register(name, "password123")
         self.assertEqual(status, 201)
         return self.db.execute("SELECT profile FROM accounts WHERE username=?", (name,)).fetchone()[0]
 
@@ -499,6 +532,14 @@ class FeedAPITest(unittest.TestCase):
                                       {"id": other["id"], "name": "НОВОСТИ", "channels": []})[0], 400)
         self.assertEqual([c["name"] for c in self.request("/api/collections")[1]["collections"]], ["Новости", "Тех"])
 
+    def test_collections_are_listed_by_name_not_by_creation(self):
+        # порядок коллекций по названию: создали «Яблоки», потом «Арбуз», а в списке первым «Арбуз»
+        self.subscribe(self.login("coll_order"), "alpha")
+        self.request("/api/collections/save", "POST", {"name": "Яблоки", "channels": []})
+        self.request("/api/collections/save", "POST", {"name": "арбуз", "channels": []})
+        self.assertEqual([c["name"] for c in self.request("/api/collections")[1]["collections"]],
+                         ["арбуз", "Яблоки"])
+
     def test_unsubscribing_takes_the_channel_out_of_collections(self):
         profile = self.login("coll_prune")
         self.subscribe(profile, "alpha")
@@ -625,11 +666,9 @@ class FeedAPITest(unittest.TestCase):
 
     def test_profile_names_accept_both_alphabets(self):
         self.cookie = ""
-        self.assertEqual(self.request("/api/auth/register", method="POST",
-                                      data={"username": "Иван_2", "password": "password123"})[0], 201)
+        self.assertEqual(self.register("Иван_2", "password123")[0], 201)
         self.cookie = ""
-        self.assertEqual(self.request("/api/auth/register", method="POST",
-                                      data={"username": "a b", "password": "password123"})[0], 400)
+        self.assertEqual(self.register("a b", "password123")[0], 400)
 
     def test_unread_counts_only_the_last_two_weeks(self):
         # Старый архив догрузки не должен раздувать счётчик непрочитанного
@@ -646,8 +685,7 @@ class FeedAPITest(unittest.TestCase):
     def test_read_posts_can_be_left_out_of_the_feed(self):
         # прочитанное без hide_read возвращается как раньше, а с hide_read страница
         # приходит без него целиком, а не полупустой после фильтрации на клиенте
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "hide_read", "password": "long-password"})
+        self.register("hide_read", "long-password")
         query = urlencode({"channels": "alpha"})
         status, full = self.request("/api/feed?" + query)
         keys = ["%s/%d" % (p["channel"], p["msg_id"]) for p in full["posts"]]
@@ -758,8 +796,7 @@ class FeedAPITest(unittest.TestCase):
         # предпросмотр читает канал и обновляет его: с 19 октября только
         # с профилем, иначе сервис становился чужим прокси в t.me
         self.assertEqual(self.request("/api/preview?c=alpha")[0], 401)
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "preview_user", "password": "long-password"})
+        self.register("preview_user", "long-password")
         status, first = self.request("/api/preview?c=alpha")
         self.assertEqual(status, 200)
         self.assertEqual(first["title"], "Alpha")
@@ -782,8 +819,7 @@ class FeedAPITest(unittest.TestCase):
 
 
     def test_login_checks_password_and_logout_expires_session(self):
-        status, _ = self.request("/api/auth/register", method="POST",
-                                 data={"username": "profile_login", "password": "long-password"})
+        status, _ = self.register("profile_login", "long-password")
         self.assertEqual(status, 201)
         self.cookie = ""
         status, payload = self.request("/api/auth/login", method="POST",
@@ -805,16 +841,14 @@ class FeedAPITest(unittest.TestCase):
         self.assertIn("error", payload)
 
     def test_password_profiles_keep_state_separate(self):
-        status, _ = self.request("/api/auth/register", method="POST",
-                                 data={"username": "profile_one", "password": "long-password"})
+        status, _ = self.register("profile_one", "long-password")
         self.assertEqual(status, 201)
         status, _ = self.request("/api/state/subscription", method="POST",
                                  data={"channel": "alpha", "subscribed": True})
         self.assertEqual(status, 200)
         first_cookie = self.cookie
         self.cookie = ""
-        status, _ = self.request("/api/auth/register", method="POST",
-                                 data={"username": "profile_two", "password": "long-password"})
+        status, _ = self.register("profile_two", "long-password")
         self.assertEqual(status, 201)
         status, second_state = self.request("/api/state")
         self.assertEqual(status, 200)
@@ -825,8 +859,7 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(first_state["subs"], ["alpha"])
 
     def test_settings_survive_reload_and_reject_values_from_browser(self):
-        status, _ = self.request("/api/auth/register", method="POST",
-                                 data={"username": "profile_settings", "password": "long-password"})
+        status, _ = self.register("profile_settings", "long-password")
         self.assertEqual(status, 201)
         status, payload = self.request("/api/settings")
         self.assertEqual(payload["settings"], {"theme": "dark", "font": "mono"})
@@ -850,8 +883,7 @@ class FeedAPITest(unittest.TestCase):
             self.assertEqual(status, 400, bad)
             status, payload = self.request("/api/check?c=" + quote(bad))
             self.assertEqual(status, 400, bad)
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "channel_guard", "password": "long-password"})
+        self.register("channel_guard", "long-password")
         status, payload = self.request("/api/state/subscription", method="POST",
                                        data={"channel": "../../etc/passwd", "subscribed": True})
         self.assertEqual(status, 400)
@@ -866,18 +898,16 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(post["media"], [{"k": "i", "u": "https://cdn/1.jpg"},
                                          {"k": "v", "u": "https://cdn/2.mp4"}])
 
-    def test_two_profiles_without_email_do_not_collide(self):
-        # accounts_email уникален для непустых значений, поэтому почта пишется как NULL
-        for name in ("no_email_one", "no_email_two"):
-            status, _ = self.request("/api/auth/register", method="POST",
-                                     data={"username": name, "password": "long-password"})
-            self.assertEqual(status, 201, name)
-        self.assertEqual(self.db.execute(
-            "SELECT COUNT(*) FROM accounts WHERE email IS NULL").fetchone()[0], 2)
+    def test_registration_without_email_is_refused(self):
+        # почта обязательна всегда: без неё профиль не создаётся, и аккаунта в базе не остаётся
+        status, payload = self.request("/api/auth/register", method="POST",
+                                       data={"username": "no_email_one", "password": "long-password"})
+        self.assertEqual(status, 400)
+        self.assertIn("почта", payload["error"])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM accounts").fetchone()[0], 0)
 
     def test_feed_stops_at_two_hundred_channels(self):
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "cap_profile", "password": "long-password"})
+        self.register("cap_profile", "long-password")
         for i in range(200):
             status, state = self.request("/api/state/subscription", method="POST",
                                          data={"channel": "cap%03d" % i, "subscribed": True})
@@ -890,8 +920,7 @@ class FeedAPITest(unittest.TestCase):
 
     def test_feed_reports_how_much_is_left_unread(self):
         # без числа фильтр «Непрочитанные» включают вслепую
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "unread_count", "password": "long-password"})
+        self.register("unread_count", "long-password")
         query = urlencode({"channels": "alpha"})
         status, payload = self.request("/api/feed?" + query)
         self.assertEqual(status, 200)
@@ -909,8 +938,7 @@ class FeedAPITest(unittest.TestCase):
 
     def test_read_mark_can_be_removed(self):
         # человек перечитал пост: он снова должен попасть в «Непрочитанные»
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "unread_mark", "password": "long-password"})
+        self.register("unread_mark", "long-password")
         status, state = self.request("/api/state/read", method="POST",
                                      data={"posts": ["alpha/1", "alpha/3"]})
         self.assertEqual(status, 200)
@@ -941,8 +969,7 @@ class FeedAPITest(unittest.TestCase):
     def test_wrong_types_in_body_do_not_break_the_server(self):
         # из браузера приходит всё, включая списки вместо строк: сервер должен
         # отвечать кодом, а не рвать соединение
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "types", "password": "long-password"})
+        self.register("types", "long-password")
         for payload in ({"channel": ["durov"], "subscribed": True},
                         {"channel": 5, "subscribed": True},
                         {"channel": {"a": 1}, "subscribed": "yes"}):
@@ -957,8 +984,7 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(status, 400)
 
     def test_partial_settings_update_keeps_the_other_field(self):
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "settings_partial", "password": "long-password"})
+        self.register("settings_partial", "long-password")
         self.request("/api/settings", method="PUT", data={"theme": "light", "font": "mono"})
         status, payload = self.request("/api/settings", method="PUT", data={"theme": "dark"})
         self.assertEqual(status, 200)
@@ -982,8 +1008,7 @@ class FeedAPITest(unittest.TestCase):
     def test_feed_titles_also_cover_the_channels_of_the_profile(self):
         # по заголовкам подписаны вкладки в шапке: при выборе одного канала
         # остальные не должны остаться сырыми именами
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "titles", "password": "long-password"})
+        self.register("titles", "long-password")
         for channel in ("alpha", "beta"):
             self.request("/api/state/subscription", method="POST",
                          data={"channel": channel, "subscribed": True})
@@ -1005,15 +1030,13 @@ class FeedAPITest(unittest.TestCase):
             self.assertIn("application/json", headers["Content-Type"], method)
             self.assertNotIn(b"<html", body.lower(), method)
         # с сессией и не-GET методом на маршрут без такого метода — 405, а не 501
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "methods", "password": "long-password"})
+        self.register("methods", "long-password")
         status, headers, _ = self.request_raw("/api/feed?channels=alpha", method="DELETE")
         self.assertEqual(status, 405)
         self.assertIn("application/json", headers["Content-Type"])
 
     def test_export_gives_the_whole_feed_as_lines_one_record_each(self):
-        self.request("/api/auth/register", method="POST",
-                     data={"username": "profile_one", "password": "long-password"})
+        self.register("profile_one", "long-password")
         self.request("/api/state/merge", method="POST",
                      data={"subs": ["alpha", "beta"], "reads": ["alpha/1", "beta/2"]})
         self.cookie = ""
@@ -1037,8 +1060,7 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(set(state["reads"]), {"alpha/1", "beta/2"})
 
     def test_state_operations_merge_and_sync(self):
-        status, account = self.request("/api/auth/register", method="POST",
-                                       data={"username": "profile_one", "password": "long-password"})
+        status, account = self.register("profile_one", "long-password")
         self.assertEqual(status, 201)
         status, initial = self.request("/api/state", client_id="local-123")
         self.assertEqual(status, 200)
@@ -1222,11 +1244,42 @@ class CatalogCategoryTest(unittest.TestCase):
             {"cat": "Technology", "cat_slug": "tech"},
             {"cat": "Art & Design", "cat_slug": "art"},
         ]
-        with patch.object(app, "search_catalog", return_value=channels):
-            self.assertEqual(app.catalog_categories(), [
-                {"name": "Art & Design", "slug": "art"},
-                {"name": "Technology", "slug": "tech"},
-            ])
+        self.assertEqual(app.category_items(channels), [
+            {"name": "Art & Design", "slug": "art"},
+            {"name": "Technology", "slug": "tech"},
+        ])
+
+    def test_one_category_with_several_slugs_is_listed_once_with_the_common_slug(self):
+        # TGMania отдаёт одну категорию под разными slug: в чипах она одна, slug берём самый частый
+        channels = [{"cat": "Bots & Tools", "cat_slug": "bots"}] * 3 + [{"cat": "Bots & Tools", "cat_slug": "bots-tools"}]
+        self.assertEqual(app.category_items(channels), [{"name": "Bots & Tools", "slug": "bots"}])
+
+    def test_build_walks_every_page_of_the_catalog(self):
+        # K10: категории берём со всех страниц выдачи, а не только с первой
+        pages = {0: [{"cat": "Art & Design", "cat_slug": "art"}],
+                 50: [{"cat": "Health & Fitness", "cat_slug": "health"}],
+                 100: [{"cat": "Art & Design", "cat_slug": "art"}, {"cat": "Education", "cat_slug": "edu"}],
+                 150: []}
+        with patch.object(app, "search_catalog", side_effect=lambda limit, offset: pages.get(offset, [])) as search:
+            names = [c["name"] for c in app.build_categories()]
+        self.assertEqual(names, ["Art & Design", "Education", "Health & Fitness"])
+        self.assertEqual(search.call_count, 4)
+
+    def test_fresh_cache_answers_without_touching_telegram_catalog(self):
+        cached = [{"name": "Music", "slug": "music"}]
+        with patch.dict(app.CATEGORY_CACHE, {"items": cached, "built": time.time(), "busy": False}), \
+                patch.object(app, "search_catalog") as search, patch.object(app.threading, "Thread") as thread:
+            self.assertEqual(app.catalog_categories(), cached)
+        search.assert_not_called()
+        thread.assert_not_called()
+
+    def test_stale_cache_is_served_while_a_new_pass_runs(self):
+        cached = [{"name": "Music", "slug": "music"}]
+        with patch.dict(app.CATEGORY_CACHE, {"items": cached, "built": 0.0, "busy": False}), \
+                patch.object(app.threading, "Thread") as thread:
+            self.assertEqual(app.catalog_categories(), cached)
+            thread.assert_called_once()
+            self.assertTrue(app.CATEGORY_CACHE["busy"])
 
 
 class CatalogSearchTest(unittest.TestCase):
@@ -1456,9 +1509,15 @@ class PrivateChannelsTest(unittest.TestCase):
             return exc.code, json.loads(exc.read())
 
     def sign_in(self, username):
-        status, _ = self.call("/api/auth/register", method="POST",
-                              data={"username": username, "password": "long-password"})
-        self.assertEqual(status, 201)
+        sent = {}
+        with patch.object(app, "SMTP_ENABLED", True), \
+                patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(token=t)):
+            status, _ = self.call("/api/auth/register", method="POST",
+                                  data={"username": username, "password": "long-password",
+                                        "email": username + "@example.com"})
+        self.assertEqual(status, 202)
+        status, _ = self.call("/api/auth/verify", method="POST", data={"token": sent["token"]})
+        self.assertEqual(status, 200)
         status, _ = self.call("/api/auth/login", method="POST",
                               data={"username": username, "password": "long-password"})
         self.assertEqual(status, 200)
@@ -1734,11 +1793,7 @@ class QrLinkResponseTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(app.tg._pending.clear)
-        req = Request(self.base + "/api/auth/register", method="POST",
-                      data=json.dumps({"username": "qrlink", "password": "long-password-1"}).encode(),
-                      headers={"Content-Type": "application/json"})
-        with urlopen(req, timeout=5) as response:
-            self.cookie = response.headers.get("Set-Cookie", "").split(";", 1)[0]
+        self.cookie = register_with_mail(self.base, "qrlink")
 
     def tearDown(self):
         self.server.shutdown()
@@ -1804,11 +1859,7 @@ class AvatarEndpointTest(unittest.TestCase):
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
-        req = Request(self.base + "/api/auth/register", method="POST",
-                      data=json.dumps({"username": "avatars", "password": "long-password-1"}).encode(),
-                      headers={"Content-Type": "application/json"})
-        with urlopen(req, timeout=5) as response:
-            self.cookie = response.headers.get("Set-Cookie", "").split(";", 1)[0]
+        self.cookie = register_with_mail(self.base, "avatars")
 
     def tearDown(self):
         self.server.shutdown()
@@ -1899,6 +1950,17 @@ class FreshMediaPlaceholderTest(unittest.TestCase):
         handler = text[start:text.index("}, true);", start)]
         self.assertIn("removeAttribute('src')", handler)
         self.assertLess(handler.index("removeAttribute('src')"), handler.index("freshMedia(post.dataset.post)"))
+
+
+class TapFeedbackTest(unittest.TestCase):
+    """Нажатие не рисует синюю подсветку браузера, а клавиатурный фокус остаётся видимым."""
+
+    def test_tap_highlight_is_off_and_keyboard_focus_stays(self):
+        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
+            html = page.read()
+        self.assertIn("-webkit-tap-highlight-color:transparent", html)
+        self.assertIn(":is(button,a,[role=button]):active{opacity:.72}", html)
+        self.assertIn(":focus-visible{outline:2px solid", html)
 
 
 class DatabaseModeTest(unittest.TestCase):

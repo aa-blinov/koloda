@@ -2,12 +2,13 @@
 """Проверка пользовательских путей в браузере по docs/user-paths.md.
 
 Запуск на стенде, где сервис уже поднят:
-    python3 ui_paths_check.py http://127.0.0.1:8090
-    python3 ui_paths_check.py http://127.0.0.1:8090 --only C1,C2,F2 --device phone
+    python3 ui_paths_check.py http://127.0.0.1:8090 --data-dir /path/to/data
+    python3 ui_paths_check.py http://127.0.0.1:8090 --data-dir /path/to/data --only C1,C2,F2 --device phone
 
 Нужны Playwright для Python и установленный Chrome (канал chrome). Нужен интернет: посты
-подтягиваются с t.me. Стенд должен работать без почты (SMTP выключен), иначе регистрация
-без почты не пройдёт. Каждая проверка создаёт свой профиль через API и не трогает чужие.
+подтягиваются с t.me. Нужен --data-dir: каталог данных стенда (где лежит feed.db). Почта на стенде
+не нужна: подтверждённый профиль раннер заводит прямо в базе, а вход и всё остальное идёт по HTTP.
+Каждая проверка создаёт свой профиль и не трогает чужие.
 Путь, которому нужны посты, которых нет, или который не на этом устройстве, помечается SKIP
 с причиной, а не проходит молча.
 
@@ -15,6 +16,7 @@
 """
 import argparse
 import json
+import os
 import random
 import string
 import sys
@@ -54,13 +56,39 @@ def api(path, body=None, cookie=""):
         return error.code, "", {}
 
 
+DATA_DIR = ""
+
+
+def seed_user(name):
+    """Подтверждённый профиль прямо в базе стенда. Регистрация требует почту, а письмо на стенде
+    не уйдёт, поэтому профиль заводим так же, как это делает регистрация, но сразу с подтверждённой почтой."""
+    import secrets
+    import time
+    os.environ["DATA_DIR"] = DATA_DIR
+    import app
+    db = app.connect()
+    try:
+        profile = secrets.token_urlsafe(24)
+        salt = secrets.token_hex(16)
+        db.execute("INSERT INTO profiles (code,created,initialized) VALUES (?,?,1)", (profile, int(time.time())))
+        db.execute("INSERT INTO accounts (username,profile,salt,digest,created,email,email_verified) "
+                   "VALUES (?,?,?,?,?,?,1)",
+                   (name, profile, salt, app.password_digest(PASSWORD, salt), int(time.time()), name + "@stand.test"))
+        db.commit()
+    finally:
+        db.close()
+
+
 def new_user(prefix):
-    """Новый профиль с тремя подписками. Почта не нужна: стенд без SMTP."""
+    """Новый подтверждённый профиль с тремя подписками."""
+    if not DATA_DIR:
+        raise RuntimeError("нужен --data-dir: каталог данных стенда, чтобы завести подтверждённый профиль")
     suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6))
     name = "%s-%s" % (prefix, suffix)
-    status, cookie_header, _ = api("/api/auth/register", {"username": name, "password": PASSWORD})
-    if status != 201:
-        raise RuntimeError("регистрация на стенде не прошла: код %s" % status)
+    seed_user(name)
+    status, cookie_header, _ = api("/api/auth/login", {"username": name, "password": PASSWORD})
+    if status != 200:
+        raise RuntimeError("вход в подтверждённый профиль не прошёл: код %s" % status)
     cookie = cookie_header.split(";")[0]
     for channel in CHANNELS:
         api("/api/state/subscription", {"channel": channel, "subscribed": True}, cookie)
@@ -156,6 +184,22 @@ def a3(c):
     c.pg.wait_for_timeout(2500)
     assert c.pg.inner_text("#authMessage").strip(), "сообщения об ошибке нет"
     assert c.pg.locator("#authScreen").is_visible(), "экран входа пропал без входа"
+
+
+@check("A2", "Регистрация без почты не проходит: профиль не создаётся")
+def a2(c):
+    c.pg.goto(BASE + "/")
+    c.pg.wait_for_selector("#authScreen:not([hidden])")
+    c.pg.click("#authRegisterMode")
+    name = "nomail-" + "".join(random.choice(string.ascii_lowercase) for _ in range(6))
+    c.pg.fill("#authUsername", name)
+    c.pg.fill("#authPassword", PASSWORD)
+    c.pg.click("#authSubmit")
+    c.pg.wait_for_timeout(2500)
+    assert c.pg.locator("#authScreen").is_visible(), "экран входа пропал"
+    assert not c.pg.locator("#appShell").is_visible(), "лента открылась без почты"
+    status, _, _ = api("/api/auth/login", {"username": name, "password": PASSWORD})
+    assert status == 401, "аккаунт без почты всё же создан: код %s" % status
 
 
 @check("A4", "Выход из профиля возвращает на экран входа")
@@ -358,6 +402,66 @@ def c19(c):
     assert not any(r["post"] in read for r in rows), "прочитанные посты видны в коллекции без переключателя"
 
 
+@check("C20", "Со страницы канала «В коллекцию» ставит галочку; признак на странице обновляется", device="both")
+def c20(c):
+    coll_id = make_collection(c.user, "Новости", [])
+    login(c.pg, c.user)
+    c.pg.evaluate("openChannel('rybolos_channel')")
+    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.wait_for_function("!document.getElementById('chColl').hidden", timeout=20000)
+    c.pg.click("#chColl")
+    c.pg.wait_for_selector("#chanCollOvl.open")
+    c.pg.locator("#chanCollList input[value='%s']" % coll_id).check()
+    c.pg.wait_for_timeout(1500)
+    assert "rybolos_channel" in collections_of(c.user)[0]["channels"], "канал не попал в коллекцию"
+    c.pg.click("#chanCollDone")
+    wait_closed(c.pg, "chanCollOvl")
+    c.pg.wait_for_timeout(500)
+    assert "Новости" in c.pg.inner_text("#chCollState"), c.pg.inner_text("#chCollState")
+
+
+@check("C21", "Лента: у канала число коллекций в списке; галочка в диалоге снимает канал", device="both")
+def c21(c):
+    coll_id = make_collection(c.user, "Новости", ["rybolos_channel"])
+    login(c.pg, c.user)
+    open_list(c.pg)
+    row = c.pg.locator("#chanList .coll-row button.quiet-btn", has_text="В коллекциях: 1")
+    assert row.count() == 1, "у канала нет числа коллекций в списке"
+    row.click()
+    c.pg.wait_for_selector("#chanCollOvl.open")
+    c.pg.locator("#chanCollList input[value='%s']" % coll_id).uncheck()
+    c.pg.wait_for_timeout(1500)
+    assert collections_of(c.user)[0]["channels"] == [], "галочка не сняла канал"
+    c.pg.click("#chanCollDone")
+    wait_closed(c.pg, "chanCollOvl")
+    c.pg.wait_for_timeout(500)
+    assert c.pg.locator("#chanList .coll-row button.quiet-btn", has_text="В коллекцию").count() >= 1, "подпись не вернулась"
+
+
+@check("C22", "Со страницы канала можно сразу создать коллекцию с этим каналом", device="both")
+def c22(c):
+    login(c.pg, c.user)
+    c.pg.evaluate("openChannel('rybolos_channel')")
+    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.wait_for_function("!document.getElementById('chColl').hidden", timeout=20000)
+    c.pg.click("#chColl")
+    c.pg.wait_for_selector("#chanCollOvl.open")
+    c.pg.fill("#chanCollNew", "С канала")
+    c.pg.click("#chanCollAdd")
+    c.pg.wait_for_timeout(2500)
+    created = [x for x in collections_of(c.user) if x["name"] == "С канала"]
+    assert created and created[0]["channels"] == ["rybolos_channel"], created
+
+
+@check("C23", "Канал без подписки не предлагает «В коллекцию»", device="both")
+def c23(c):
+    login(c.pg, c.user)
+    c.pg.evaluate("openChannel('durov')")
+    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.wait_for_timeout(1500)
+    assert c.pg.locator("#chColl").is_hidden(), "кнопка видна у неподписанного канала"
+
+
 # ---------- F: лента ----------
 
 @check("F2", "Прокрутка мимо поста отмечает его прочитанным на сервере")
@@ -413,24 +517,27 @@ def f4(c):
     assert len(rows) == expected, "счётчик %s, на первой странице %s" % (unread_counter(c.pg), len(rows))
 
 
-@check("F8", "«Загрузить ещё» дописывает страницу без повторов")
+@check("F8", "Прокрутка к концу ленты подгружает следующую страницу без повторов")
 def f8(c):
     login(c.pg, c.user)
-    if not c.pg.locator("#loadMore").is_visible():
+    if c.pg.locator("#loadMore").is_hidden():
         raise Skip("страница одна: нужно больше постов в подписках")
     before = c.pg.locator("#postList .post").count()
-    c.pg.click("#loadMore")
-    c.pg.wait_for_timeout(3000)
-    after = c.pg.locator("#postList .post").count()
+    for _ in range(15):
+        c.pg.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        c.pg.wait_for_timeout(1500)
+        if c.pg.locator("#postList .post").count() > before:
+            break
     keys = [r["post"] for r in post_rows(c.pg)]
-    assert after > before and len(keys) == len(set(keys)), (before, after)
+    assert len(keys) > before, (before, len(keys))
+    assert len(keys) == len(set(keys)), "повторы при подгрузке"
 
 
 @check("F12", "Убрать канал из ленты с отменой")
 def f12(c):
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.locator("#chanList > button.chan-item").filter(has_not_text="Все каналы").first.click()
+    c.pg.locator("#chanList .coll-row:has(button[aria-label^='Коллекции канала']) > button.chan-item").first.click()
     c.pg.wait_for_timeout(2500)
     c.pg.click("#unsubBtn")
     c.pg.wait_for_timeout(1500)
@@ -537,6 +644,46 @@ def k3(c):
     c.pg.wait_for_timeout(1500)
     assert c.pg.inner_text("#channelState").strip(), "сообщения нет"
     assert set(subscriptions_of(c.user)) == set(CHANNELS), "подписка появилась"
+
+
+@check("K10", "Категории: «Все» первая, остальные по русским названиям; ошибка не прячет ряд и повторяется")
+def k10(c):
+    login(c.pg, c.user)
+    c.pg.click("#tabCat:visible, #tbCat:visible")
+    c.pg.wait_for_selector("#cats button")
+    labels = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
+    assert labels and labels[0] == "Все", labels
+    assert len(labels) > 2, "категорий меньше двух: %s" % labels
+    ordered = c.pg.evaluate("""() => { const a = [...document.querySelectorAll('#cats button')].slice(1).map(b => b.textContent);
+        return a.every((x, i, all) => i === 0 || all[i - 1].localeCompare(x, 'ru') <= 0); }""")
+    assert ordered, "категории не по русскому алфавиту: %s" % labels
+    assert len(set(labels)) == len(labels), "категории повторяются: %s" % labels
+    c.pg.route("**/api/categories", lambda route: route.fulfill(status=502, body="{}", content_type="application/json"))
+    c.pg.reload()
+    c.pg.wait_for_selector("#appShell:not([hidden])", timeout=30000)
+    c.pg.click("#tabCat:visible, #tbCat:visible")
+    c.pg.wait_for_selector("#catRetry", timeout=20000)
+    shown = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
+    assert shown[0] == "Все", "при ошибке пропала кнопка «Все»: %s" % shown
+    c.pg.unroute("**/api/categories")
+    c.pg.click("#catRetry")
+    c.pg.wait_for_function("document.querySelectorAll('#cats button').length > 2", timeout=20000)
+
+
+@check("K11", "Телефон: «Все категории» показывает все чипы в несколько строк", device="phone")
+def k11(c):
+    login(c.pg, c.user)
+    c.pg.click("#tbCat:visible, #tabCat:visible")
+    c.pg.wait_for_selector("#cats button")
+    c.pg.wait_for_timeout(1000)
+    expand = c.pg.locator("#catExpand")
+    if not expand.is_visible():
+        raise Skip("все категории помещаются в одну строку")
+    expand.click()
+    c.pg.wait_for_timeout(500)
+    assert c.pg.evaluate("document.getElementById('cats').classList.contains('wrap')"), "ряд не развернулся"
+    right = c.pg.evaluate("Math.max(...[...document.querySelectorAll('#cats button')].map(b => b.getBoundingClientRect().right))")
+    assert right <= c.pg.evaluate("innerWidth") + 1, "чипы выходят за экран: %s" % right
 
 
 @check("P1", "Страница канала открывается с заголовком")
@@ -681,25 +828,28 @@ def run(device_filter, only):
         for pid, title, device, fn in CHECKS:
             if only and pid not in only:
                 continue
-            if device_filter != "both" and device != device_filter:
-                results.append((pid, title, "SKIP", "проверка для устройства %s" % device))
-                continue
-            phone = device == "phone"
-            viewport = {"width": 420, "height": 900} if phone else {"width": 1280, "height": 860}
-            ctx = browser.new_context(viewport=viewport, is_mobile=phone, has_touch=phone)
-            pg = ctx.new_page()
-            pg.set_default_timeout(20000)
-            pg.on("dialog", lambda d: d.accept())
-            try:
-                user = new_user("ui" + pid.lower())
-                fn(type("Ctx", (), {"pg": pg, "ctx": ctx, "user": user})())
-                results.append((pid, title, "PASS", ""))
-            except Skip as skipped:
-                results.append((pid, title, "SKIP", str(skipped)))
-            except Exception as failed:
-                results.append((pid, title, "FAIL", str(failed).splitlines()[0][:200]))
-            finally:
-                ctx.close()
+            # device="both" значит: одна и та же проверка на ПК и на телефоне
+            for run_device in (("desk", "phone") if device == "both" else (device,)):
+                label = pid if device != "both" else "%s/%s" % (pid, "ПК" if run_device == "desk" else "тел")
+                if device_filter != "both" and run_device != device_filter:
+                    results.append((label, title, "SKIP", "проверка для устройства %s" % run_device))
+                    continue
+                phone = run_device == "phone"
+                viewport = {"width": 420, "height": 900} if phone else {"width": 1280, "height": 860}
+                ctx = browser.new_context(viewport=viewport, is_mobile=phone, has_touch=phone)
+                pg = ctx.new_page()
+                pg.set_default_timeout(20000)
+                pg.on("dialog", lambda d: d.accept())
+                try:
+                    user = new_user("ui" + pid.lower())
+                    fn(type("Ctx", (), {"pg": pg, "ctx": ctx, "user": user})())
+                    results.append((label, title, "PASS", ""))
+                except Skip as skipped:
+                    results.append((label, title, "SKIP", str(skipped)))
+                except Exception as failed:
+                    results.append((label, title, "FAIL", str(failed).splitlines()[0][:200]))
+                finally:
+                    ctx.close()
         browser.close()
     return results
 
@@ -710,7 +860,10 @@ def main():
     parser.add_argument("base", help="адрес стенда, например http://127.0.0.1:8090")
     parser.add_argument("--only", default="", help="ID через запятую, например C1,F2")
     parser.add_argument("--device", default="desk", choices=("desk", "phone", "both"))
+    parser.add_argument("--data-dir", default="", help="каталог данных стенда (где лежит feed.db)")
     args = parser.parse_args()
+    global DATA_DIR
+    DATA_DIR = args.data_dir
     BASE = args.base.rstrip("/")
     only = {item.strip().upper() for item in args.only.split(",") if item.strip()}
     results = run(args.device, only)
