@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import app
 import qrcodegen
@@ -420,12 +420,92 @@ class FeedAPITest(unittest.TestCase):
             self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 200)
         fetch.assert_called_once()
 
+    def test_one_page_refreshes_every_post_on_it(self):
+        # Страница t.me отдаёт около двадцати постов: свежие ссылки всех них берём одним запросом,
+        # а не по одному запросу на каждый протухший кадр
+        msg, other = [r[0] for r in self.db.execute(
+            "SELECT msg_id FROM posts WHERE channel='alpha' ORDER BY msg_id DESC LIMIT 2")]
+        self.subscribe(self.login("media_page"))
+        old = json.dumps([{"k": "i", "u": "https://cdn.example/old.jpg"}])
+        self.db.execute("UPDATE posts SET media=? WHERE channel='alpha' AND msg_id IN (?,?)", (old, msg, other))
+        self.db.commit()
+        page = []
+        for mid in (msg, other):
+            post = fake_post("alpha", mid, 1_600_000_000)
+            post["media"] = json.dumps([{"k": "i", "u": f"https://cdn.example/new-{mid}.jpg"}])
+            page.append(post)
+        with patch.dict(app._media_checked, clear=True), \
+                patch.object(app, "fetch_channel", return_value=("Alpha", page)) as fetch:
+            self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 200)
+            self.assertEqual(self.request(f"/api/media?post=alpha/{other}")[0], 200)
+        fetch.assert_called_once()
+        stored = dict(self.db.execute(
+            "SELECT msg_id, media FROM posts WHERE channel='alpha' AND msg_id IN (?,?)", (msg, other)).fetchall())
+        self.assertEqual(json.loads(stored[other])[0]["u"], f"https://cdn.example/new-{other}.jpg")
+
     def test_fresh_links_report_telegram_errors_as_bad_gateway(self):
         msg = self.last_msg_id()
         self.subscribe(self.login("media_unlucky"))
         with patch.dict(app._media_checked, clear=True), \
                 patch.object(app, "fetch_channel", side_effect=TimeoutError("timed out")):
             self.assertEqual(self.request(f"/api/media?post=alpha/{msg}")[0], 502)
+
+    def test_collections_belong_to_one_profile(self):
+        # Коллекция видна только своему профилю, и чужой id её не меняет и не удаляет
+        self.subscribe(self.login("coll_owner"), "alpha")
+        status, made = self.request("/api/collections/save", "POST", {"name": "Новости", "channels": ["alpha"]})
+        self.assertEqual(status, 200)
+        cid = made["collection"]["id"]
+        self.login("coll_guest")
+        self.assertEqual(self.request("/api/collections")[1]["collections"], [])
+        self.assertEqual(self.request("/api/collections/save", "POST", {"id": cid, "name": "Чужая", "channels": []})[0], 404)
+        self.assertEqual(self.request("/api/collections/delete", "POST", {"id": cid})[0], 404)
+
+    def test_collection_is_saved_renamed_and_deleted(self):
+        profile = self.login("coll_crud")
+        self.subscribe(profile, "alpha")
+        self.subscribe(profile, "beta")
+        status, made = self.request("/api/collections/save", "POST", {"name": "Новости", "channels": ["alpha", "beta"]})
+        self.assertEqual(status, 200)
+        cid = made["collection"]["id"]
+        status, renamed = self.request("/api/collections/save", "POST",
+                                       {"id": cid, "name": "Все новости", "channels": ["beta"]})
+        self.assertEqual((status, renamed["collection"]["name"], renamed["collection"]["channels"]),
+                         (200, "Все новости", ["beta"]))
+        self.assertEqual(self.request("/api/collections")[1]["collections"],
+                         [{"id": cid, "name": "Все новости", "channels": ["beta"]}])
+        self.assertEqual(self.request("/api/collections/delete", "POST", {"id": cid})[0], 200)
+        self.assertEqual(self.request("/api/collections")[1]["collections"], [])
+
+    def test_collection_rejects_strangers_and_bad_names(self):
+        self.subscribe(self.login("coll_checks"), "alpha")
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": "  ", "channels": []})[0], 400)
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": "x" * 33, "channels": []})[0], 400)
+        # канал, на который нет подписки, в коллекцию не попадает
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": "Чужой", "channels": ["beta"]})[0], 400)
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": "Ок", "channels": ["bad name!"]})[0], 400)
+        self.assertEqual(self.request("/api/collections")[1]["collections"], [])
+
+    def test_collection_names_are_unique_per_profile(self):
+        # одинаковые названия в списке не различить: второе сохранение с тем же именем (без учёта
+        # регистра и пробелов по краям) отклоняем, а переименовать коллекцию в её же название можно
+        self.subscribe(self.login("coll_names"), "alpha")
+        first = self.request("/api/collections/save", "POST", {"name": "Новости", "channels": ["alpha"]})[1]["collection"]
+        self.assertEqual(self.request("/api/collections/save", "POST", {"name": " новости ", "channels": []})[0], 400)
+        self.assertEqual(self.request("/api/collections/save", "POST",
+                                      {"id": first["id"], "name": "Новости", "channels": ["alpha"]})[0], 200)
+        other = self.request("/api/collections/save", "POST", {"name": "Тех", "channels": []})[1]["collection"]
+        self.assertEqual(self.request("/api/collections/save", "POST",
+                                      {"id": other["id"], "name": "НОВОСТИ", "channels": []})[0], 400)
+        self.assertEqual([c["name"] for c in self.request("/api/collections")[1]["collections"]], ["Новости", "Тех"])
+
+    def test_unsubscribing_takes_the_channel_out_of_collections(self):
+        profile = self.login("coll_prune")
+        self.subscribe(profile, "alpha")
+        self.subscribe(profile, "beta")
+        self.request("/api/collections/save", "POST", {"name": "Две", "channels": ["alpha", "beta"]})
+        self.request("/api/state/subscription", "POST", {"channel": "alpha", "subscribed": False})
+        self.assertEqual(self.request("/api/collections")[1]["collections"][0]["channels"], ["beta"])
 
     def test_catalog_is_for_signed_in_profiles_only(self):
         # Каталог и категории отдают список каналов, поэтому без входа их не получают
@@ -940,6 +1020,30 @@ class HistoryTextTest(unittest.TestCase):
         self.assertEqual(out.splitlines(), [expected for _, _, expected in cases])
 
 
+class CollectionFeedTest(unittest.TestCase):
+    """Лента коллекции это лента с фильтром: каналы берём из коллекции и только из подписок."""
+
+    @unittest.skipUnless(shutil.which("node"), "нужен node")
+    def test_collection_feed_takes_only_its_subscribed_channels(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+        with open(path, encoding="utf-8") as page:
+            html = page.read()
+        lookup = re.search(r"^const collectionOf = .*$", html, re.M).group(0)
+        feed = re.search(r"^function feedChannels\(\).*?^}", html, re.S | re.M).group(0)
+        cases = [
+            ("''", "[]", ["alpha", "beta"], ["alpha", "beta"]),
+            ("'c:1'", "[{id: 1, name: 'Новости', channels: ['alpha', 'gamma']}]", ["alpha", "beta"], ["alpha"]),
+            ("'c:2'", "[{id: 1, name: 'Новости', channels: ['alpha']}]", ["alpha", "beta"], []),
+            ("'beta'", "[]", ["alpha", "beta"], ["beta"]),
+        ]
+        script = "var tab = '', collections = [], subsList = [];\nvar subs = () => subsList;\n" + lookup + "\n" + feed + "\n" + "\n".join(
+            "tab = %s; collections = %s; subsList = %s; console.log(JSON.stringify(feedChannels()));"
+            % (selected, collections, json.dumps(subscribed))
+            for selected, collections, subscribed, _ in cases)
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout
+        self.assertEqual([json.loads(line) for line in out.splitlines()], [expected for *_, expected in cases])
+
+
 class BackfillLoopTest(unittest.TestCase):
     """Пока догружать нечего, цикл ждёт недолго: новая подписка не должна ждать минуту."""
 
@@ -956,6 +1060,66 @@ class BackfillLoopTest(unittest.TestCase):
                 app._backfill_loop()
         clock.sleep.assert_called_once_with(app.BACKFILL_IDLE)
         self.assertLessEqual(app.BACKFILL_IDLE, 5)
+
+
+class MediaSweepTest(unittest.TestCase):
+    """Фон освежает ссылки на медиа подписанных каналов: страницы за окно, не чаще интервала."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="media-sweep-test-")
+        self.patches = [patch.object(app, "DB", self.temp.name + "/feed.db"),
+                        patch.object(app, "MEDIA_PAUSE", 0)]
+        for p in self.patches:
+            p.start()
+        app._media_swept.clear()
+        self.db = app.connect()
+        self.now = int(time.time())
+        rows = [fake_post("alpha", msg, self.age_ts(msg)) for msg in range(1, 61)]
+        for row in rows:
+            row["media"] = json.dumps([{"k": "i", "u": "https://cdn.example/old-%d.jpg" % row["msg_id"]}])
+        self.db.executemany(app.POST_INSERT, rows)
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES ('sweep_fan', 'alpha')")
+        self.db.commit()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        app._media_swept.clear()
+        self.db.close()
+        self.temp.cleanup()
+
+    def age_ts(self, msg):
+        # три часа между постами: пост 60 свежий, пост 1 старше недели
+        return self.now - (61 - msg) * 3 * 3600
+
+    def page(self, channel, before=None):
+        # страницы по двадцать постов, от свежих к старым, как отдаёт t.me
+        ids = {None: range(60, 40, -1), 41: range(40, 20, -1), 21: range(20, 0, -1)}[before]
+        posts = [fake_post(channel, msg, self.age_ts(msg)) for msg in ids]
+        for post in posts:
+            post["media"] = json.dumps([{"k": "i", "u": "https://cdn.example/new-%d.jpg" % post["msg_id"]}])
+        return ("Alpha", posts)
+
+    def media_url(self, msg):
+        raw = self.db.execute("SELECT media FROM posts WHERE channel='alpha' AND msg_id=?", (msg,)).fetchone()[0]
+        return json.loads(raw)[0]["u"]
+
+    def test_sweep_walks_pages_only_until_the_window_ends(self):
+        with patch.object(app, "fetch_channel", side_effect=self.page) as fetch:
+            self.assertTrue(app.media_step(self.db))
+        # первая страница и вторая, на которой окно уже кончается; третью не запрашиваем
+        self.assertEqual(fetch.call_args_list, [call("alpha", before=None), call("alpha", before=41)])
+        self.assertEqual(self.media_url(60), "https://cdn.example/new-60.jpg")
+        self.assertEqual(self.media_url(25), "https://cdn.example/new-25.jpg")
+        self.assertEqual(self.media_url(10), "https://cdn.example/old-10.jpg")
+
+    def test_telegram_error_skips_the_channel_until_the_next_interval(self):
+        with patch.object(app, "fetch_channel", side_effect=ValueError("t.me попросил подождать")) as fetch:
+            self.assertTrue(app.media_step(self.db))
+            self.assertFalse(app.media_step(self.db))
+            app._media_swept["alpha"] = 0
+            self.assertTrue(app.media_step(self.db))
+        self.assertEqual(fetch.call_count, 2)
 
 
 class CatalogCategoryTest(unittest.TestCase):
