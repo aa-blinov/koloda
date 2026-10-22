@@ -34,10 +34,10 @@
 
   $: available = $subs.filter((name) => !picked.includes(name));
 
-  function toggle(channelName) {
-    picked = picked.includes(channelName)
-      ? picked.filter((c) => c !== channelName)
-      : [...picked, channelName];
+  function toggle(channelName, on) {
+    picked = on
+      ? [...new Set([...picked, channelName])]
+      : picked.filter((c) => c !== channelName);
   }
 
   // Галочка коллекции сохраняется сразу: человек не ждёт кнопки «Сохранить»
@@ -128,19 +128,24 @@
       </ul>
     {/if}
   {:else}
-    <TextField label="Название" bind:value={name} placeholder="Новости" />
+    <TextField id="collName" label="Название" bind:value={name} placeholder="Новости" />
 
-    <div class="channels">
+    <div class="channels" id="collPick">
       {#if !available.length}
         <p class="hint">Все каналы уже в коллекции. Добавь подписку в каталоге.</p>
       {:else}
         <ul>
           {#each available as name (name)}
             <li>
-              <button type="button" class="chan" on:click={() => toggle(name)}>
-                <Icon name="plus" size={14} />
-                {($titles && $titles[name]) || name}
-              </button>
+              <label>
+                <input
+                  type="checkbox"
+                  value={name}
+                  checked={picked.includes(name)}
+                  on:change={(event) => toggle(name, event.currentTarget.checked)}
+                />
+                <span>{($titles && $titles[name]) || name}</span>
+              </label>
             </li>
           {/each}
         </ul>
@@ -158,11 +163,15 @@
 
   <svelte:fragment slot="footer">
     {#if collection && collection.id && !channel}
-      <Button variant="danger" on:click={remove} disabled={busy}>Удалить</Button>
+      <span id="collDelete">
+        <Button variant="danger" on:click={remove} disabled={busy}>Удалить</Button>
+      </span>
     {/if}
     <Button variant="secondary" on:click={() => dispatch('close')}>Отмена</Button>
     {#if !channel}
-      <Button on:click={save} loading={busy}>Сохранить</Button>
+      <span id="collSave">
+        <Button on:click={save} loading={busy}>Сохранить</Button>
+      </span>
     {/if}
   </svelte:fragment>
 </Modal>
@@ -185,24 +194,15 @@
     border-bottom: 1px solid var(--ui-line);
   }
 
-  .chan {
+  .channels label {
     display: flex;
     align-items: center;
     gap: var(--ui-space-snug);
-    width: 100%;
     min-height: var(--ui-control-touch);
-    padding: 0;
-    background: none;
-    border: 0;
-    font: inherit;
-    color: var(--ui-ink);
     cursor: pointer;
-    text-align: left;
   }
 
-  .chan:hover {
-    color: var(--ui-accent-text);
-  }
+
 
   .picks {
     list-style: none;

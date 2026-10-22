@@ -155,6 +155,7 @@
   }
 </script>
 
+<div id="chanList">
 <Modal
   {open}
   title="Каналы и коллекции"
@@ -194,7 +195,7 @@
         description="Открой каталог, выбери нужные, и они появятся здесь."
       />
     {:else}
-      <div class="list" id="chanList">
+      <div class="list">
         {#each $subs as channel (channel)}
           {@const item = historyBy.get(channel)}
           {@const name = $titles[channel] || channel}
@@ -226,6 +227,11 @@
             {/if}
           </button>
           <!-- Быстрое «в коллекцию»: канал и его коллекции, без похода в каталог. -->
+          <button
+            type="button"
+            class="quiet-btn unsub-btn"
+            on:click={() => dispatch('unsubscribe', channel)}
+          >Отписаться</button>
           <button
             type="button"
             class="quiet-btn"
@@ -307,7 +313,10 @@
       </div>
     {/if}
 
-    <form class="coll-new" on:submit|preventDefault={createCollection}>
+    {#if !$subs.length}
+      <p class="hint">Подписок нет: сначала подпишись на канал, потом собирай коллекции.</p>
+    {/if}
+    <form class="coll-new" hidden={!$subs.length} on:submit|preventDefault={createCollection}>
       <TextField
         label="Новая коллекция"
         bind:value={collectionName}
@@ -330,6 +339,7 @@
     <Button variant="secondary" on:click={() => dispatch('close')}>Закрыть</Button>
   </svelte:fragment>
 </Modal>
+</div>
 
 <style>
   /* Сетка, а не флекс: поле и кнопка — это корни двух разных компонентов,

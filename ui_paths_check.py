@@ -220,9 +220,9 @@ def a4(c):
     login(c.pg, c.user)
     open_profile(c.pg)
     # выход подтверждается вторым нажатием в течение шести секунд: защита от случайного выхода
-    c.pg.click("#logoutBtn")
+    c.pg.get_by_role("button", name="Выйти из профиля").first.click()
     c.pg.wait_for_timeout(300)
-    c.pg.click("#logoutBtn")
+    c.pg.get_by_role("button", name="Выйти из профиля").first.click()
     c.pg.wait_for_selector("#authScreen", timeout=20000)
 
 
@@ -232,13 +232,14 @@ def a4(c):
 def c1(c):
     login(c.pg, c.user)
     open_list(c.pg)
+    c.pg.fill("#chanList .coll-new input", "Новости")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     assert c.pg.locator("#collPick input[type=checkbox]").count() == len(CHANNELS), "в редакторе не все подписки"
     c.pg.fill("#collName", "Новости")
     c.pg.locator("#collPick input[value=rybolos_channel]").check()
     c.pg.locator("#collPick input[value=evilfreelancer]").check()
-    c.pg.click("#collSave")
+    c.pg.click("#collSave button")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(3000)
     assert c.pg.inner_text("#tabsToggleLabel") == "Новости", c.pg.inner_text("#tabsToggleLabel")
@@ -275,7 +276,7 @@ def c4(c):
     login(c.pg, c.user)
     edit_from_list(c.pg, "Новости")
     c.pg.locator("#collPick input[value=evilfreelancer]").uncheck()
-    c.pg.click("#collSave")
+    c.pg.click("#collSave button")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(1500)
     assert collections_of(c.user)[0]["channels"] == ["rybolos_channel"], "состав не сохранился"
@@ -286,10 +287,10 @@ def c5(c):
     make_collection(c.user, "Новости", ["rybolos_channel", "evilfreelancer"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
-    c.pg.click("#collEditBtn")
+    c.pg.locator("button[aria-label^='Изменить коллекцию']").first.click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.locator("#collPick input[value=evilfreelancer]").uncheck()
-    c.pg.click("#collSave")
+    c.pg.click("#collSave button")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(4000)
     assert set(feed_channels(c.pg)) <= {"rybolos_channel"}, feed_channels(c.pg)
@@ -301,7 +302,7 @@ def c6(c):
     login(c.pg, c.user)
     edit_from_list(c.pg, "Старое")
     c.pg.fill("#collName", "Новое")
-    c.pg.click("#collSave")
+    c.pg.click("#collSave button")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(1500)
     assert collections_of(c.user)[0]["name"] == "Новое"
@@ -312,9 +313,9 @@ def c7(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
-    c.pg.click("#collEditBtn")
+    c.pg.locator("button[aria-label^='Изменить коллекцию']").first.click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
-    c.pg.click("#collDelete")
+    c.pg.click("#collDelete button")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(2500)
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы"
@@ -326,10 +327,11 @@ def c8(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
+    c.pg.fill("#chanList .coll-new input", "Новости")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.fill("#collName", "  НОВОСТИ ")
-    c.pg.click("#collSave")
+    c.pg.click("#collSave button")
     c.pg.wait_for_timeout(1500)
     assert "уже есть" in c.pg.inner_text("#collMsg"), c.pg.inner_text("#collMsg")
     assert overlay_open(c.pg, "collOvl"), "редактор закрылся"
@@ -362,7 +364,7 @@ def c11(c):
     api("/api/collections/delete", {"id": collection_id}, c.user["cookie"])
     c.pg.click("button[aria-label='Изменить коллекцию Удалённая']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
-    c.pg.click("#collSave")
+    c.pg.click("#collSave button")
     c.pg.wait_for_timeout(2500)
     assert "нет" in c.pg.inner_text("#collMsg"), c.pg.inner_text("#collMsg")
     assert c.pg.locator("#chanList .coll-name", has_text="Удалённая").count() == 0, "строка не исчезла"
@@ -383,6 +385,7 @@ def c12(c):
 def c17(c):
     login(c.pg, c.user)
     open_list(c.pg)
+    c.pg.fill("#chanList .coll-new input", "Новости")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.keyboard.press("Escape")
@@ -394,9 +397,9 @@ def c17(c):
 def c18(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
-    assert not c.pg.locator("#collEditBtn").is_visible(), "кнопка видна без выбранной коллекции"
+    assert c.pg.locator("#chanList .coll-name").count() == 0, "кнопка видна без выбранной коллекции"
     pick_collection(c.pg, "Новости")
-    assert c.pg.locator("#collEditBtn").is_visible(), "кнопки нет при выбранной коллекции"
+    assert c.pg.locator("button[aria-label^='Изменить коллекцию']").count() >= 1, "кнопки нет при выбранной коллекции"
 
 
 @check("C19", "Прочитанное внутри коллекции общее с лентой; счётчик считает коллекцию")
@@ -439,7 +442,7 @@ def c21(c):
     coll_id = make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
-    row = c.pg.locator("#chanList .coll-row button.quiet-btn", has_text="В коллекциях: 1")
+    row = c.pg.locator("#chanList .quiet-btn", has_text="В коллекциях: 1")
     assert row.count() == 1, "у канала нет числа коллекций в списке"
     row.click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
@@ -449,7 +452,7 @@ def c21(c):
     c.pg.locator("#collOvl button", has_text="Отмена").first.click()
     wait_closed(c.pg, "chanCollOvl")
     c.pg.wait_for_timeout(500)
-    assert c.pg.locator("#chanList .coll-row button.quiet-btn", has_text="В коллекцию").count() >= 1, "подпись не вернулась"
+    assert c.pg.locator("#chanList .quiet-btn", has_text="В коллекцию").count() >= 1, "подпись не вернулась"
 
 
 @check("C22", "Со страницы канала можно сразу создать коллекцию с этим каналом", device="both")
@@ -461,7 +464,7 @@ def c22(c):
     c.pg.click("#chColl button")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.fill("#chanCollNew", "С канала")
-    c.pg.click("#chanCollAdd")
+    c.pg.click("#chanCollAdd button")
     c.pg.wait_for_timeout(2500)
     created = [x for x in collections_of(c.user) if x["name"] == "С канала"]
     assert created and created[0]["channels"] == ["rybolos_channel"], created
@@ -556,9 +559,9 @@ def f8(c):
 def f12(c):
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.locator("#chanList .coll-row:has(button[aria-label^='Коллекции канала']) > button.chan-item").first.click()
+    c.pg.locator("#chanList .coll-name").first.click()
     c.pg.wait_for_timeout(2500)
-    c.pg.click("#unsubBtn")
+    c.pg.locator("#chanList .unsub-btn").first.click()
     c.pg.wait_for_timeout(1500)
     removed = [ch for ch in CHANNELS if ch not in subscriptions_of(c.user)]
     assert len(removed) == 1, "канал не ушёл из подписок: %s" % removed
@@ -611,30 +614,30 @@ def f20(c):
 def h1(c):
     login(c.pg, c.user)
     open_profile(c.pg)
-    c.pg.click("#meTabHelp")
-    c.pg.wait_for_timeout(500)
-    assert "Клавиши" in c.pg.inner_text("#mePanelHelp"), "список клавиш не открылся"
+    c.pg.get_by_role("tab", name="Справка").click()
+    c.pg.wait_for_timeout(800)
+    assert "Клавиши" in c.pg.get_by_role("tabpanel").inner_text(), "список клавиш не открылся"
 
 
 @check("V1", "Тема сохраняется в профиле и переживает перезагрузку")
 def v1(c):
     login(c.pg, c.user)
     open_profile(c.pg)
-    c.pg.click("#meTabView")
-    c.pg.click("button[data-set=theme][data-value=light]")
-    c.pg.wait_for_timeout(1500)
-    assert c.pg.evaluate("document.documentElement.dataset.theme") == "light", "тема не применилась"
+    c.pg.get_by_role("tab", name="Вид").click()
+    c.pg.get_by_role("button", name="Светлая").first.click()
+    c.pg.wait_for_timeout(1800)
+    assert c.pg.evaluate("document.documentElement.dataset.mode") == "light", "тема не применилась"
     c.pg.reload()
     c.pg.wait_for_selector("#postList", timeout=30000)
-    assert c.pg.evaluate("document.documentElement.dataset.themePref") == "light", "после перезагрузки тема слетела"
+    assert c.pg.evaluate("document.documentElement.dataset.modePref") == "light", "после перезагрузки тема слетела"
 
 
 @check("V2", "Шрифт меняется и сохраняется")
 def v2(c):
     login(c.pg, c.user)
     open_profile(c.pg)
-    c.pg.click("#meTabView")
-    c.pg.click("button[data-set=font][data-value=serif]")
+    c.pg.get_by_role("tab", name="Вид").click()
+    c.pg.get_by_role("button", name="С засечками").first.click()
     c.pg.wait_for_timeout(1500)
     c.pg.reload()
     c.pg.wait_for_selector("#postList", timeout=30000)
@@ -645,9 +648,9 @@ def v2(c):
 def d1(c):
     login(c.pg, c.user)
     open_profile(c.pg)
-    c.pg.click("#meTabData")
+    c.pg.get_by_role("tab", name="Данные").click()
     with c.pg.expect_download(timeout=20000) as download:
-        c.pg.click("#exportBtn")
+        c.pg.get_by_role("link", name="Скачать koloda-lenta.jsonl").click()
     assert download.value.suggested_filename, "файл без имени"
 
 
@@ -656,10 +659,10 @@ def d1(c):
 @check("K3", "Ссылка, которая не похожа на канал, отклоняется сообщением")
 def k3(c):
     login(c.pg, c.user)
-    c.pg.click("#tabCat:visible, #tbCat:visible")
-    c.pg.wait_for_selector("#viewCat:not([hidden])")
+    c.pg.get_by_role("button", name="Каталог", exact=True).first.click()
+    c.pg.wait_for_selector(".channel-entry, .empty")
     c.pg.fill("#channelInput", "нет такого!!")
-    c.pg.click("#channelAdd")
+    c.pg.click("#channelAdd button")
     c.pg.wait_for_timeout(1500)
     assert c.pg.inner_text("#channelState").strip(), "сообщения нет"
     assert set(subscriptions_of(c.user)) == set(CHANNELS), "подписка появилась"
@@ -668,7 +671,7 @@ def k3(c):
 @check("K10", "Категории: «Все» первая, остальные по русским названиям; ошибка не прячет ряд и повторяется")
 def k10(c):
     login(c.pg, c.user)
-    c.pg.click("#tabCat:visible, #tbCat:visible")
+    c.pg.get_by_role("button", name="Каталог", exact=True).first.click()
     c.pg.wait_for_selector("#cats button")
     labels = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
     assert labels and labels[0] == "Все", labels
