@@ -11,7 +11,17 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { postKey } from '../lib/format.js';
-  import { subs, reads, titles, avatars, setSubscription, showUndo, loadAvatars, markRead } from '../lib/stores.js';
+  import {
+    subs,
+    reads,
+    titles,
+    avatars,
+    collections,
+    setSubscription,
+    showUndo,
+    loadAvatars,
+    markRead,
+  } from '../lib/stores.js';
 
   export let channelName = '';
 
@@ -26,6 +36,8 @@
   let requestId = 0;
   let saved = new Set();
   let lastBottom = new WeakMap();
+  // Коллекции, в которых лежит канал: их видно и можно поправить отсюда.
+  $: mine = $collections.filter((c) => (c.channels || []).includes(channelName));
 
   $: subscribed = $subs.includes(channelName);
   $: mark = $avatars.get(channelName) || '';
@@ -91,7 +103,7 @@
   });
 </script>
 
-<div class="column ch-page">
+<div class="column ch-page" id="viewChannel">
   <Button variant="text" size="sm" on:click={() => dispatch('back')}>Назад в каталог</Button>
 
   <h1>{title || channelName}</h1>
@@ -99,6 +111,14 @@
 
   <div class="ch-actions">
     <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
+    <span id="chColl" class="ch-coll">
+      <Button variant="text" size="sm" on:click={() => dispatch('channelCollections', channelName)}>
+        {mine.length ? 'В коллекциях: ' + mine.length : 'В коллекцию'}
+      </Button>
+      <span id="chCollState">
+        {mine.length ? 'В коллекциях: ' + mine.map((c) => c.name).join(', ') : 'Пока ни в одной коллекции'}
+      </span>
+    </span>
     <a class="ch-link" href={'https://t.me/' + channelName} target="_blank" rel="noopener">
       <Icon name="external" size={14} />
       Открыть в Telegram
@@ -154,6 +174,12 @@
     font-weight: 700;
     letter-spacing: -0.025em;
     margin: var(--ui-space-snug) 0;
+  }
+
+  .ch-coll {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-snug);
   }
 
   .ch-link {

@@ -149,6 +149,11 @@
     }
   }
 
+  // Обновление ленты по событию: так же обновляет жест «потянуть вниз».
+  function onRefresh() {
+    load(false);
+  }
+
   function onSearch(event) {
     query = event.detail || '';
     load(false);
@@ -237,18 +242,20 @@
   function onTouchEnd() {
     if (!pulling) return;
     pulling = false;
-    if (pullHeight > 48) load(false);
+    if (pullHeight > 48) onRefresh();
     pullHeight = 0;
   }
 
   onMount(() => {
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('koloda:search', onSearch);
+    window.addEventListener('koloda:refresh', onRefresh);
     window.addEventListener('koloda:key', onKey);
     load(false);
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('koloda:search', onSearch);
+      window.removeEventListener('koloda:refresh', onRefresh);
       window.removeEventListener('koloda:key', onKey);
       if (controller) controller.abort();
     };
@@ -272,9 +279,11 @@
   </div>
 
   <div class="feed-bar">
-    <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!showRead}>
-      {showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
-    </Button>
+    <span id="readToggle" class="read-toggle">
+      <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!showRead}>
+        {showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
+      </Button>
+    </span>
     {#if tab || collection}
       <Button variant="text" size="sm" on:click={() => pickChannel('')}>Все каналы</Button>
     {/if}
