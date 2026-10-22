@@ -153,6 +153,22 @@ if os.path.isdir(DIST):
 else:
     print("сборки нет: ui/dist её соберёт npm run build")
 
+# --- служебные скрипты должны быть хотя бы синтаксически целы ---
+# Они не входят в тесты, и опечатка в них всплыла бы только на стенде.
+import py_compile
+import tempfile
+
+for script in ("ui_paths_check.py", "audit_media.py", "app.py", "tg.py"):
+    path = os.path.join(BASE, script)
+    if not os.path.exists(path):
+        continue
+    try:
+        py_compile.compile(path, doraise=True,
+                           cfile=os.path.join(tempfile.gettempdir(), script + "c"))
+    except py_compile.PyCompileError as error:
+        fail("СИНТАКСИС: %s: %s" % (script, str(error).splitlines()[-1][:120]))
+print("служебные скрипты собираются")
+
 if problems:
     print()
     for line in problems:
