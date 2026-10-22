@@ -1124,6 +1124,20 @@ class HistoryTextTest(unittest.TestCase):
         self.assertEqual(out.splitlines(), [expected for _, _, expected in cases])
 
 
+class ViewsTextTest(unittest.TestCase):
+    """Просмотры приходят от Telegram строкой: её разбираем, а не показываем как есть."""
+
+    @unittest.skipUnless(shutil.which("node"), "нужен node")
+    def test_views_are_parsed_into_the_common_format(self):
+        source = read_ui("lib/format.js")
+        cases = [("7.07K", "7 тыс."), ("230K", "230 тыс."), ("54K", "54 тыс."),
+                 ("1.2M", "1,2 млн"), ("999", "999")]
+        script = source + "\n" + "\n".join(
+            "console.log(viewsText(%s));" % json.dumps(value) for value, _ in cases)
+        out = run_node(script)
+        self.assertEqual(out.splitlines(), [expected for _, expected in cases])
+
+
 class CollectionFeedTest(unittest.TestCase):
     """Лента коллекции это лента с фильтром: каналы берём из коллекции и только из подписок."""
 

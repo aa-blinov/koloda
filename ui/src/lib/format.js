@@ -15,6 +15,20 @@ export function nfmt(value) {
 
 export const kfmt = nfmt;
 
+/**
+ * Просмотры приходят от Telegram строкой: "7.07K", "230K", "1.2M".
+ * Строку нужно разобрать, а не показать как есть: иначе рядом с нашими
+ * "тыс." и "млн" стояли бы чужие "K" и "M".
+ */
+export function viewsText(raw) {
+  const text = String(raw || '').trim();
+  const match = /^([\d.,]+)\s*([KkMm])?/.exec(text);
+  if (!match) return text;
+  const base = Number(match[1].replace(',', '.')) * ({ K: 1e3, k: 1e3, M: 1e6, m: 1e6 }[match[2]] || 1);
+  // Округлять до сотен при 1 999 значило показывать не тот счёт, что у Telegram.
+  return base < 1000 ? String(base) : nfmt(Math.round(base / 100) * 100);
+}
+
 export function dayLabel(ts) {
   const d = new Date(ts * 1000), now = new Date();
   const same = (a) => a.toDateString() === d.toDateString();
