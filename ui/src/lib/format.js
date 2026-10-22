@@ -58,6 +58,15 @@ export function when(ts) {
 // чтобы не выдумывать смысл.
 const CAT_RU = {
   'News & Media': 'Новости и медиа',
+  'Bots & Tools': 'Боты и инструменты',
+  'Business & Marketing': 'Бизнес и маркетинг',
+  Communities: 'Сообщества',
+  'Crypto & Finance': 'Крипта и финансы',
+  'Deals & Coupons': 'Скидки и купоны',
+  'Education & Learning': 'Образование и учёба',
+  Entertainment: 'Развлечения',
+  Lifestyle: 'Образ жизни',
+  Technology: 'Технологии',
   'Career & Jobs': 'Работа и карьера',
   Education: 'Образование',
   'Tech & Science': 'Технологии и наука',

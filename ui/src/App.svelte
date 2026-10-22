@@ -80,7 +80,9 @@
   function readHash() {
     const hash = location.hash || '';
     if (hash.startsWith('#/cat')) return { view: 'catalog', feedMode: 'feed', channelName: '' };
-    if (hash.startsWith('#/channel/')) return { view: 'channel', feedMode: 'feed', channelName: hash.slice(9) };
+    // Префикс «#/channel/» — десять символов: со сдвигом на один канал приходил
+    // со слешем, и подписка менялась не у того канала.
+    if (hash.startsWith('#/channel/')) return { view: 'channel', feedMode: 'feed', channelName: hash.slice(10) };
     if (hash.startsWith('#/me')) return { view: 'profile', feedMode: 'feed', channelName: '' };
     return { view: 'feed', feedMode: 'feed', channelName: '' };
   }
