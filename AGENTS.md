@@ -14,19 +14,26 @@ layout, and the traps that cost a rebuild to learn.
 docker compose up -d --build    # build the image and start the service on http://127.0.0.1:8090
 docker compose logs -f           # the log
 docker compose down              # stop
+cd ui && npm ci && npm run build # the interface: the dependencies and the build
+cd ui && npm run dev             # the interface on http://127.0.0.1:5180, the API is proxied
 python3 -m unittest -v           # the tests: no network, no Telegram, a temporary database
-python3 check_ui.py              # the integrity of index.html, without a browser
+python3 check_ui.py              # the integrity of the interface, without a browser
 docker build -t koloda:ci .      # the image builds
 python3 app.py 8090              # run it without Docker, on an empty data/feed.db
 ```
+
+The interface is built: the sources are in `ui/src`, the ready files in `ui/dist`.
+The server only hands over the built files, so after a change in `ui/` the build
+has to be repeated, or the service keeps the old interface. The image builds the
+interface itself, in the `ui` stage of the Dockerfile.
 
 The port is 8000 inside the container and 8090 on the host, because 8000 is
 taken by other processes on that machine. The port of the process itself: the
 argument of the command line first, then `$PORT`, then 8000.
 
-The same three commands run in GitHub Actions on every push to `master` and on
-every pull request: `python3 -m unittest -v`, `python3 check_ui.py` and
-`docker build`.
+The same checks run in GitHub Actions on every push to `master` and on every
+pull request: `npm ci && npm run build` in `ui/`, then `python3 -m unittest -v`,
+`python3 check_ui.py` and `docker build`.
 
 The audit of the media runs against the live data and needs the internet:
 
@@ -40,23 +47,29 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
 
 | Path | What it holds |
 | --- | --- |
-| `app.py` | The whole server: the parsing of `t.me/s/<channel>`, the schema and the migrations, the profiles, the sessions, the letters, the serving of `index.html`. The standard library alone. |
-| `index.html` | The whole frontend: markup, styles and script in one file. No build. |
+| `app.py` | The whole server: the parsing of `t.me/s/<channel>`, the schema and the migrations, the profiles, the sessions, the letters, the serving of the built interface. The standard library alone. |
+| `ui/` | The whole frontend: Svelte 4, Vite and the Monos kit. The sources in `ui/src`, the build in `ui/dist`. |
+| `ui/src/lib/` | The parts without a screen: the API client, the state, the formatting, the wording of the history. They are plain modules, and the tests count them in node. |
+| `ui/src/components/` | The screens: the feed, the card of a post, the catalog, the channel, the profile, the dialogs, the viewer of the frames. |
 | `tg.py` | The Telegram layer: the login by link and the reading of the private channels. Telethon is imported lazily, so without a linked profile the module never touches the network. |
 | `qrsvg.py` | The QR code of the login link, as SVG. |
 | `qrcodegen.py` | The QR encoder of Project Nayuki (MIT), unchanged. |
 | `test_app.py` | The tests. The HTTP server stands on a random port, Telegram is mocked. |
-| `check_ui.py` | The integrity of `index.html` without a browser. It takes no arguments and reads `index.html` next to itself. |
-| `audit_media.py` | Compares the media in the database with what t.me serves now. A service script: it is not in the image and it is not in the tests. |
+| `check_ui.py` | The integrity of the interface without a browser: the imports, the icons, the colours, the spacing, the build. It takes no arguments. |
+| `audit_media.py` | Compares the media in the database with what t.me serves now. A service script: it is not in the image. Only its exit code is covered by the tests, without the network. |
 | `sync.py`, `serve.py` | The old variant with Telethon and RSS. The current service does not call them. |
 | `fonts/` | JetBrains Mono, in four woff2 files, served from the address of the service itself. |
 | `docs/` | The screenshots for the README. |
 
 ## Traps
 
-- **The Dockerfile copies the files by name.** `COPY app.py index.html tg.py
-  qrsvg.py qrcodegen.py ./`. A new module works on the machine and dies in the
+- **The Dockerfile copies the files by name.** `COPY app.py tg.py qrsvg.py
+  qrcodegen.py ./`. A new module works on the machine and dies in the
   container at the first request. Add the file to that line.
+- **The interface is built, and the build is a separate step.** The server hands
+  over `ui/dist` and nothing else. A change in `ui/src` without `npm run build`
+  leaves the service with the old interface, and the symptom is "my change did
+  not show up" rather than an error.
 - **The schema changes by a migration in `connect()`.** `PRAGMA table_info` plus
   `ALTER TABLE`. Changing the `SCHEMA` block alone leaves the databases of the
   users alone.
@@ -73,11 +86,16 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
 - **The values that come from the browser are checked against a white list on
   the server.** The theme, the font, the channel name, the search: they go into
   the markup as they are. The server answers 400 to an unknown theme or font.
-- **The colours, the radii, the fonts and the spacing come from the tokens in
-  `:root`.** `--r-xs/sm/md/lg/pill/round`, `--fg`, `--dim`, `--acc` and the
-  rest. A value of its own in the markup breaks the rule. The contrast of the
-  text is at least 4.5:1, so a change to the palette means recomputing the
-  contrast and correcting the numbers in the README.
+- **The palette, the radii, the fonts and the spacing come from the Monos kit.**
+  The tokens are `--ui-bg`, `--ui-surface`, `--ui-ink`, `--ui-accent`,
+  `--ui-radius` and `--ui-space-*`. A colour of one's own breaks the theme: the
+  palette stops switching. `check_ui.py` looks for a hex colour in the sources
+  and fails on it. The text of the interface keeps a contrast of at least 4.5:1,
+  and the test counts it over all the palettes of the kit.
+- **The theme is a palette, the light is a separate setting.** `theme` is one of
+  the six palettes of the kit, `mode` is `dark`, `light` or `auto`. The old
+  setting was a pair "light or dark", and its value moves to `mode` when the
+  profile is read.
 - **The interface texts are in Russian**, addressed to the reader as "ты",
   without a dash in the role of a separator and without service emoji.
 - **The name of a channel is checked before it reaches the address.**
@@ -100,18 +118,33 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
 - **A feed with no subscriptions stays empty.** `search_posts` with an empty
   list of channels returns the whole cache, which in the feed would be every
   post of the database.
+- **The word "captcha" in a post is not a block.** The sign of a block is
+  looked for only on a page without posts: on a page with posts the word
+  belongs to the text of the channel. The check over the whole html took a
+  whole channel offline, because one of its posts was about a captcha.
+- **The file of a Telegram session is created before Telethon opens it.**
+  Telethon opens the file in the constructor, and it appears with the rights of
+  the umask, that is readable by all. `tg._client` creates the file itself with
+  0600; do not remove that.
+- **The audit of the media returns 3 when it could not check everything.**
+  Zero mismatches over a check that saw nothing is not a clean result, it is a
+  broken parser. The same goes for the exit code of any check of the live data.
 - **`sync.py` and `serve.py` are the old variant with Telethon and RSS.** The
   current service does not call them. Do not touch them without being asked.
 
 ## Style / safety rails
 
-- **Always:** a test for the new behaviour, `python3 check_ui.py` after a change
-  to `index.html`, and green tests before the commit.
+- **Always:** a test for the new behaviour, `npm run build` and
+  `python3 check_ui.py` after a change in `ui/`, and green tests before the
+  commit.
 - **Ask:** the removal of a column or of data, a change in the schema of the
   profiles and the sessions, a change in the format of `media`, somebody else's
   screenshots in `docs/`.
 - **Never:** commit `.env`, the SMTP keys or a password; write them into the
-  log; add a `<script src>`, a build step or a download from outside.
+  log; add a `<script src>` to the page or a download from outside. The
+  dependencies of the interface come from the registry and the kit comes from
+  `github:aa-blinov/monos-ui` with a fixed version; nothing else is fetched at
+  runtime.
 - **Check the result in a browser and with the data**, not with the code and
   not with a tool that reported success. A measurement taken before the data was
   loaded says "all good" while it means nothing, and a script that has never

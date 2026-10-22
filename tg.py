@@ -73,6 +73,15 @@ def _client(profile):
     from telethon import TelegramClient
     os.makedirs(TG_DIR, mode=0o700, exist_ok=True)
     path = session_path(profile)
+    # Telethon открывает файл сессии прямо в конструкторе, и он появляется с
+    # правами по umask, то есть читаемый всеми. А в файле — готовый вход в
+    # аккаунт. Поэтому создаём файл сами и сразу с 0600.
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        os.close(fd)
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     client = TelegramClient(path, API_ID, API_HASH)
     return client
 
@@ -136,14 +145,25 @@ _pending = {}
 
 async def _start(profile):
     client = _client(profile)
-    await client.connect()
-    if await client.is_user_authorized():
-        me = await client.get_me()
+    handed = False
+    try:
+        await client.connect()
+        if await client.is_user_authorized():
+            me = await client.get_me()
+            _tighten(session_path(profile))
+            return {"state": "done", "account": _account(me)}
+        qr = await client.qr_login()
         _tighten(session_path(profile))
-        return {"state": "done", "account": _account(me)}
-    qr = await client.qr_login()
-    _tighten(session_path(profile))
-    return {"state": "waiting", "client": client, "qr": qr}
+        handed = True
+        return {"state": "waiting", "client": client, "qr": qr}
+    finally:
+        # Клиент, который не передан ожидающему входу, отключаем: он держит
+        # файл сессии открытым, а второй клиент на том же файле его портит.
+        if not handed:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
 
 
 def start_link(profile):
@@ -151,26 +171,29 @@ def start_link(profile):
     if not installed():
         raise TelegramMissing("Telethon не установлен в образе")
 
-    # Второе устройство того же человека не должно запускать второй вход в тот
-    # же профиль поверх первого: ключ по токену, а не по профилю, так что
-    # без этой проверки оба висяли бы с отдельными QR.
-    for token, entry in list(_pending.items()):
-        if entry.get("profile") == profile:
-            return {"state": "waiting", "token": token, "url": entry["qr"].url}
+    # Замок на профиль: и вход, и чтение приватных каналов ходят в один и тот же
+    # файл сессии, а Telethon не терпит двух клиентов на одном файле.
+    with _lock(profile):
+        # Второе устройство того же человека не должно запускать второй вход в тот
+        # же профиль поверх первого: ключ по токену, а не по профилю, так что
+        # без этой проверки оба висяли бы с отдельными QR.
+        for token, entry in list(_pending.items()):
+            if entry.get("profile") == profile:
+                return {"state": "waiting", "token": token, "url": entry["qr"].url}
 
-    async def go():
-        return await _start(profile)
+        async def go():
+            return await _start(profile)
 
-    state = run(go())
-    if state.get("state") == "done":
-        return state
-    token = secrets.token_urlsafe(12)
-    entry = {"profile": profile, "client": state["client"], "qr": state["qr"],
-             "started": time.time()}
-    # Ждём подтверждения в фоне: событие об импорте может прийти между опросами
-    entry["task"] = asyncio.run_coroutine_threadsafe(_watch(entry), loop())
-    _pending[token] = entry
-    return {"state": "waiting", "token": token, "url": entry["qr"].url}
+        state = run(go())
+        if state.get("state") == "done":
+            return state
+        token = secrets.token_urlsafe(12)
+        entry = {"profile": profile, "client": state["client"], "qr": state["qr"],
+                 "started": time.time()}
+        # Ждём подтверждения в фоне: событие об импорте может прийти между опросами
+        entry["task"] = asyncio.run_coroutine_threadsafe(_watch(entry), loop())
+        _pending[token] = entry
+        return {"state": "waiting", "token": token, "url": entry["qr"].url}
 
 
 async def _watch(entry):
@@ -189,12 +212,27 @@ async def _watch(entry):
             except asyncio.TimeoutError:
                 await qr.recreate()
                 continue
+            except Exception as exc:
+                # Двухфакторный пароль: при входе по QR Telethon его не спрашивает,
+                # и аккаунт с ним так не подключится. Молчаливый «ссылка протухла»
+                # отправлял человека по кругу, поэтому говорим прямо.
+                if "SessionPasswordNeeded" in type(exc).__name__:
+                    entry["failed"] = True
+                    entry["error"] = "у аккаунта включён двухфакторный пароль, вход по QR не поддерживается"
+                    return
+                raise
             entry["account"] = _account(me)
             _tighten(session_path(entry["profile"]))
             return
     except Exception:
         pass
     entry["failed"] = True
+    # Вход не состоялся: клиент отключаем сам. Иначе он остаётся подключённым
+    # и держит файл сессии открытым, пока человек не нажмёт «отменить».
+    try:
+        await entry["client"].disconnect()
+    except Exception:
+        pass
 
 
 def poll_link(token):
@@ -206,8 +244,9 @@ def poll_link(token):
         _drop_pending(token)
         return {"state": "done", "account": entry["account"]}
     if entry.get("failed") or time.time() - entry["started"] > 600:
+        error = entry.get("error")
         _drop_pending(token)
-        return {"state": "expired"}
+        return {"state": "expired", "error": error} if error else {"state": "expired"}
     return {"state": "waiting", "url": entry["qr"].url}
 
 
@@ -367,19 +406,32 @@ def _cache_size():
 def media(profile, channel, msg_id):
     """Картинка или видео из приватного поста: с диска, если уже скачивали, иначе через MTProto."""
     path = _media_path(profile, channel, msg_id)
-    if os.path.exists(path + ".bin"):
-        with open(path + ".mime", encoding="utf-8") as f:
-            mime = f.read().strip()
-        with open(path + ".bin", "rb") as f:
-            return f.read(), mime
+    bin_path, mime_path = path + ".bin", path + ".mime"
+    if os.path.exists(bin_path) and os.path.exists(mime_path):
+        try:
+            with open(mime_path, encoding="utf-8") as f:
+                mime = f.read().strip()
+            with open(bin_path, "rb") as f:
+                return f.read(), mime
+        except OSError:
+            # Кэш побит: удаляем его, иначе файл без .mime читался бы вечно.
+            for stale in (bin_path, mime_path):
+                try:
+                    os.remove(stale)
+                except OSError:
+                    pass
     with _lock(profile):
         data, mime = run(_download(profile, channel, msg_id), timeout=120)
     if _cache_size() + len(data) <= CACHE_LIMIT:
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
         for suffix, content in ((".bin", data), (".mime", mime.encode())):
-            with open(path + suffix, "wb") as f:
+            # Пишем во временный файл и переименовываем: прерванная запись
+            # больше не оставляет файл, который потом читается как готовый.
+            tmp = path + suffix + ".tmp"
+            with open(tmp, "wb") as f:
                 f.write(content)
-            os.chmod(path + suffix, 0o600)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, path + suffix)
     return data, mime
 
 
@@ -391,7 +443,11 @@ def linked(profile):
 
 def drop_session(profile):
     """Выход: стираем файл сессии, иначе вход в аккаунт остаётся жить. Кэш медиа тоже."""
-    _tighten  # noqa: B018
+    # Ожидающий вход отменяем: он успел бы снова записать файл сессии сразу
+    # после удаления, и «Telegram отключён» было бы неправдой.
+    for token, entry in list(_pending.items()):
+        if entry.get("profile") == profile:
+            _drop_pending(token)
     import shutil
     shutil.rmtree(os.path.join(TG_DIR, "media", hashlib.sha256(profile.encode()).hexdigest()[:24]),
                   ignore_errors=True)

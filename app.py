@@ -27,7 +27,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from html import escape, unescape
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import qrsvg  # QR-код ссылки входа для сканирования с компьютера
 import tg  # слой Telegram. Без входа профиля он ничего не делает и не ходит в сеть.
@@ -204,6 +204,15 @@ MIN_GZIP = 1024        # меньше килобайта сжатие не ок�
 # Шрифты лежат в fonts/ рядом с приложением и отдаются только по этим именам
 FONT_FILES = {"jetbrains-mono-latin.woff2", "jetbrains-mono-latin-ext.woff2",
               "jetbrains-mono-cyrillic.woff2", "jetbrains-mono-cyrillic-ext.woff2"}
+# Собранный интерфейс: его делает сборка на node (ui/), сервер раздаёт готовое
+UI_DIR = os.path.join(BASE, "ui", "dist")
+UI_ASSET_TYPES = {".js": "application/javascript; charset=utf-8",
+                   ".css": "text/css; charset=utf-8",
+                   ".map": "application/json; charset=utf-8",
+                   ".svg": "image/svg+xml",
+                   ".png": "image/png",
+                   ".ico": "image/x-icon",
+                   ".woff2": "font/woff2"}
 
 
 def connect():
@@ -234,6 +243,17 @@ def connect():
     profile_columns = {row[1] for row in db.execute("PRAGMA table_info(profiles)")}
     if "settings" not in profile_columns:
         db.execute("ALTER TABLE profiles ADD COLUMN settings TEXT")
+    # Индекс по почте: без него два профиля с одной почтой получили бы
+    # одинаковый ключ восстановления. Старые базы могли остаться с пустой почтой
+    # или с дублями — тогда создание индекса падало, и сервис не поднимался вовсе.
+    # Поэтому перед индексом пустые почты становятся пустыми (NULL), а дубли
+    # оставляют адрес только у первого профиля.
+    db.execute("UPDATE accounts SET email=NULL WHERE email IS NOT NULL AND TRIM(email)=''")
+    dupes = db.execute("SELECT email, MIN(rowid) FROM accounts WHERE email IS NOT NULL "
+                       "GROUP BY email COLLATE NOCASE HAVING COUNT(*)>1").fetchall()
+    for email, keep in dupes:
+        db.execute("UPDATE accounts SET email=NULL WHERE email=? COLLATE NOCASE AND rowid<>?",
+                   (email, keep))
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS accounts_email ON accounts(email COLLATE NOCASE) "
                "WHERE email IS NOT NULL")
     db.commit()
@@ -344,8 +364,9 @@ def _bg(chunk, pattern):
 def _text(chunk, cls):
     """Видимый текст элемента по классу. Класс в разметке Telegram всегда идёт
     с дополнительными словами ("...title accent_color"), поэтому закрываем кавычку
-    через [^"]*, а не сразу после имени."""
-    m = re.search(r'class="' + cls + r'[^"]*"[^>]*>(.*?)</div>', chunk, re.S)
+    через [^"]*, а не сразу после имени. Закрывающим тегом может быть и div,
+    и span: имя автора в ответе Telegram лежит в span."""
+    m = re.search(r'class="' + cls + r'[^"]*"[^>]*>(.*?)</(?:div|span)>', chunk, re.S)
     if not m:
         return None
     return unescape(re.sub(r"<[^>]+>", "", m.group(1))).strip() or None
@@ -396,19 +417,35 @@ def parse_doc(chunk):
 
 
 def parse_fwd(chunk):
-    m = re.search(r'<a class="tgme_widget_message_forwarded_from_name"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', chunk, re.S)
+    """Откуда переслали. В живой разметке это span, а не ссылка: имя лежит
+    во вложенном span, а адреса у него часто нет вовсе. Раньше разбирался
+    только вариант со ссылкой, и пересылка терялась целиком."""
+    m = re.search(r'<(a|span) ([^>]*class="tgme_widget_message_forwarded_from_name"[^>]*)>(.*?)</\1>',
+                  chunk, re.S)
     if not m:
         return None
-    return {"url": unescape(m.group(1)),
-            "name": unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()}
+    inner = m.group(3)
+    name = unescape(re.sub(r"<[^>]+>", "", inner)).strip()
+    href = re.search(r'href="([^"]+)"', m.group(2))
+    url = unescape(href.group(1)) if href else ""
+    if not name and not url:
+        return None
+    return {"url": url, "name": name}
 
 
 def parse_quote(chunk):
-    m = re.search(r'<a class="tgme_widget_message_reply_quote"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', chunk, re.S)
+    """Ответ на публикацию: автор и текст. В живой разметке класс ответа —
+    tgme_widget_message_reply (не ..._reply_quote), а имя автора лежит в span."""
+    m = re.search(r'<a ([^>]*class="tgme_widget_message_reply(?![_\w-])[^"]*"[^>]*)>', chunk)
     if not m:
         return None
-    inner = m.group(2)
-    return {"url": unescape(m.group(1)), "author": _text(inner, "tgme_widget_message_author_name"),
+    href = re.search(r'href="([^"]+)"', m.group(1))
+    rest = chunk[m.end():]
+    # Блок ответа заканчивается перед основным текстом публикации.
+    stop = rest.find("js-message_text")
+    inner = rest[:stop] if stop != -1 else rest
+    return {"url": unescape(href.group(1)) if href else "",
+            "author": _text(inner, "tgme_widget_message_author_name"),
             "text": _text(inner, "tgme_widget_message_text")}
 
 
@@ -433,8 +470,6 @@ def fetch_channel(channel, before=None):
     url = f"https://t.me/s/{channel}" + (f"?before={before}" if before else "")
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     html = urllib.request.urlopen(req, timeout=FETCH_TIMEOUT).read().decode("utf-8", "replace")
-    if "captcha" in html.lower() or "too many requests" in html.lower():
-        raise ValueError("t.me попросил подождать, попробуем позже")
 
     t = re.search(r'property="og:title" content="([^"]+)"', html) or \
         re.search(r"<title>([^<]+)</title>", html)
@@ -518,6 +553,14 @@ def fetch_channel(channel, before=None):
     # t.me на несуществующий канал отдаёт свою заглушку с чужим og:title.
     # Единственный честный признак канала — посты в его ленте. Пустая страница с before
     # — не ошибка, а конец истории: догрузка по ней помечает канал полным.
+    if not posts:
+        # Признак блокировки смотрим только на странице без постов: там слову «captcha»
+        # неоткуда взяться, кроме самой заглушки t.me. Раньше проверка шла по всему
+        # html, и канал, в тексте поста которого есть слово «captcha», оказывался
+        # недоступен целиком.
+        low = html.lower()
+        if "captcha" in low or "too many requests" in low:
+            raise ValueError("t.me попросил подождать, попробуем позже")
     if not posts and before is None:
         raise ValueError(f"канал «{channel}» не найден, закрыт или без постов")
     return title, posts
@@ -631,6 +674,24 @@ def store_media(db, channel, posts):
     db.commit()
 
 
+# Запросы к t.me из пути запроса ограничены: страница с десятком битых кадров
+# иначе устраивала десяток параллельных загрузок, а t.me отвечал на это
+# блокировкой — и лента гасла у всех сразу.
+_ondemand_lock = threading.Lock()
+_ondemand_next = 0.0
+ONDEMAND_PAUSE = 0.7     # секунд между такими запросами
+
+
+def _ondemand_slot():
+    """Встать в очередь к t.me: один запрос за раз и не чаще раза в ONDEMAND_PAUSE."""
+    global _ondemand_next
+    with _ondemand_lock:
+        wait = _ondemand_next - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _ondemand_next = time.monotonic() + ONDEMAND_PAUSE
+
+
 def refresh_media(db, channel, msg_id):
     """Свежие медиа и карточка ссылки одного поста или None, если поста нет в базе.
     Страница до msg_id + 1 захватывает сам пост и более старые, поэтому работает и для
@@ -650,6 +711,7 @@ def refresh_media(db, channel, msg_id):
     if len(_media_checked) > 5000:
         _media_checked.clear()
     _media_checked[key] = time.time()
+    _ondemand_slot()
     _, posts = fetch_channel(channel, before=msg_id + 1)
     store_media(db, channel, posts)
     fresh = next((p for p in posts if p["msg_id"] == msg_id), None)
@@ -663,6 +725,8 @@ def refresh_media(db, channel, msg_id):
 # стоит протухшим до клика, а потом идёт в t.me по одному посту. Время последнего прохода
 # держим в памяти: после перезапуска каналы пройдут заново, один раз на канал.
 _media_swept = {}  # канал -> когда последний раз проходили
+_media_delay = {}  # канал -> через сколько секунд проходить снова
+MEDIA_RETRY = 15 * 60   # после ошибки t.me повторяем скоро, а не через шесть часов
 
 
 def media_sweep(db, channel):
@@ -685,15 +749,19 @@ def media_step(db):
     """Один канал за проход. False, если все подписанные каналы проверены недавно."""
     now = time.time()
     channels = public_channels([r[0] for r in db.execute("SELECT DISTINCT channel FROM user_subs")])
-    due = [c for c in channels if now - _media_swept.get(c, 0) >= MEDIA_SWEEP_EVERY]
+    due = [c for c in channels if now - _media_swept.get(c, 0) >= _media_delay.get(c, MEDIA_SWEEP_EVERY)]
     if not due:
         return False
     channel = min(due, key=lambda c: _media_swept.get(c, 0))
     _media_swept[channel] = now
     try:
         media_sweep(db, channel)
+        _media_delay[channel] = MEDIA_SWEEP_EVERY
     except Exception as exc:
-        # t.me ответил ошибкой или попросил подождать: канал вернётся на следующем круге
+        # t.me ответил ошибкой или попросил подождать: повторяем скоро. Раньше
+        # канал после одной ошибки ждал полный круг, и битые ссылки в ленте
+        # оставались битыми до вечера.
+        _media_delay[channel] = MEDIA_RETRY
         print("фон медиа: " + type(exc).__name__, file=sys.stderr, flush=True)
     return True
 
@@ -1070,14 +1138,16 @@ def search_catalog(q="", category="", limit=CATALOG_PAGE, last_posts=None, offse
     if category and category != "all":
         params["category"] = category
 
-    url = TGMANIA + "?" + urllib.parse.urlencode(params)
+    url = TGMANIA + "?" + urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     data = json.loads(urllib.request.urlopen(req, timeout=20).read())
 
     out = []
     for c in data.get("channels", []):
         u = c.get("username")
-        if not u:
+        # Имя из внешнего каталога проверяем так же, как ввод человека: иначе в
+        # подписки и в разметку попадает то, чему там быть нельзя.
+        if not u or not valid_channel(u):
             continue
         # Название приходит уже HTML-экранированным — без unescape получится "Robots &amp; Art".
         out.append({
@@ -1218,7 +1288,6 @@ def issue_auth_token(db, profile, purpose, email=None, lifetime=24 * 60 * 60):
 
 
 def confirmation_link(path, token):
-    from urllib.parse import urlencode
     return APP_BASE_URL + path + "?" + urlencode({"token": token})
 
 
@@ -1255,6 +1324,24 @@ def cursor_int(value, minimum=0):
     number = int(value)
     if not minimum <= number <= SQLITE_MAX_INT:
         raise ValueError("позиция вне диапазона")
+    return number
+
+
+def sql_int(value, minimum=1):
+    """Целое число для SQLite из тела запроса.
+
+    sqlite3 не кладёт в INTEGER числа длиннее 19 цифр: из обработчика уходит
+    OverflowError, клиент видит оборванное соединение вместо ответа. Граница
+    проверяется до запроса, поэтому лишнее число отсекается как плохой запрос.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError("не число")
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("не число")
+    if not minimum <= number <= SQLITE_MAX_INT:
+        raise ValueError("число вне диапазона")
     return number
 
 
@@ -1319,9 +1406,13 @@ def client_id(handler, db):
     return account["profile"] if account else ""
 
 
-SETTINGS_ALLOWED = {"theme": ("dark", "light", "auto"),
+# Тема — это палитра кита (Monos), светлота — отдельная настройка.
+# Раньше тема была парой «светлота», поэтому старое значение переезжает в светлоту.
+SETTINGS_ALLOWED = {"theme": ("gruvbox", "github", "dracula", "nord", "solarized", "catppuccin"),
+                    "mode": ("dark", "light", "auto"),
                     "font": ("sans", "serif", "mono")}
-DEFAULT_SETTINGS = {"theme": "dark", "font": "mono"}
+DEFAULT_SETTINGS = {"theme": "gruvbox", "mode": "dark", "font": "mono"}
+LEGACY_THEMES = ("dark", "light", "auto")
 
 
 def load_settings(db, cid):
@@ -1341,6 +1432,12 @@ def load_settings(db, cid):
         value = saved.get(key)
         if value in allowed:
             out[key] = value
+    # Прежняя настройка была одной парой «тема-светлота»: её значение становится
+    # светлотой, а палитра остаётся умолчательной. Иначе у старых профилей
+    # настройка молча пропала бы.
+    legacy = saved.get("theme")
+    if legacy in LEGACY_THEMES:
+        out["mode"] = legacy
     return out
 
 
@@ -1454,7 +1551,9 @@ def prune_collections(db, cid):
 
 
 def save_state(db, cid, data):
-    subs = [c for c in string_list(data, "subs") if valid_channel(c)][:200]
+    # Приватные каналы тоже подписки: без них полная замена состояния стирала
+    # бы подписку на приватный канал, а её больше негде восстановить.
+    subs = [c for c in string_list(data, "subs") if valid_feed_channel(c)][:200]
     reads = [r for r in string_list(data, "reads") if valid_post_key(r)][:20000]
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
@@ -1566,7 +1665,10 @@ class Handler(BaseHTTPRequestHandler):
         for name, value in headers or []:
             self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(b)
+        # У HEAD тела нет: клиент ждёт только заголовки, а байты в ответе на HEAD
+        # ломают протокол и сбивают следующий запрос по тому же соединению.
+        if self.command != "HEAD":
+            self.wfile.write(b)
 
     def do_GET(self):
         self._route()
@@ -1594,8 +1696,36 @@ class Handler(BaseHTTPRequestHandler):
         db = connect()
         try:
             if path in ("/", "/verify", "/reset"):
-                html = open(os.path.join(BASE, "index.html"), encoding="utf-8").read()
-                return self._send(200, html, "text/html; charset=utf-8")
+                # Собранный интерфейс лежит в ui/dist: его делает сборка на
+                # node, а сервер только раздаёт готовое. Без сборки отвечаем
+                # прямо: пустая страница выглядела бы как сломанный сервис.
+                page = os.path.join(UI_DIR, "index.html")
+                if not os.path.exists(page):
+                    return self._send(503, json.dumps(
+                        {"error": "интерфейс не собран: запусти npm run build в ui/"},
+                        ensure_ascii=False), "application/json; charset=utf-8")
+                with open(page, encoding="utf-8") as html:
+                    return self._send(200, html.read(), "text/html; charset=utf-8")
+            # Файлы сборки: в именах есть хеш содержимого, поэтому кеш живёт
+            # долго. Путь проверяем по расширению и по тому, что имя не выходит
+            # за пределы каталога сборки.
+            if path.startswith("/assets/"):
+                name = path[len("/assets/"):]
+                if "/" in name or ".." in name or not name:
+                    return self._send(404, json.dumps({"error": "нет такого файла"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                suffix = os.path.splitext(name)[1].lower()
+                ctype = UI_ASSET_TYPES.get(suffix)
+                if not ctype:
+                    return self._send(404, json.dumps({"error": "нет такого файла"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                full = os.path.join(UI_DIR, "assets", name)
+                if not os.path.exists(full):
+                    return self._send(404, json.dumps({"error": "нет такого файла"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                with open(full, "rb") as asset:
+                    return self._send(200, asset.read(), ctype,
+                                      [("Cache-Control", "public, max-age=31536000, immutable")])
             # Шрифт с нашего адреса: сеть для него не нужна. Имена проверяем по списку,
             # поэтому путь вида ../app.py сюда не попадёт
             if path.startswith("/fonts/"):
@@ -1908,15 +2038,28 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send(data, json.dumps({"error": "неверные данные"}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
                     channel = str(data.get("channel", ""))
-                    msg_id = data.get("msg_id")
                     on = data.get("on") is True
-                    if not valid_feed_channel(channel) or not isinstance(msg_id, int) or msg_id < 1:
+                    if not valid_feed_channel(channel):
                         return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
-                    if on and not db.execute("SELECT 1 FROM posts WHERE channel=? AND msg_id=?",
-                                             (channel, msg_id)).fetchone():
-                        return self._send(404, json.dumps({"error": "такой публикации нет"}, ensure_ascii=False),
+                    try:
+                        msg_id = sql_int(data.get("msg_id"))
+                    except ValueError:
+                        return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
+                    if on:
+                        # Приватные посты лежат в своей таблице и принадлежат профилю,
+                        # который их принёс: публичную корзину для них не ищем.
+                        if private_channel(channel):
+                            known = db.execute(
+                                "SELECT 1 FROM private_posts WHERE profile=? AND channel=? AND msg_id=?",
+                                (cid, channel, msg_id)).fetchone()
+                        else:
+                            known = db.execute("SELECT 1 FROM posts WHERE channel=? AND msg_id=?",
+                                               (channel, msg_id)).fetchone()
+                        if not known:
+                            return self._send(404, json.dumps({"error": "такой публикации нет"}, ensure_ascii=False),
+                                              "application/json; charset=utf-8")
                     if on:
                         db.execute("INSERT OR REPLACE INTO saved_posts VALUES (?,?,?,?)",
                                    (cid, channel, msg_id, int(time.time())))
@@ -1943,13 +2086,26 @@ class Handler(BaseHTTPRequestHandler):
                                           "application/json; charset=utf-8")
                     conditions.append("(s.saved < ? OR (s.saved = ? AND (s.channel < ? OR (s.channel = ? AND p.msg_id < ?))))")
                     args += [before_saved, before_saved, before_channel, before_channel, before_id]
-                # Страницы по времени сохранения: порядок как у ленты, курсор — последний пост страницы
-                rows = db.execute(
+                # Страницы по времени сохранения: порядок как у ленты, курсор — последний пост страницы.
+                # Публичные и приватные посты лежат в разных таблицах, поэтому список
+                # собирается из обеих: приватный пост иначе сохранился бы, но не показался.
+                where = " AND ".join(conditions)
+                public = db.execute(
                     "SELECT " + ",".join("p." + f for f in POST_FIELDS) + ",s.saved"
                     " FROM saved_posts s JOIN posts p ON p.channel=s.channel AND p.msg_id=s.msg_id"
-                    " WHERE " + " AND ".join(conditions) +
+                    " WHERE " + where +
                     " ORDER BY s.saved DESC, s.channel DESC, p.msg_id DESC LIMIT ?",
                     args + [FEED_PAGE_SIZE + 1]).fetchall()
+                private = db.execute(
+                    "SELECT p.channel,p.msg_id,p.url,p.text,p.media,p.views,p.ts,"
+                    " NULL,NULL,NULL,NULL,NULL,NULL,s.saved"
+                    " FROM saved_posts s JOIN private_posts p"
+                    " ON p.channel=s.channel AND p.msg_id=s.msg_id AND p.profile=s.profile"
+                    " WHERE " + where +
+                    " ORDER BY s.saved DESC, s.channel DESC, p.msg_id DESC LIMIT ?",
+                    args + [FEED_PAGE_SIZE + 1]).fetchall()
+                # Порядок как в SQL: время сохранения, канал, номер поста.
+                rows = sorted(public + private, key=lambda r: (r[-1], r[0], r[1]), reverse=True)
                 has_more = len(rows) > FEED_PAGE_SIZE
                 rows = rows[:FEED_PAGE_SIZE]
                 posts = [dict(zip(POST_FIELDS, r[:-1])) for r in rows]
@@ -2117,7 +2273,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not cid:
                     return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
                                       "application/json")
-                token = str(self._read_json().get("token", ""))
+                data = self._read_json()
+                if isinstance(data, int):
+                    return self._send(data, json.dumps({"error": "неверные данные"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                token = str(data.get("token", ""))
                 try:
                     result = tg.poll_link(token)
                 except Exception as exc:
@@ -2138,7 +2298,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not cid:
                     return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
                                       "application/json")
-                token = str(self._read_json().get("token", ""))
+                data = self._read_json()
+                if isinstance(data, int):
+                    return self._send(data, json.dumps({"error": "неверные данные"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                token = str(data.get("token", ""))
                 return self._send(200, json.dumps(tg.cancel_link(token)),
                                   "application/json; charset=utf-8")
 
@@ -2150,12 +2314,18 @@ class Handler(BaseHTTPRequestHandler):
                 if not cid:
                     return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
                                       "application/json")
-                tg.drop_session(cid)
+                removed = tg.drop_session(cid)
                 db.execute("DELETE FROM tg_accounts WHERE profile=?", (cid,))
                 db.execute("DELETE FROM tg_channels WHERE profile=?", (cid,))
                 db.execute("DELETE FROM private_posts WHERE profile=?", (cid,))
                 db.commit()
-                return self._send(200, json.dumps({"ok": True}, ensure_ascii=False),
+                # Файл сессии — это готовый вход в аккаунт. Если он уцелел,
+                # говорить «Telegram отключён» нельзя: отключение не состоялось.
+                if not removed and tg.linked(cid):
+                    return self._send(500, json.dumps(
+                        {"error": "не удалось удалить файл сессии: вход в аккаунт остался"},
+                        ensure_ascii=False), "application/json; charset=utf-8")
+                return self._send(200, json.dumps({"ok": True, "removed": removed}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/tg/channels":
@@ -2468,8 +2638,10 @@ class Handler(BaseHTTPRequestHandler):
                         {"channels": found, "has_more": len(found) >= CATALOG_PAGE},
                         ensure_ascii=False),
                         "application/json; charset=utf-8")
-                except Exception as e:
-                    return self._send(502, json.dumps({"error": str(e)}),
+                except Exception:
+                    # Текст ошибки наружу не отдаём: в нём бывает адрес и детали
+                    # запроса к внешнему каталогу, а клиенту достаточно причины.
+                    return self._send(502, json.dumps({"error": "каталог не отвечает"}),
                                       "application/json")
 
             if path == "/api/preview":
@@ -2549,8 +2721,8 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self._send(200, json.dumps({"categories": catalog_categories()}),
                                       "application/json; charset=utf-8")
-                except Exception as e:
-                    return self._send(502, json.dumps({"error": str(e)}),
+                except Exception:
+                    return self._send(502, json.dumps({"error": "каталог не отвечает"}),
                                       "application/json")
 
             if path == "/api/media":
@@ -2558,6 +2730,11 @@ class Handler(BaseHTTPRequestHandler):
                 # поэтому только для подписчика канала: иначе сайт снова станет чужим обходом.
                 channel, _, msg = (self._query("post") or "").partition("/")
                 if not valid_channel(channel) or not msg.isdigit():
+                    return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                try:
+                    msg_id = sql_int(msg)
+                except ValueError:
                     return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 profile = client_id(self, db)
@@ -2569,7 +2746,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, json.dumps({"error": "канала нет в подписках"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 try:
-                    fresh = refresh_media(db, channel, int(msg))
+                    fresh = refresh_media(db, channel, msg_id)
                 except Exception:  # t.me не ответил или попросил подождать
                     return self._send(502, json.dumps({"error": "t.me не отдал пост"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
@@ -2593,9 +2770,14 @@ class Handler(BaseHTTPRequestHandler):
                     title, posts = fetch_channel(c)
                     store_channel_cache(db, c, title, posts)
                     db.commit()
-                except Exception as e:
-                    return self._send(404, json.dumps({"error": str(e)}),
-                                      "application/json")
+                except ValueError as exc:
+                    # Наши собственные сообщения: «канал не найден», «t.me попросил ждать».
+                    return self._send(404, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                except Exception:
+                    # Чужие исключения не показываем: в тексте бывает адрес и детали запроса.
+                    return self._send(502, json.dumps({"error": "t.me не отвечает"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 return self._send(200, json.dumps({
                     "channel": c, "title": title, "count": len(posts),
                     "url": f"https://t.me/{c}",
