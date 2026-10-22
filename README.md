@@ -45,12 +45,14 @@ The service then starts on an empty local database at `data/feed.db`.
 The interface is in Russian; the labels quoted here are translated.
 
 - **Sections.** Three main screens: the feed, the catalog and the saved posts.
-  They are one tap away: a bottom bar on a phone, a switch in the header on a
-  desktop. The page of a channel and the profile open over them and close with
-  the arrow in the header, back to where the reader came from. The address of
-  the screen is in the hash (`#/feed`, `#/saved`, `#/cat`, `#/channel/<name>`,
-  `#/me`), so the back button of the browser does the same as the arrow, and
-  every screen remembers the place where the reader stopped scrolling.
+  On a wide screen they stand in a sidebar on the left; on a phone the same
+  three sit in a bottom bar under the finger, and the channels and the profile
+  stay in the header as two signs. The page of a channel and the profile open
+  over them and close with the arrow in the header, back to where the reader
+  came from. The address of the screen is in the hash (`#/feed`, `#/saved`,
+  `#/cat`, `#/channel/<name>`, `#/me`), so the back button of the browser
+  does the same as the arrow, and every screen remembers the place where the
+  reader stopped scrolling.
 - **Avatars.** The photo of a channel is taken from the public page on t.me
   (`og:image`) and kept for seven days. A channel with no photo shows the first
   letter of its name.

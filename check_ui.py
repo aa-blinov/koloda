@@ -85,6 +85,20 @@ for name in sorted(used - icon_names):
     fail("ИКОНКА БЕЗ ПУТИ: %s" % name)
 print("иконок нарисовано: %d, использовано: %d" % (len(icon_names), len(used)))
 
+# --- знаки навигации не путаются ---
+
+# Один и тот же знак у раздела и у кнопки рядом: список каналов и каталог
+# выглядели одинаково, и знак ничего не говорил.
+app_source = sources.get(os.path.join(SRC, "App.svelte"), "")
+main_icons = re.findall(r"icon:\s*'([a-z]+)'", app_source)
+if len(main_icons) != len(set(main_icons)):
+    fail("ЗНАКИ РАЗДЕЛОВ ПОВТОРЯЮТСЯ: %s" % ", ".join(main_icons))
+plain_icons = set(re.findall(r'<Icon\s+name="([a-z]+)"', app_source))
+clash = sorted(set(main_icons) & plain_icons)
+if clash:
+    fail("ЗНАК РАЗДЕЛА И ЗНАК КНОПКИ СОВПАДАЮТ: %s" % ", ".join(clash))
+print("знаки навигации разные: %s" % ", ".join(sorted(set(main_icons) | plain_icons)))
+
 # --- цвет приходит из токенов кита, а не из своего ---
 
 # Свой цвет в разметке ломает тему: палитра перестаёт переключаться.

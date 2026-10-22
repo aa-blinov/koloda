@@ -149,11 +149,19 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   not there.
 - **The navigation lives in `ui/src/App.svelte`.** Three main sections (the
   feed, the catalog, the saved) and two sub-screens (the channel, the profile).
-  The address of the screen is in the hash (`#/feed`, `#/saved`, `#/cat`,
+  On a wide screen the sections stand in the sidebar on the left, on a phone in
+  the bottom bar: the navigation is deliberately not the same on the two
+  screens, and the same signs and the same order are used in both. The
+  address of the screen is in the hash (`#/feed`, `#/saved`, `#/cat`,
   `#/channel/<name>`, `#/me`), and the history of the browser holds the
   screens: `pushState` with the depth inside the app, and `popstate` brings
   the screen back. The arrow in the header calls `history.back()` only when
   the depth is greater than zero, so it never takes the reader off the site.
+- **Two neighbours in the navigation never share a sign.** The list of the
+  channels and the catalog carried the same one, and the sign said nothing:
+  the feed is lines of posts, the catalog is a grid, the saved is a bookmark,
+  the channels are a folder, the profile is a person. `check_ui.py` fails when
+  two signs collide.
 - **Only the active screen is mounted.** With every screen mounted at once the
   sub-screens went out for an empty channel and the server answered 400. The
   shell keeps the place of the scroll of every screen (`scrolls`) and restores
