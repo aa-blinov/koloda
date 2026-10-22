@@ -15,6 +15,8 @@
 
   const dispatch = createEventDispatcher();
 
+  // Мёртвое фото канала уступает место букве: адрес на CDN Telegram живёт недолго.
+  let broken = new Set();
   let history = null;
   let loading = false;
   let requestId = 0;
@@ -195,8 +197,14 @@
           {@const name = $titles[channel] || channel}
           <button type="button" class="chan" on:click={() => pickChannel(channel)}>
             <span class="photo" aria-hidden="true">
-              {#if $avatars.get(channel)}
-                <img src={$avatars.get(channel)} alt="" loading="lazy" referrerpolicy="no-referrer" />
+              {#if $avatars.get(channel) && !broken.has(channel)}
+                <img
+                  src={$avatars.get(channel)}
+                  alt=""
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  on:error={() => (broken = new Set(broken).add(channel))}
+                />
               {:else}
                 {letter(name)}
               {/if}

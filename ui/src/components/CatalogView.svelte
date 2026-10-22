@@ -36,6 +36,9 @@
   let linkState = '';
   let linkError = '';
   let allCategories = false;
+  // Фото канала лежит в кэше сервера неделю, а адрес на CDN Telegram к тому
+  // времени умирает. На месте мёртвой картинки встаёт буква названия.
+  let brokenAvatars = new Set();
 
   $: queryKey = query.trim() + '|' + category;
 
@@ -233,8 +236,16 @@
       <article class="channel-entry">
         <button type="button" class="channel-open" on:click={() => dispatch('openChannel', channel.username)}>
           <span class="channel-mark" aria-hidden="true">
-            {#if $avatars.get(channel.username)}
-              <img src={$avatars.get(channel.username)} alt="" loading="lazy" referrerpolicy="no-referrer" />
+            {#if $avatars.get(channel.username) && !brokenAvatars.has(channel.username)}
+              <img
+                src={$avatars.get(channel.username)}
+                alt=""
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                on:error={() => {
+                  brokenAvatars = new Set(brokenAvatars).add(channel.username);
+                }}
+              />
             {:else}
               {(channel.name || channel.username).trim()[0].toUpperCase()}
             {/if}
