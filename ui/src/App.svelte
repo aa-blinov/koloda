@@ -17,6 +17,7 @@
 
   import Icon from './components/Icon.svelte';
   import { api } from './lib/api.js';
+  import { searchValue } from './lib/search.js';
   import {
     session,
     subs,
@@ -37,6 +38,7 @@
   export let view = 'feed';
   export let feedMode = 'feed';
   export let channelName = '';
+  export let channelTitle = '';
 
   let searchOpen = false;
   let search = '';
@@ -178,7 +180,7 @@
   }
 
   function onSearchInput(event) {
-    search = event.detail.value;
+    search = searchValue(event);
     window.dispatchEvent(new CustomEvent('koloda:search', { detail: search }));
   }
 
@@ -220,9 +222,9 @@
       {#if searchOpen}
         <div id="koloda-search" class="search">
           <SearchField
-            value={search}
+            bind:value={search}
             label="Поиск"
-            placeholder="Поиск по постам"
+            placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
             clearLabel="Очистить"
             on:input={onSearchInput}
           />
@@ -273,6 +275,7 @@
     <FeedView
       {feedMode}
       collection={collectionFilter}
+      on:clearCollection={() => (collectionFilter = null)}
       on:lightbox={(event) => (lightbox = event.detail)}
     on:channelCollections={(event) => {
       collectionChannel = event.detail;
@@ -282,7 +285,11 @@
   {:else if view === 'catalog'}
     <CatalogView
       on:openChannel={(event) => {
-        channelName = event.detail;
+        const value = event.detail;
+        // Каталог знает название канала, а сервер на странице канала отдаёт
+        // только имя: без названия заголовком был бы «tonraffles_en».
+        channelName = typeof value === 'string' ? value : value.channel;
+        channelTitle = typeof value === 'string' ? '' : value.title || '';
         view = 'channel';
         writeHash();
       }}
@@ -290,6 +297,7 @@
   {:else if view === 'channel'}
     <ChannelView
       {channelName}
+      title={channelTitle}
       on:back={() => {
         view = 'catalog';
         writeHash();

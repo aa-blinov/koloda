@@ -24,11 +24,12 @@
   } from '../lib/stores.js';
 
   export let channelName = '';
+  // Название, которое знает каталог: сервер на странице канала отдаёт его не сразу.
+  export let title = '';
 
   const dispatch = createEventDispatcher();
 
   let posts = [];
-  let title = '';
   let hasMore = false;
   let cursor = null;
   let loading = false;

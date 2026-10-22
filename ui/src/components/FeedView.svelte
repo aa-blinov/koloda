@@ -11,7 +11,17 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { dayLabel, postKey } from '../lib/format.js';
-  import { subs, reads, titles, avatars, markRead, loadAvatars, showUndo, setSubscription } from '../lib/stores.js';
+  import {
+    subs,
+    reads,
+    titles,
+    avatars,
+    markRead,
+    markUnread,
+    loadAvatars,
+    showUndo,
+    setSubscription,
+  } from '../lib/stores.js';
   import { feedChannels } from '../lib/feed.js';
 
   export let feedMode = 'feed';
@@ -190,8 +200,9 @@
     else markUnread(key);
   }
 
+  // Ключ поста для селектора: сюда приходит сам пост, а не строка.
   function cssEscape(post) {
-    return (post.channel + '/' + post.msg_id).replace(/"/g, '\\"');
+    return postKey(post).replace(/"/g, '\\"');
   }
 
   function toggleSave(event) {
@@ -218,6 +229,16 @@
   // канала: второй клик снимает фильтр. Страница канала открывается из каталога.
   function pickChannel(channel) {
     tab = tab === channel ? '' : channel;
+    if (!tab && collection) dispatch('clearCollection');
+    load(false);
+  }
+
+  // Смена коллекции — тоже смена состава ленты: без перезапроса посты остались
+  // бы прежними, а подпись обещала коллекцию.
+  let lastCollectionKey = '';
+  $: collectionKey = collection ? String(collection.id) : '';
+  $: if (collectionKey !== lastCollectionKey) {
+    lastCollectionKey = collectionKey;
     load(false);
   }
 
@@ -314,10 +335,12 @@
     </EmptyState>
   {:else if !posts.length}
     <EmptyState
-      title={query ? 'Ничего не нашлось' : 'Пока пусто'}
+      title={query ? 'Ничего не нашлось' : collection ? 'В коллекции пока нет каналов' : 'Пока пусто'}
       description={query
         ? 'Измени запрос или выбери канал.'
-        : 'Добавь канал в каталоге — и публикации появятся здесь.'}
+        : collection
+          ? 'Добавь каналы в коллекцию — из списка каналов или со страницы канала.'
+          : 'Добавь канал в каталоге — и публикации появятся здесь.'}
     >
       <svelte:fragment slot="actions">
         {#if query}

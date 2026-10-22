@@ -1124,6 +1124,28 @@ class HistoryTextTest(unittest.TestCase):
         self.assertEqual(out.splitlines(), [expected for _, _, expected in cases])
 
 
+class SearchValueTest(unittest.TestCase):
+    """Значение поля поиска лежит в target, а не в самом событии.
+
+    Ки�� присылает нативное событие input: у него нет поля value, и поиск
+    молча получал пустым — запросы уходили без запроса, а поле выглядело
+    живым.
+    """
+
+    @unittest.skipUnless(shutil.which("node"), "нужен node")
+    def test_value_is_taken_from_the_event_target(self):
+        source = read_ui("lib/search.js")
+        script = source + """
+console.log(searchValue({ detail: { target: { value: 'пост' } } }));
+console.log(searchValue({ detail: 'строка' }));
+console.log(searchValue({ target: { value: 'без detail' } }));
+console.log(searchValue({}));
+"""
+        out = run_node(script).splitlines()
+        self.assertEqual(out[:3], ["пост", "строка", "без detail"])
+        self.assertEqual(out[3], "")
+
+
 class ViewsTextTest(unittest.TestCase):
     """Просмотры приходят от Telegram строкой: её разбираем, а не показываем как есть."""
 

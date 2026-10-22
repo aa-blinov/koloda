@@ -5,10 +5,11 @@
    */
   import { onMount } from 'svelte';
   import { createEventDispatcher } from 'svelte';
-  import { Button, EmptyState, Notice, SearchField, SegmentedControl, Skeleton, TextField } from '@monos/ui';
+  import { Button, EmptyState, Notice, SegmentedControl, Skeleton, TextField } from '@monos/ui';
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
+  import { searchValue } from '../lib/search.js';
   import { catRu, kfmt } from '../lib/format.js';
   import { subs, avatars, setSubscription, showUndo, loadAvatars } from '../lib/stores.js';
 
@@ -95,10 +96,6 @@
     channels = [...channels].sort(compare[value] || compare.subs);
   }
 
-  function onSearchInput(event) {
-    query = event.detail.value;
-  }
-
   $: if (queryKey !== undefined) {
     // A new query or a new category: the list is built from scratch.
   }
@@ -147,7 +144,7 @@
     loadCategories();
     load(false);
     const onSearch = (event) => {
-      query = event.detail || '';
+      query = searchValue(event);
     };
     window.addEventListener('koloda:search', onSearch);
     return () => window.removeEventListener('koloda:search', onSearch);
@@ -160,16 +157,6 @@
     Каталог собран из открытого списка Telegram-каналов. Подпишись на нужные — и их публикации
     появятся в ленте.
   </p>
-
-  <div class="catalog-search">
-    <SearchField
-      value={query}
-      label="Поиск"
-      placeholder="Поиск по каналу"
-      clearLabel="Очистить"
-      on:input={onSearchInput}
-    />
-  </div>
 
   <form class="channel-form" on:submit|preventDefault={addByLink}>
     <TextField
@@ -239,7 +226,11 @@
   {:else}
     {#each channels as channel (channel.username)}
       <article class="channel-entry">
-        <button type="button" class="channel-open" on:click={() => dispatch('openChannel', channel.username)}>
+        <button
+          type="button"
+          class="channel-open"
+          on:click={() => dispatch('openChannel', { channel: channel.username, title: channel.name })}
+        >
           <span class="channel-mark" aria-hidden="true">
             {#if $avatars.get(channel.username) && !brokenAvatars.has(channel.username)}
               <img
@@ -308,9 +299,6 @@
     max-width: 60ch;
   }
 
-  .catalog-search {
-    margin-bottom: var(--ui-space-comfortable);
-  }
 
   .channel-form {
     display: flex;
