@@ -1146,6 +1146,66 @@ console.log(searchValue({}));
         self.assertEqual(out[3], "")
 
 
+class KeepAliveBodyTest(unittest.TestCase):
+    """Маршрут, который не читает тело запроса, не должен ломать соединение.
+
+    Тело оставалось в сокете, и следующий запрос на том же соединении читался
+    с середины: после выхода из профиля страница перезагружалась и получала
+    «Unsupported method ('{}GET')».
+    """
+
+    def test_post_without_reading_the_body_keeps_the_connection_usable(self):
+        import socket
+
+        def read_response(sock):
+            """Читает ответ целиком: заголовки и тело по Content-Length."""
+            data = b""
+            while b"\r\n\r\n" not in data:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            head, _, rest = data.partition(b"\r\n\r\n")
+            length = 0
+            for line in head.split(b"\r\n"):
+                if line.lower().startswith(b"content-length:"):
+                    length = int(line.split(b":", 1)[1].strip())
+            while len(rest) < length:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                rest += chunk
+            return head, rest
+
+        def send(sock, method, path, body=b""):
+            head = ("%s %s HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n"
+                    "Content-Length: %d\r\n\r\n" % (method, path, len(body)))
+            sock.sendall(head.encode() + body)
+
+        with feed_server() as server:
+            host, port = server.server_address
+            sock = socket.create_connection((host, port), timeout=10)
+            try:
+                # Сначала запрос, который тело читает: признак «прочитано» должен
+                # относиться к запросу, а не к соединению.
+                send(sock, "POST", "/api/auth/login",
+                     b'{"username":"nobody","password":"nobody"}')
+                time.sleep(0.3)
+                read_response(sock)
+                # Теперь запрос, который тело не читает, и следом обычный.
+                send(sock, "POST", "/api/auth/logout", b"{}")
+                time.sleep(0.3)
+                first, _ = read_response(sock)
+                self.assertIn(b"200 OK", first[:40], first[:120])
+                send(sock, "GET", "/api/health")
+                time.sleep(0.3)
+                second, body = read_response(sock)
+                self.assertIn(b"200 OK", second[:40], second[:120])
+                self.assertIn(b'"ok": true', body)
+            finally:
+                sock.close()
+
+
 class ViewsTextTest(unittest.TestCase):
     """Просмотры приходят от Telegram строкой: её разбираем, а не показываем как есть."""
 

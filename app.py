@@ -1669,6 +1669,8 @@ class Handler(BaseHTTPRequestHandler):
         # ломают протокол и сбивают следующий запрос по тому же соединению.
         if self.command != "HEAD":
             self.wfile.write(b)
+        # Тело запроса, которое маршрут не прочитал, не должно остаться в сокете.
+        self._drain_body()
 
     def do_GET(self):
         self._route()
@@ -1687,6 +1689,10 @@ class Handler(BaseHTTPRequestHandler):
         self._route()
 
     def _route(self):
+        # Один обработчик обслуживает много запросов на одном соединении, и
+        # признак «тело прочитано» должен относиться к запросу, а не к
+        # соединению: иначе дочитка пропускалась, и тело оставалось в сокете.
+        self._body_read = False
         path = self.path.split("?")[0]
         # Проверка живости для healthcheck в compose. Без профиля и без
         # обращения к t.me: только база, поэтому отвечает быстро и всегда.
@@ -2801,10 +2807,36 @@ class Handler(BaseHTTPRequestHandler):
         if size > 4_000_000:
             return 413
         try:
-            data = json.loads(self.rfile.read(size) or b"{}")
+            raw = self.rfile.read(size)
+        except OSError:
+            return 400
+        self._body_read = True
+        try:
+            data = json.loads(raw or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError):
             return 400
         return data if isinstance(data, dict) else 400
+
+    def _drain_body(self):
+        """Дочитывает тело запроса, которое маршрут не прочитал.
+
+        Иначе оно остаётся в сокете, и следующий запрос на том же соединении
+        читается с середины: после выхода из профиля страница перезагружалась
+        и получала «Unsupported method ('{}GET')».
+        """
+        if getattr(self, "_body_read", False):
+            return
+        self._body_read = True
+        try:
+            size = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        if size <= 0:
+            return
+        try:
+            self.rfile.read(size)
+        except OSError:
+            pass
 
     def log_message(self, fmt, *a):
         # Логи выключены по умолчанию: при каждом запросе к t.me и картинкам они
