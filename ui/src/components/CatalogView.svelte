@@ -42,6 +42,9 @@
   let brokenAvatars = new Set();
 
   $: queryKey = query.trim() + '|' + category;
+  // Категории по алфавиту: список читают глазами, а не ищут.
+  $: sortedCategories = [...categories].sort((a, b) =>
+    catRu(a.name).localeCompare(catRu(b.name), 'ru'));
 
   const compare = {
     subs: (a, b) => (b.subs - a.subs) || a.username.localeCompare(b.username),
@@ -75,12 +78,16 @@
     }
   }
 
+  let categoriesFailed = false;
+
   async function loadCategories() {
     try {
       const answer = await api.categories();
       categories = answer.categories || [];
+      categoriesFailed = false;
     } catch (err) {
-      categories = [];
+      // Категории не пришли: ряд остаётся на месте, чтобы можно было повторить.
+      categoriesFailed = true;
     }
   }
 
@@ -180,14 +187,23 @@
   {/if}
   </div>
 
-  {#if categories.length}
+  {#if categoriesFailed}
+    <div class="cats-error">
+      <span>Категории не загрузились.</span>
+      <span id="catRetry">
+        <Button variant="text" size="sm" on:click={loadCategories}>Повторить</Button>
+      </span>
+    </div>
+  {/if}
+
+  {#if categories.length || categoriesFailed}
     <div class="filters" id="cats" role="group" aria-label="Категории">
       <button
         type="button"
         class="chip"
         aria-pressed={category === 'all'}
         on:click={() => pickCategory('all')}>Все</button>
-      {#each (allCategories ? categories : categories.slice(0, 12)) as item (item.slug)}
+      {#each sortedCategories as item (item.slug)}
         <button
           type="button"
           class="chip"

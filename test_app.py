@@ -1112,9 +1112,9 @@ class HistoryTextTest(unittest.TestCase):
     def test_channel_line_says_loading_only_once(self):
         source = read_ui("lib/history.js")
         cases = [
-            ({"state": "loading", "fetched": 8}, "true", "Загружаем старые публикации канала: 8 из 500"),
-            ({"state": "waiting", "fetched": 0}, "true", "Старые публикации канала: в очереди"),
-            ({"state": "paused", "fetched": 40}, "true", "Старые публикации канала: t.me не отвечает, повторим позже"),
+            ({"state": "loading", "fetched": 8}, "true", "Загружаем историю канала: 8 из 500"),
+            ({"state": "waiting", "fetched": 0}, "true", "История канала: ждёт очереди на загрузку"),
+            ({"state": "paused", "fetched": 40}, "true", "История канала: t.me не отвечает, вернёмся позже"),
             ({"state": "done", "fetched": 13}, "false", "вся история загружена"),
         ]
         script = source + "\n" + "\n".join(

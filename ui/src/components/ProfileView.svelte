@@ -101,7 +101,21 @@
     }
   }
 
-  async function logout() {
+  let logoutArmed = false;
+  let logoutTimer = null;
+
+  // Выход просит подтверждения: одно нажатие не должно выкидывать из профиля.
+  function askLogout() {
+    if (logoutArmed) {
+      clearTimeout(logoutTimer);
+      doLogout();
+      return;
+    }
+    logoutArmed = true;
+    logoutTimer = setTimeout(() => (logoutArmed = false), 6000);
+  }
+
+  async function doLogout() {
     try {
       await api.logout();
     } catch (err) {
@@ -198,6 +212,7 @@
   <Tabs
     items={[
       { id: 'account', label: 'Аккаунт' },
+      { id: 'telegram', label: 'Telegram' },
       { id: 'data', label: 'Данные' },
       { id: 'view', label: 'Вид' },
       { id: 'help', label: 'Справка' },
@@ -232,6 +247,18 @@
 
           <Separator />
 
+          <h2>Частные каналы</h2>
+          <p class="hint">Вход по QR в Telegram открывает и приватные каналы. Он живёт на отдельной вкладке.</p>
+          <Button variant="text" on:click={() => (tab = 'telegram')}>К Telegram</Button>
+
+          <Separator />
+
+          <Button variant="danger" on:click={askLogout}>
+            {logoutArmed ? 'Точно выйти?' : 'Выйти из профиля'}
+          </Button>
+        </section>
+      {:else if active === 'telegram'}
+        <section class="panel">
           <h2>Частные каналы</h2>
           {#if !tgInstalled}
             <p class="hint">Приватные каналы сейчас недоступны: в образе нет Telethon.</p>
@@ -281,9 +308,6 @@
             </div>
           {/if}
 
-          <Separator />
-
-          <Button variant="danger" on:click={logout}>Выйти из профиля</Button>
         </section>
       {:else if active === 'data'}
         <section class="panel">
