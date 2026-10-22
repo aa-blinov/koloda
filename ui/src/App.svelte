@@ -13,7 +13,7 @@
    *   history, and the hash follows the screen.
    */
   import { onMount, tick } from 'svelte';
-  import { SegmentedControl, IconButton, SearchField, Toaster } from '@monos/ui';
+  import { NavItem, IconButton, SearchField, Toaster } from '@monos/ui';
 
   import AuthScreen from './components/AuthScreen.svelte';
   import FeedView from './components/FeedView.svelte';
@@ -43,8 +43,8 @@
   // Главные экраны. Значение — раздел, а не экран: лента и сохранённое
   // показываются одним и тем же списком.
   const MAIN = [
-    { value: 'feed', label: 'Лента', icon: 'grid' },
-    { value: 'catalog', label: 'Каталог', icon: 'list' },
+    { value: 'feed', label: 'Лента', icon: 'feed' },
+    { value: 'catalog', label: 'Каталог', icon: 'grid' },
     { value: 'saved', label: 'Сохранённое', icon: 'bookmark' },
   ];
 
@@ -369,88 +369,120 @@
 {:else if !$session}
   <AuthScreen {bootError} on:done={() => boot()} />
 {:else}
-  <header class="sticky top-0 z-20 border-b border-line bg-canvas">
-    <div class="bar">
-      {#if isSub}
-        <!-- Подэкран: назад туда, откуда пришли. -->
-        <button type="button" class="back" on:click={goBack} aria-label="Назад">
-          <Icon name="back" size={18} />
-          <span>Назад</span>
-        </button>
-      {/if}
-
-      <div class="sections">
-        <SegmentedControl
-          options={MAIN}
-          value={section}
-          label="Разделы"
-          on:change={(event) => pickSection(event.detail.value)}
-        />
-      </div>
-
-      <!-- Поле поиска: на широком экране оно всегда на виду, на телефоне
-           открывается лупой — иначе шапка не помещается. На подэкранах поиска
-           нет: там он и не работает, и молчаливое поле сбивает с толку. -->
-      {#if !isSub}
-        <div id="koloda-search" class="search" class:open={searchOpen}>
-          <SearchField
-            bind:value={search}
-            label="Поиск"
-            placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
-            clearLabel="Очистить"
-            on:input={onSearchInput}
-          />
-        </div>
-        <span class="search-toggle">
-          <IconButton
-            label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
-            variant="ghost"
-            size="lg"
-            on:click={toggleSearch}
-          >
-            <Icon name={searchOpen ? 'close' : 'search'} />
-          </IconButton>
-        </span>
-      {/if}
-
-      <div class="ml-auto flex items-center gap-2">
-        <IconButton
-          label="Каналы и коллекции"
-          variant="ghost"
-          size="lg"
-          on:click={() => (channelsOpen = true)}
-        >
-          <Icon name="list" />
-        </IconButton>
-        <IconButton
-          label="Профиль"
-          variant="ghost"
-          size="lg"
-          on:click={openProfile}
-        >
-          <Icon name="user" />
-        </IconButton>
-      </div>
+  <!-- Боковая панель: на широком экране палец не нужен, места много, и все
+       назначения видны сразу и названы. На телефоне её заменяет нижняя
+       панель: там до верха экрана тянуться не надо. -->
+  <aside class="side" aria-label="Навигация">
+    <div class="side-brand">
+      <Icon name="send" size={20} />
+      <span>Колода</span>
     </div>
 
-    {#if $syncStatus}
-      <p class="sync-status" role="status">
-        {$syncStatus.message}
-        {#if $syncStatus.retry}
-          <button type="button" class="underline" on:click={() => drainStateOps()}>Повторить</button>
+    <nav class="side-nav" aria-label="Разделы">
+      {#each MAIN as item (item.value)}
+        <NavItem
+          label={item.label}
+          active={section === item.value}
+          on:click={() => pickSection(item.value)}
+        >
+          <svelte:fragment slot="icon"><Icon name={item.icon} /></svelte:fragment>
+        </NavItem>
+      {/each}
+    </nav>
+
+    <nav class="side-foot" aria-label="Ещё">
+      <NavItem label="Каналы и коллекции" on:click={() => (channelsOpen = true)}>
+        <svelte:fragment slot="icon"><Icon name="folder" /></svelte:fragment>
+      </NavItem>
+      <NavItem label="Профиль" on:click={openProfile}>
+        <svelte:fragment slot="icon"><Icon name="user" /></svelte:fragment>
+      </NavItem>
+    </nav>
+  </aside>
+
+  <div class="shell">
+    <header class="topbar">
+      <div class="bar" class:searching={searchOpen}>
+        <!-- Имя сервиса: на телефоне боковой панели нет, и шапка с одним
+             значком слева выглядит пустой. -->
+        <span class="brand">
+          <Icon name="send" size={18} />
+          <span>Колода</span>
+        </span>
+
+        {#if isSub}
+          <!-- Подэкран: назад туда, откуда пришли. -->
+          <button type="button" class="back" on:click={goBack} aria-label="Назад">
+            <Icon name="back" size={18} />
+            <span>Назад</span>
+          </button>
         {/if}
-      </p>
-    {/if}
 
-    {#if $undo}
-      <p class="undo-bar" id="undoBar" role="status">
-        {$undo.text}
-        <button type="button" class="underline" on:click={onUndo}>Вернуть</button>
-      </p>
-    {/if}
-  </header>
+        <!-- Поле поиска: на широком экране оно всегда на виду, на телефоне
+             открывается лупой — иначе шапка не помещается. На подэкранах поиска
+             нет: там он и не работает, и молчаливое поле сбивает с толку. -->
+        {#if !isSub}
+          <div id="koloda-search" class="search" class:open={searchOpen}>
+            <SearchField
+              bind:value={search}
+              label="Поиск"
+              placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
+              clearLabel="Очистить"
+              on:input={onSearchInput}
+            />
+          </div>
+          <span class="search-toggle">
+            <IconButton
+              label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
+              variant="ghost"
+              size="lg"
+              on:click={toggleSearch}
+            >
+              <Icon name={searchOpen ? 'close' : 'search'} />
+            </IconButton>
+          </span>
+        {/if}
 
-  <main class="screens">
+        <!-- На широком экране каналы и профиль живут в боковой панели: в шапке
+             им места нет, а на телефоне боковой панели нет. -->
+        <div class="head-icons">
+          <IconButton
+            label="Каналы и коллекции"
+            variant="ghost"
+            size="lg"
+            on:click={() => (channelsOpen = true)}
+          >
+            <Icon name="folder" />
+          </IconButton>
+          <IconButton
+            label="Профиль"
+            variant="ghost"
+            size="lg"
+            on:click={openProfile}
+          >
+            <Icon name="user" />
+          </IconButton>
+        </div>
+      </div>
+
+      {#if $syncStatus}
+        <p class="sync-status" role="status">
+          {$syncStatus.message}
+          {#if $syncStatus.retry}
+            <button type="button" class="underline" on:click={() => drainStateOps()}>Повторить</button>
+          {/if}
+        </p>
+      {/if}
+
+      {#if $undo}
+        <p class="undo-bar" id="undoBar" role="status">
+          {$undo.text}
+          <button type="button" class="underline" on:click={onUndo}>Вернуть</button>
+        </p>
+      {/if}
+    </header>
+
+    <main class="screens">
     <!-- На экране один раздел: пустой канал или профиль не должны грузиться
          зря. Место прокрутки каждого экрана запоминается, чтобы возврат
          в ленту не терял читателя. -->
@@ -526,7 +558,8 @@
         </div>
       </section>
     {/if}
-  </main>
+    </main>
+  </div>
 
   <!-- Нижняя панель: на телефоне главные экраны должны быть под пальцем,
        и на подэкранах её сменяет стрелка «назад» в шапке. -->
@@ -604,8 +637,34 @@
     padding-top: calc(var(--ui-space-snug) + env(safe-area-inset-top));
   }
 
-  .sections {
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 1px solid var(--ui-line);
+    background: var(--ui-bg);
+  }
+
+  /* Боковая панель — только на широком экране. На телефоне её заменяет
+     нижняя: до верха экрана палец не дотягивается. */
+  .side {
     display: none;
+  }
+
+  .head-icons {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-field);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-snug);
+    color: var(--ui-ink);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 
   .back {
@@ -746,12 +805,14 @@
   }
 
   @media (max-width: 900px) {
-    .sections {
-      display: none;
-    }
-
     .search-toggle {
       display: inline-flex;
+      margin-left: auto;
+    }
+
+    /* Поле поиска заняло всю шапку: имя уступает ему место. */
+    .bar.searching .brand {
+      display: none;
     }
 
     .tabs {
@@ -776,12 +837,72 @@
   }
 
   @media (min-width: 901px) {
-    .sections {
-      display: block;
+    /* На широком экране разделы стоят в боковой панели: все назначения видны
+       сразу и названы, а место занимает то, что на телефоне занимает палец. */
+    .side {
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 25;
+      width: var(--koloda-side);
+      padding: var(--ui-space-comfortable) var(--ui-space-base);
+      border-right: 1px solid var(--ui-line);
+      background: var(--ui-bg);
     }
 
+    .shell {
+      padding-left: var(--koloda-side);
+    }
+
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: var(--ui-space-snug);
+      padding: 0 var(--ui-space-field);
+      margin-bottom: var(--ui-space-roomy);
+      color: var(--ui-ink);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .side-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .side-foot {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: auto;
+      padding-top: var(--ui-space-base);
+      border-top: 1px solid var(--ui-line);
+    }
+
+    /* Поиск на широком экране стоит справа от шапки: слева уже есть панель
+       разделов, и два ряда знакомых рядом мешают друг другу. Шапка по ширине
+       колонки с постами, иначе поиск повисает над пустым местом. */
     .search {
       display: flex;
+      flex: 0 1 360px;
+      margin-left: auto;
+    }
+
+    .bar {
+      max-width: 748px;
+    }
+
+    .brand {
+      display: none;
+    }
+
+    .head-icons {
+      display: none;
     }
   }
 </style>

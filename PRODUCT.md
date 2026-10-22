@@ -90,9 +90,17 @@ Confirmed by the code:
   button stays as the way to load it when that does not happen.
 - The search runs over the posts of the feed and over the names in the catalog.
 - The interface has three main sections: the feed, the catalog and the saved
-  posts. They are one tap away: a bottom bar on a phone, a switch in the header
-  on a desktop. Two screens open over them: the channel and the profile; they
-  close with the back arrow in the header, back to where the reader came from.
+  posts. They are one tap away, and the navigation is not the same on the two
+  screens: on a wide screen the sections stand in a sidebar on the left, with
+  the name of the service above them and the channels and the profile below;
+  on a phone the same three sections stand in a bottom bar under the finger,
+  and the channels and the profile stay in the header as two signs. Two
+  screens open over them: the channel and the profile; they close with the
+  back arrow in the header, back to where the reader came from.
+- Every sign in the navigation means one thing: the feed is lines of posts,
+  the catalog is a grid of channels, the saved is a bookmark, the channels
+  and the collections are a folder, the profile is a person. Two neighbours
+  never share a sign.
 - The address follows the screen (`#/feed`, `#/saved`, `#/cat`,
   `#/channel/<name>`, `#/me`), and the back button of the browser does the same
   as the arrow in the header. The arrow never takes the reader off the site:

@@ -239,8 +239,9 @@ px, and the channel list becomes a dialog that covers the page.
 
 The bottom bar is 64 px tall, and the sections in it are the three main
 screens: the feed, the catalog and the saved. On a wide screen the same three
-sections sit in the header as a switch, and the bottom bar is not shown at
-all: a finger does not reach the bottom of a wide screen.
+sections stand in a sidebar of 232 px on the left, and the bottom bar is not
+shown at all: a finger does not reach the bottom of a wide screen, and there
+the place is better spent on naming every destination.
 
 ## Navigation
 
@@ -253,6 +254,28 @@ The interface has five screens and three of them are main ones.
   with the arrow in the header, back to where the reader came from. On them
   the bottom bar is hidden and the arrow takes its place: the reader is one
   step deep, and the way out is where they came from.
+
+**The navigation is not the same on the two screens, and it is not the same
+screen twice.** On a wide screen there is room, the pointer is exact, and every
+destination is worth naming: the sections stand in a **sidebar on the left**,
+with the name of the service above them and the channels and the profile
+below. On a phone the finger does not reach the top of the screen, so the same
+three sections stand in a **bottom bar**, with the icon over the word, and the
+channels and the profile stay in the header as two signs. The header on a
+phone holds the name of the service on the left and the search, the channels
+and the profile on the right.
+
+The signs are not decoration and not one sign for everything:
+
+- the feed is **lines of posts**;
+- the catalog is a **grid of squares** — a directory of channels;
+- the saved is a **bookmark**;
+- the channels and the collections are a **folder**;
+- the profile is a **person**.
+
+No two neighbours in the navigation share a sign, and `check_ui.py` fails when
+they do: the list of the channels and the catalog used to carry the same one,
+and the sign said nothing.
 
 The address of the screen is in the hash: `#/feed`, `#/saved`, `#/cat`,
 `#/channel/<name>`, `#/me`. Every screen goes into the history of the
@@ -360,6 +383,16 @@ the type, so no button has a fill or a frame at rest.
 - The bar is a solid ground: the posts do not show through it.
 - The bar is hidden on the sub-screens: there the arrow in the header leads
   back.
+
+### The sidebar on a wide screen
+
+- 232 px wide, fixed, with the name of the service above the sections and the
+  channels and the profile below them.
+- The rows are the rows of the kit: the icon on the left, the name next to it,
+  and the current section on a lighter ground.
+- The search is not in the sidebar: it stays in the header, on the right, over
+  the column of the posts, so that the eye goes from the field to the list
+  without a turn.
 
 ## Do's and Don'ts
 
