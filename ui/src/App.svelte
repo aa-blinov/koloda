@@ -325,10 +325,14 @@
     }}
     on:editCollection={(event) => {
       collection = event.detail;
+      // Редактор — отдельное окно: список под ним закрывается, иначе Escape
+      // закрывает оба сразу.
+      channelsOpen = false;
     }}
     on:channelCollections={(event) => {
       collectionChannel = event.detail;
       collection = null;
+      channelsOpen = false;
     }}
     on:unsubscribe={(event) => {
       const channel = event.detail;
