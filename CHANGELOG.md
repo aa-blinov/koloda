@@ -36,6 +36,13 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- The exit from the profile broke the connection: the body of the request was
+  not read by the route and stayed in the socket, so the reload after the exit
+  got "501 Unsupported method ('{}GET')" instead of the screen of the entry.
+  Now the body is always read out.
+- The number of the collections next to a channel did not appear: the store was
+  read only inside a helper, and Svelte does not see such a dependency — the
+  button kept the old text.
 - The search did not work anywhere: the kit sends a native input event, which
   has no value of its own, so the request went out without a query while the
   field looked alive.

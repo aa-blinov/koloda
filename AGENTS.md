@@ -131,6 +131,15 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   broken parser. The same goes for the exit code of any check of the live data.
 - **`sync.py` and `serve.py` are the old variant with Telethon and RSS.** The
   current service does not call them. Do not touch them without being asked.
+- **A store read only inside a helper is not a dependency.** Svelte tracks what
+  the markup refers to directly: if the markup calls a function that reads a
+  store, the store is not tracked and the part is not redrawn. The count of the
+  collections next to a channel stayed empty because of this.
+- **The body of a request must be read out.** A route that answers without
+  reading the body leaves it in the socket, and the next request on the same
+  connection is read from the middle: the reload after the exit from the
+  profile answered "501 Unsupported method ('{}GET')". `Handler._drain_body`
+  does it; do not remove it.
 - **`ui_paths_check.py` walks the interface in a browser and is a service
   script.** It is not in the image and not in the tests, and it needs a running
   stand with its data directory. After the move to the kit it was rewritten to
