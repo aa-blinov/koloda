@@ -40,12 +40,16 @@
   export let channelName = '';
   export let channelTitle = '';
 
-  let searchOpen = false;
   let search = '';
   let channelsOpen = false;
   let collection = null;      // редактируемая коллекция
   let collectionChannel = ''; // канал, чьи коллекции правятся
-  let collectionFilter = null; // коллекция, по которой отфильтрована лента
+  let collectionFilterId = null; // id коллекции, по которой отфильтрована лента
+  // Саму коллекцию берём из списка: отредактировали состав — и лента должна
+  // перечитаться, а не смотреть на старую копию.
+  $: collectionFilter = collectionFilterId
+    ? $collectionsList.find((c) => String(c.id) === String(collectionFilterId)) || null
+    : null;
   let lightbox = null;
   let booting = true;
   let bootError = '';
@@ -59,7 +63,6 @@
   $: section = feedMode === 'saved' ? 'saved' : view === 'catalog' ? 'catalog' : 'feed';
 
   function pickSection(value) {
-    searchOpen = false;
     if (value === 'catalog') {
       view = 'catalog';
       feedMode = 'feed';
@@ -157,12 +160,10 @@
     const key = event.key.toLowerCase();
     if (key === '/') {
       const field = document.querySelector('#koloda-search input');
-      // The search is hidden on the screens of the profile and the channel:
-      // a focus in a hidden field does nothing, and the key would vanish.
       if (!field) return;
       event.preventDefault();
-      searchOpen = true;
-      tick().then(() => field.focus());
+      field.focus();
+      field.select();
       return;
     }
     if (key === '?') {
@@ -202,16 +203,6 @@
 {:else}
   <header class="sticky top-0 z-20 border-b border-line bg-canvas">
     <div class="bar">
-      <IconButton
-        label="Поиск"
-        variant="ghost"
-        size="lg"
-        pressed={searchOpen}
-        on:click={() => (searchOpen = !searchOpen)}
-      >
-        <Icon name="search" />
-      </IconButton>
-
       <SegmentedControl
         options={sections}
         value={section}
@@ -219,17 +210,18 @@
         on:change={(event) => pickSection(event.detail.value)}
       />
 
-      {#if searchOpen}
-        <div id="koloda-search" class="search">
-          <SearchField
-            bind:value={search}
-            label="Поиск"
-            placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
-            clearLabel="Очистить"
-            on:input={onSearchInput}
-          />
-        </div>
-      {/if}
+      <!-- Поиск всегда на виду: за кнопкой его не находит никто, кроме того,
+           кто уже знает, что она там. На узком экране поле переносится на
+           вторую строку шапки. -->
+      <div id="koloda-search" class="search">
+        <SearchField
+          bind:value={search}
+          label="Поиск"
+          placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
+          clearLabel="Очистить"
+          on:input={onSearchInput}
+        />
+      </div>
 
       <div class="ml-auto flex items-center gap-2">
         <IconButton
@@ -297,7 +289,7 @@
   {:else if view === 'channel'}
     <ChannelView
       {channelName}
-      title={channelTitle}
+      initialTitle={channelTitle}
       on:back={() => {
         view = 'catalog';
         writeHash();
@@ -325,7 +317,7 @@
       // Клик по названию коллекции показывает её в ленте: каналы коллекции
       // фильтром, остальные подписки — рядом.
       const found = ($collectionsList || []).find((c) => String(c.id) === String(event.detail));
-      collectionFilter = found || null;
+      collectionFilterId = found ? found.id : null;
       view = 'feed';
       feedMode = 'feed';
       channelsOpen = false;
@@ -349,6 +341,11 @@
     open={Boolean(collection) || Boolean(collectionChannel)}
     {collection}
     channel={collectionChannel}
+    on:deleted={(event) => {
+      if (collectionFilter && String(collectionFilter.id) === String(event.detail)) {
+        collectionFilterId = null;
+      }
+    }}
     on:close={() => {
       collection = null;
       collectionChannel = '';
@@ -371,6 +368,7 @@
     max-width: 1120px;
     margin: 0 auto;
     display: flex;
+    flex-wrap: wrap;
     gap: var(--ui-space-base);
     align-items: center;
     padding: var(--ui-space-snug) var(--ui-space-comfortable);
@@ -378,10 +376,19 @@
   }
 
   .search {
-    flex: 1;
+    flex: 1 1 220px;
     min-width: 0;
     display: flex;
     align-items: center;
+  }
+
+  @media (max-width: 900px) {
+    /* На узком экране поле уходит на вторую строку под разделы. */
+    .search {
+      order: 3;
+      flex-basis: 100%;
+      padding-bottom: var(--ui-space-snug);
+    }
   }
 
   .search :global(.w-full) {

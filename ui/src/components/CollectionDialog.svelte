@@ -38,7 +38,9 @@
     wasOpen = false;
   }
 
-  $: available = $subs.filter((channel) => !picked.includes(channel));
+  // В списке все подписки: снять галочку с канала, который уже в коллекции,
+  // должно быть можно — для этого он должен быть виден.
+  $: available = $subs;
 
   function toggle(channelName, on) {
     picked = on
@@ -94,6 +96,7 @@
     try {
       await api.deleteCollection(collection.id);
       collections.update((list) => list.filter((c) => c.id !== collection.id));
+      dispatch('deleted', collection.id);
       dispatch('close');
     } catch (err) {
       problem = err && err.message ? err.message : 'Не удалось удалить коллекцию.';
@@ -138,7 +141,7 @@
 
     <div class="channels" id="collPick">
       {#if !available.length}
-        <p class="hint">Все каналы уже в коллекции. Добавь подписку в каталоге.</p>
+        <p class="hint">Подписок нет: сперва подпишись на канал в каталоге.</p>
       {:else}
         <ul>
           {#each available as name (name)}
@@ -164,7 +167,9 @@
   {/if}
 
   {#if problem}
-    <Notice tone="danger" title="Не получилось">{problem}</Notice>
+    <div id="collMsg">
+      <Notice tone="danger" title="Не получилось">{problem}</Notice>
+    </div>
   {/if}
 
   <svelte:fragment slot="footer">

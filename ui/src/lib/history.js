@@ -6,18 +6,19 @@
 
 export function historyDetail(item, cap) {
   if (!item) return '';
-  if (item.state === 'loading') return 'загружаем: ' + item.fetched + ' из ' + cap;
-  if (item.state === 'waiting') return 'в очереди';
-  if (item.state === 'paused') return 't.me не отвечает, повторим позже';
+  // Формулировка про то, что видит человек, а не про то, что делает фон.
+  if (item.state === 'loading') return 'загружаем историю: ' + item.fetched + ' из ' + cap;
+  if (item.state === 'waiting') return 'ждёт очереди на загрузку';
+  if (item.state === 'paused') return 't.me не отвечает, вернёмся позже';
   if (item.state === 'done') return 'вся история загружена';
-  return 'загружено ' + item.fetched + ', дальше только в Telegram';
+  return 'загружено ' + item.fetched + ' постов, остальные — только в Telegram';
 }
 
 export function channelHistoryText(item, cap, pending) {
   if (!item) return '';
-  if (item.state === 'loading') return 'Загружаем старые публикации канала: ' + item.fetched + ' из ' + cap;
+  if (item.state === 'loading') return 'Загружаем историю канала: ' + item.fetched + ' из ' + cap;
   const detail = historyDetail(item, cap);
-  return pending ? 'Старые публикации канала: ' + detail : detail;
+  return pending ? 'История канала: ' + detail : detail;
 }
 
 export function historyPercent(item, cap) {

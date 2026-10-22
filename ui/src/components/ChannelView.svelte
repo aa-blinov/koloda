@@ -25,7 +25,11 @@
 
   export let channelName = '';
   // Название, которое знает каталог: сервер на странице канала отдаёт его не сразу.
-  export let title = '';
+  export let initialTitle = '';
+  // Заголовок живёт здесь: prop перезаписывается родителем при каждой его
+  // перерисовке, и название канала терялось бы.
+  let heading = initialTitle;
+  $: if (initialTitle && initialTitle !== heading) heading = initialTitle;
 
   const dispatch = createEventDispatcher();
 
@@ -60,7 +64,7 @@
       posts = append ? posts.concat(answer.posts || []) : answer.posts || [];
       hasMore = Boolean(answer.has_more);
       cursor = answer.next || null;
-      if (answer.titles && answer.titles[channelName]) title = answer.titles[channelName];
+      if (answer.titles && answer.titles[channelName]) heading = answer.titles[channelName];
       loadAvatars([channelName]);
       await tick();
       markPassed();
@@ -107,20 +111,28 @@
 <div class="column ch-page" id="viewChannel">
   <Button variant="text" size="sm" on:click={() => dispatch('back')}>Назад в каталог</Button>
 
-  <h1 id="chTitle">{title || channelName}</h1>
+  <h1 id="chTitle">{heading || channelName}</h1>
   <p class="ch-meta" id="chMeta">@{channelName}</p>
 
   <div class="ch-actions">
     <span id="chAction">
       <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
     </span>
-    <span id="chColl" class="ch-coll" hidden={!subscribed}>
-      <Button variant="text" size="sm" on:click={() => dispatch('channelCollections', channelName)}>
-        {mine.length ? 'В коллекциях: ' + mine.length : 'В коллекцию'}
-      </Button>
-      <span id="chCollState">
-        {mine.length ? 'В коллекциях: ' + mine.map((c) => c.name).join(', ') : 'Пока ни в одной коллекции'}
-      </span>
+    <span id="chColl" class="ch-coll">
+      {#if subscribed}
+        <Button variant="text" size="sm" on:click={() => dispatch('channelCollections', channelName)}>
+          {mine.length ? 'В коллекциях: ' + mine.length : 'В коллекцию'}
+        </Button>
+        <span id="chCollState">
+          {mine.length ? 'В коллекциях: ' + mine.map((c) => c.name).join(', ') : 'Пока ни в одной коллекции'}
+        </span>
+      {:else}
+        <!-- Кнопки нет, пока канал не подписан: сказать об этом лучше, чем
+             показать пустое место. -->
+        <span id="chCollState" class="hint">
+          Подпишись на канал — и его можно будет положить в коллекцию.
+        </span>
+      {/if}
     </span>
     <a class="ch-link" id="chTg" href={'https://t.me/' + channelName} target="_blank" rel="noopener">
       <Icon name="external" size={14} />

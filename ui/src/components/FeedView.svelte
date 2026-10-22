@@ -236,7 +236,10 @@
   // Смена коллекции — тоже смена состава ленты: без перезапроса посты остались
   // бы прежними, а подпись обещала коллекцию.
   let lastCollectionKey = '';
-  $: collectionKey = collection ? String(collection.id) : '';
+  // Ключ — с составом: изменили каналы коллекции, и лента должна перечитаться.
+  $: collectionKey = collection
+    ? String(collection.id) + ':' + ((collection.channels || []).join(','))
+    : '';
   $: if (collectionKey !== lastCollectionKey) {
     lastCollectionKey = collectionKey;
     load(false);
@@ -298,6 +301,11 @@
       <Icon name="chevron" size={16} />
     </button>
   </div>
+
+  {#if feedMode === 'saved'}
+    <h1 class="feed-title">Сохранённые публикации</h1>
+    <p class="fresh">То, что ты отметил «Сохранить». Порядок — по времени сохранения.</p>
+  {/if}
 
   <div class="feed-bar">
     <span id="readToggle" class="read-toggle">
@@ -407,6 +415,14 @@
     border-bottom: 1px solid var(--ui-line);
     border-radius: 0;
     color: var(--ui-ink);
+  }
+
+  .feed-title {
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: var(--ui-space-base) 0 0;
   }
 
   .feed-bar {

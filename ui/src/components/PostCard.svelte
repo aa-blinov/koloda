@@ -105,6 +105,12 @@
 
 <article class="post" class:read data-post={postKey(post)}>
   <div class="meta">
+    <!-- Непрочитанность стоит рядом с кнопкой, а не внутри неё: иначе
+         скринридер читает «Не прочитано Pavel Zloi» вместо названия канала. -->
+    {#if !read}
+      <span class="dot" aria-hidden="true"></span>
+      <span class="sr-only">Не прочитано</span>
+    {/if}
     <button type="button" class="who" title="Показать только этот канал" on:click={openChannel}>
       <span class="chan-dot" aria-hidden="true">
         {#if avatar && !avatarFailed}
@@ -114,10 +120,6 @@
           {letter}
         {/if}
       </span>
-      {#if !read}
-        <span class="dot" aria-hidden="true"></span>
-        <span class="sr-only">Не прочитано</span>
-      {/if}
       {channelLabel()}
     </button>
 

@@ -331,7 +331,9 @@
     </form>
 
     {#if collectionError}
-      <Notice tone="danger" title="Не получилось">{collectionError}</Notice>
+      <div id="collListMsg">
+        <Notice tone="danger" title="Не получилось">{collectionError}</Notice>
+      </div>
     {/if}
   </section>
 

@@ -15,6 +15,37 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Changed
 
+- The search is always in sight: it used to hide behind a magnifier in the
+  header, and on a narrow screen the field moves to a second row. The hint says
+  what is searched: "по каналу" in the catalog, "по постам" in the feed.
+- The screen of the entry has a switch instead of two buttons: the current mode
+  is visible.
+- The Telegram login got its own tab in the profile: it is a whole possibility,
+  and it used to be a paragraph inside the account tab.
+- The state of the history of a channel speaks about what the reader sees:
+  "503 поста загружено, остальные — только в Telegram" instead of "загружено
+  503, дальше только в Telegram".
+- The saved posts have their own heading: the column is the same as the feed's,
+  and without it the two were hard to tell apart.
+- The channel page explains why there is no "into a collection" until you
+  subscribe.
+- The categories of the catalog are sorted by name in Russian, and a failed
+  request can be repeated without losing the row.
+- The exit from the profile asks for a confirmation again: one click should not
+  throw you out of the profile.
+
+### Fixed
+
+- The search did not work anywhere: the kit sends a native input event, which
+  has no value of its own, so the request went out without a query while the
+  field looked alive.
+- The keys j, k and n did not scroll the feed, and u fell with an error.
+- The collection filter did not re-read the feed, and "All channels" did not
+  drop it.
+- The channel page showed the name of the channel instead of its title.
+- The editor of a collection showed only the channels that were not in it, so
+  a tick could not be taken off.
+
 - The interface moved to the Monos kit: the sources are in `ui/`, the build in
   `ui/dist`, and the server hands over the built files. The palette, the
   radius, the spacing and the controls are the kit's; the product keeps the

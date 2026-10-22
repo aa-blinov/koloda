@@ -4,7 +4,7 @@
    * the password. The mode decides which fields are on the screen.
    */
   import { createEventDispatcher } from 'svelte';
-  import { Button, Card, Notice, TextField } from '@monos/ui';
+  import { Button, Card, Notice, SegmentedControl, TextField } from '@monos/ui';
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
@@ -126,14 +126,18 @@
       Выбирай каналы и читай их публикации в одном месте. У каждого профиля своя подборка.
     </p>
 
-    <div class="auth-modes" role="group" aria-label="Действие с профилем">
-      <Button variant="text" on:click={() => setMode('login')} aria-pressed={mode === 'login'}>
-        Уже есть профиль
-      </Button>
+    <!-- Переключатель, а не две кнопки: так видно, где ты сейчас. -->
+    <div class="auth-modes">
       <span id="authRegisterMode">
-      <Button variant="text" on:click={() => setMode('register')} aria-pressed={mode === 'register'}>
-        Создать профиль
-      </Button>
+        <SegmentedControl
+          options={[
+            { value: 'login', label: 'Уже есть профиль' },
+            { value: 'register', label: 'Создать профиль' },
+          ]}
+          value={mode === 'register' ? 'register' : 'login'}
+          label="Действие с профилем"
+          on:change={(event) => setMode(event.detail.value)}
+        />
       </span>
     </div>
 

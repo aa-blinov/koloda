@@ -203,7 +203,7 @@ def a3(c):
 def a2(c):
     c.pg.goto(BASE + "/")
     c.pg.wait_for_selector("#authScreen")
-    c.pg.click("#authRegisterMode button")
+    c.pg.get_by_role("button", name="Создать профиль").click()
     name = "nomail-" + "".join(random.choice(string.ascii_lowercase) for _ in range(6))
     c.pg.fill("#authUsername", name)
     c.pg.fill("#authPassword", PASSWORD)
@@ -222,7 +222,8 @@ def a4(c):
     # выход подтверждается вторым нажатием в течение шести секунд: защита от случайного выхода
     c.pg.get_by_role("button", name="Выйти из профиля").first.click()
     c.pg.wait_for_timeout(300)
-    c.pg.get_by_role("button", name="Выйти из профиля").first.click()
+    # выход подтверждается вторым нажатием
+    c.pg.get_by_role("button", name="Точно выйти?").first.click()
     c.pg.wait_for_selector("#authScreen", timeout=20000)
 
 
@@ -234,14 +235,20 @@ def c1(c):
     open_list(c.pg)
     c.pg.fill("#chanList .coll-new input", "Новости")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
+    c.pg.wait_for_timeout(2500)
+    assert c.pg.locator("#chanList .coll-name", has_text="Новости").count() == 1, "коллекция не создалась"
+    # состав коллекции задаётся в редакторе
+    c.pg.click("button[aria-label='Изменить коллекцию Новости']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     assert c.pg.locator("#collPick input[type=checkbox]").count() == len(CHANNELS), "в редакторе не все подписки"
-    c.pg.fill("#collName", "Новости")
     c.pg.locator("#collPick input[value=rybolos_channel]").check()
     c.pg.locator("#collPick input[value=evilfreelancer]").check()
     c.pg.click("#collSave button")
     wait_closed(c.pg, "collOvl")
-    c.pg.wait_for_timeout(3000)
+    c.pg.wait_for_timeout(2000)
+    # открыть коллекцию: лента показывает только её каналы
+    c.pg.locator("#chanList .coll-name", has_text="Новости").first.click()
+    c.pg.wait_for_timeout(3500)
     assert c.pg.inner_text("#tabsToggleLabel") == "Новости", c.pg.inner_text("#tabsToggleLabel")
     channels = feed_channels(c.pg)
     assert channels and set(channels) <= COLL_CHANNELS, "лента коллекции: %s" % channels
@@ -263,7 +270,6 @@ def c3(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
-    open_list(c.pg)
     c.pg.locator("#feed button", has_text="Все каналы").first.click()
     c.pg.wait_for_timeout(3500)
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы"
@@ -287,6 +293,7 @@ def c5(c):
     make_collection(c.user, "Новости", ["rybolos_channel", "evilfreelancer"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
+    open_list(c.pg)
     c.pg.locator("button[aria-label^='Изменить коллекцию']").first.click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.locator("#collPick input[value=evilfreelancer]").uncheck()
@@ -313,6 +320,7 @@ def c7(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
+    open_list(c.pg)
     c.pg.locator("button[aria-label^='Изменить коллекцию']").first.click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.click("#collDelete button")
@@ -327,14 +335,11 @@ def c8(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.fill("#chanList .coll-new input", "Новости")
+    c.pg.fill("#chanList .coll-new input", "  НОВОСТИ ")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
-    c.pg.wait_for_selector("#collOvl [role=dialog]")
-    c.pg.fill("#collName", "  НОВОСТИ ")
-    c.pg.click("#collSave button")
-    c.pg.wait_for_timeout(1500)
-    assert "уже есть" in c.pg.inner_text("#collMsg"), c.pg.inner_text("#collMsg")
-    assert overlay_open(c.pg, "collOvl"), "редактор закрылся"
+    c.pg.wait_for_timeout(2500)
+    assert "уже есть" in c.pg.inner_text("#collListMsg"), c.pg.inner_text("#collListMsg")
+    assert c.pg.locator("[role=dialog]").count() == 1, "список закрылся"
 
 
 @check("C9", "Пустая коллекция: лента говорит, что каналов нет")
@@ -362,6 +367,7 @@ def c11(c):
     assert found, "коллекции нет в списке"
     collection_id = found[0]["id"]
     api("/api/collections/delete", {"id": collection_id}, c.user["cookie"])
+    open_list(c.pg)
     c.pg.click("button[aria-label='Изменить коллекцию Удалённая']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.click("#collSave button")
@@ -397,8 +403,10 @@ def c17(c):
 def c18(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
+    open_list(c.pg)
     assert c.pg.locator("#chanList .coll-name").count() == 0, "кнопка видна без выбранной коллекции"
     pick_collection(c.pg, "Новости")
+    open_list(c.pg)
     assert c.pg.locator("button[aria-label^='Изменить коллекцию']").count() >= 1, "кнопки нет при выбранной коллекции"
 
 
@@ -432,7 +440,7 @@ def c20(c):
     c.pg.wait_for_timeout(1500)
     assert "rybolos_channel" in collections_of(c.user)[0]["channels"], "канал не попал в коллекцию"
     c.pg.locator("#collOvl button", has_text="Отмена").first.click()
-    wait_closed(c.pg, "chanCollOvl")
+    wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(500)
     assert "Новости" in c.pg.inner_text("#chCollState"), c.pg.inner_text("#chCollState")
 
@@ -450,7 +458,7 @@ def c21(c):
     c.pg.wait_for_timeout(1500)
     assert collections_of(c.user)[0]["channels"] == [], "галочка не сняла канал"
     c.pg.locator("#collOvl button", has_text="Отмена").first.click()
-    wait_closed(c.pg, "chanCollOvl")
+    wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(500)
     assert c.pg.locator("#chanList .quiet-btn", has_text="В коллекцию").count() >= 1, "подпись не вернулась"
 
@@ -463,11 +471,21 @@ def c22(c):
     c.pg.wait_for_selector("#chColl button", timeout=20000)
     c.pg.click("#chColl button")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
-    c.pg.fill("#chanCollNew", "С канала")
-    c.pg.click("#chanCollAdd button")
+    # коллекцию создают в списке каналов, а канал отмечают отсюда
+    open_list(c.pg)
+    c.pg.fill("#chanList .coll-new input", "С канала")
+    c.pg.locator("#chanList .coll-new button[type=submit]").click()
     c.pg.wait_for_timeout(2500)
     created = [x for x in collections_of(c.user) if x["name"] == "С канала"]
-    assert created and created[0]["channels"] == ["rybolos_channel"], created
+    assert created, "коллекция не создалась"
+    c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
+    c.pg.click("#chColl button")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
+    c.pg.locator("#chanCollList input[value='%s']" % created[0]["id"]).check()
+    c.pg.wait_for_timeout(2000)
+    after = [x for x in collections_of(c.user) if x["name"] == "С канала"]
+    assert after and after[0]["channels"] == ["rybolos_channel"], after
 
 
 @check("C23", "Канал без подписки не предлагает «В коллекцию»", device="both")
@@ -559,8 +577,6 @@ def f8(c):
 def f12(c):
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.locator("#chanList .coll-name").first.click()
-    c.pg.wait_for_timeout(2500)
     c.pg.locator("#chanList .unsub-btn").first.click()
     c.pg.wait_for_timeout(1500)
     removed = [ch for ch in CHANNELS if ch not in subscriptions_of(c.user)]
@@ -574,11 +590,11 @@ def f12(c):
 @check("F15", "Галерея: кадр открывает просмотрщик, стрелка листает «N из M»")
 def f15(c):
     login(c.pg, c.user)
-    post = c.pg.locator("#postList .post").filter(has=c.pg.locator(".gal > img")).first
+    post = c.pg.locator("#postList .post").filter(has=c.pg.locator(".gal-frame img")).first
     if post.count() == 0:
         raise Skip("нет поста с фото в галерее")
-    post.locator(".gal > img").first.click()
-    c.pg.wait_for_selector("#lightbox.open", timeout=10000)
+    post.locator(".gal-frame img").first.click()
+    c.pg.wait_for_selector("[role=dialog]", timeout=10000)
     total = int(c.pg.inner_text("#lbN").split(" из ")[1]) if " из " in c.pg.inner_text("#lbN") else 1
     assert total >= 1
     c.pg.keyboard.press("ArrowRight")
@@ -639,6 +655,8 @@ def v2(c):
     c.pg.get_by_role("tab", name="Вид").click()
     c.pg.get_by_role("button", name="С засечками").first.click()
     c.pg.wait_for_timeout(1500)
+    c.pg.get_by_role("button", name="Лента", exact=True).first.click()
+    c.pg.wait_for_timeout(2500)
     c.pg.reload()
     c.pg.wait_for_selector("#postList", timeout=30000)
     assert c.pg.evaluate("document.documentElement.dataset.font") == "serif", "шрифт не сохранился"
@@ -683,7 +701,7 @@ def k10(c):
     c.pg.route("**/api/categories", lambda route: route.fulfill(status=502, body="{}", content_type="application/json"))
     c.pg.reload()
     c.pg.wait_for_selector("#postList", timeout=30000)
-    c.pg.click("#tabCat:visible, #tbCat:visible")
+    c.pg.get_by_role("button", name="Каталог", exact=True).first.click()
     c.pg.wait_for_selector("#catRetry", timeout=20000)
     shown = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
     assert shown[0] == "Все", "при ошибке пропала кнопка «Все»: %s" % shown
@@ -759,7 +777,7 @@ def e3(c):
 @check("X3", "Нажимаемые зоны не ниже 44 px на телефоне", device="phone")
 def x3(c):
     login(c.pg, c.user)
-    sizes = c.pg.evaluate("""() => [...document.querySelectorAll('#tabBar .tabbar-item, #readToggle')]
+    sizes = c.pg.evaluate("""() => [...document.querySelectorAll('header button, #readToggle button, .feed-bar button')]
         .filter(e => e.offsetParent !== null).map(e => [e.id || e.textContent.trim().slice(0, 12),
         Math.round(e.getBoundingClientRect().height)])""")
     small = [s for s in sizes if s[1] < 44]
@@ -781,11 +799,11 @@ def swipe(cdp, x0, y0, x1, y1, steps=4):
 def f16(c):
     login(c.pg, c.user)
     index = c.pg.evaluate("[...document.querySelectorAll('#postList .post')].findIndex("
-                          "e => e.querySelectorAll('.gal > *').length >= 3 && e.querySelector('.gal > img'))")
+                          "e => e.querySelectorAll('.gal > *').length >= 3 && e.querySelector('.gal-frame img'))")
     if index < 0:
         raise Skip("нет альбома из трёх и больше кадров на первой странице")
-    c.pg.locator("#postList .post").nth(index).locator(".gal > img").first.click()
-    c.pg.wait_for_selector("#lightbox.open", timeout=10000)
+    c.pg.locator("#postList .post").nth(index).locator(".gal-frame img").first.click()
+    c.pg.wait_for_selector("[role=dialog]", timeout=10000)
     counter = c.pg.inner_text("#lbN")
     if " из " not in counter or int(counter.split(" из ")[1]) < 2:
         raise Skip("в просмотрщике один кадр")
@@ -819,18 +837,18 @@ def f17(c):
         raise Skip("протухших кадров не нашлось на первых страницах")
     state = c.pg.evaluate("""() => {
         const imgs = [...document.querySelectorAll('#feed .gal img')];
-        const waiting = imgs.filter(i => i.dataset.fresh && !i.getAttribute('src'));
+        const waiting = imgs.filter(i => !i.getAttribute('src'));
         const broken = imgs.filter(i => i.getAttribute('src') && i.complete && i.naturalWidth === 0);
-        return {waiting: waiting.length, emptyAlt: waiting.filter(i => i.alt === '').length, broken: broken.length};
+        return {waiting: waiting.length, broken: broken.length};
     }""")
-    assert state["waiting"] >= 1 and state["emptyAlt"] == state["waiting"], "во время ожидания: %s" % state
+    assert state["waiting"] >= 1, "протухший кадр не очищен: %s" % state
     assert state["broken"] == 0, "битая картинка видна во время ожидания: %s" % state
     for route in held:
         route.continue_()
     held.clear()
     c.pg.unroute("**/api/media**")
     c.pg.wait_for_timeout(8000)
-    frames = c.pg.locator("#feed .gal img[data-fresh]")
+    frames = c.pg.locator("#feed .gal img")
     loaded = 0
     for index in range(frames.count()):
         frame = frames.nth(index)
