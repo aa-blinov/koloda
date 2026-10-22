@@ -8,7 +8,7 @@
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
-  import { when, nfmt, postKey, postLink } from '../lib/format.js';
+  import { when, nfmt, viewsText, postKey, postLink } from '../lib/format.js';
   import { markRead, markUnread } from '../lib/stores.js';
 
   export let post;
@@ -22,6 +22,7 @@
   let media = post.media || [];
   let loading = false;
   let fresh = false; // the addresses were asked for once already
+  let avatarFailed = false; // the photo of the channel died: the letter stands in
 
   $: media = post.media || [];
 
@@ -105,17 +106,18 @@
 <article class="post" class:read data-post={postKey(post)}>
   <div class="meta">
     <button type="button" class="who" title="Показать только этот канал" on:click={openChannel}>
-      {#if !read}
-        <span class="dot" aria-hidden="true"></span>
-        <span class="sr-only">Не прочитано</span>
-      {/if}
       <span class="chan-dot" aria-hidden="true">
-        {#if avatar}
-          <img src={avatar} alt="" loading="lazy" referrerpolicy="no-referrer" />
+        {#if avatar && !avatarFailed}
+          <img src={avatar} alt="" loading="lazy" referrerpolicy="no-referrer"
+               on:error={() => (avatarFailed = true)} />
         {:else}
           {letter}
         {/if}
       </span>
+      {#if !read}
+        <span class="dot" aria-hidden="true"></span>
+        <span class="sr-only">Не прочитано</span>
+      {/if}
       {channelLabel()}
     </button>
 
@@ -123,7 +125,7 @@
       {#if post.views}
         <span class="stat">
           <Icon name="eye" size={14} />
-          {nfmt(post.views)}
+          {viewsText(post.views)}
         </span>
       {/if}
       <time datetime={new Date(post.ts * 1000).toISOString()}>{when(post.ts)}</time>
