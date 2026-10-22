@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check": "svelte-check --tsconfig ./jsconfig.json"
+    "check": "svelte-check --tsconfig ./jsconfig.json --fail-on-warnings"
   },
   "dependencies": {
     "@monos/ui": "github:aa-blinov/monos-ui#v1.0.3"

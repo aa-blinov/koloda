@@ -72,6 +72,19 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Высота нижней панели разделов на телефоне. Запас снизу равен ей, чтобы
+   последний пост не уезжал под панель. */
+:root {
+  --koloda-tabs: 64px;
+}
+
+/* На телефоне снизу стоит панель разделов: под неё нужен запас. */
+@media (max-width: 900px) {
+  body {
+    padding-bottom: calc(var(--koloda-tabs) + env(safe-area-inset-bottom));
+  }
+}
+
 [hidden] {
   display: none !important;
 }

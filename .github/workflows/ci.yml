@@ -28,6 +28,12 @@ jobs:
         working-directory: ui
         run: npm run build
 
+      # Статическая проверка: ловит ссылку на несуществующую переменную, а
+      # та роняет приложение при переходе между экранами — и до стенда.
+      - name: Интерфейс без ошибок
+        working-directory: ui
+        run: npm run check
+
       - name: Тесты
         run: python3 -m unittest -v
 

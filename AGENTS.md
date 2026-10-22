@@ -15,6 +15,7 @@ docker compose up -d --build    # build the image and start the service on http:
 docker compose logs -f           # the log
 docker compose down              # stop
 cd ui && npm ci && npm run build # the interface: the dependencies and the build
+cd ui && npm run check            # svelte-check: a warning is a broken page, and CI fails on it
 cd ui && npm run dev             # the interface on http://127.0.0.1:5180, the API is proxied
 python3 -m unittest -v           # the tests: no network, no Telegram, a temporary database
 python3 check_ui.py              # the integrity of the interface, without a browser
@@ -32,8 +33,8 @@ taken by other processes on that machine. The port of the process itself: the
 argument of the command line first, then `$PORT`, then 8000.
 
 The same checks run in GitHub Actions on every push to `master` and on every
-pull request: `npm ci && npm run build` in `ui/`, then `python3 -m unittest -v`,
-`python3 check_ui.py` and `docker build`.
+pull request: `npm ci && npm run build` and `npm run check` in `ui/`, then
+`python3 -m unittest -v`, `python3 check_ui.py` and `docker build`.
 
 The audit of the media runs against the live data and needs the internet:
 
@@ -140,6 +141,36 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   connection is read from the middle: the reload after the exit from the
   profile answered "501 Unsupported method ('{}GET')". `Handler._drain_body`
   does it; do not remove it.
+- **A token of the kit that does not exist breaks the drawing silently.** The
+  browser paints a transparent background instead of the colour, and the page
+  under it shows through: the bottom bar of the phone was transparent because
+  of `--ui-canvas`, and the kit has no such token (`--ui-bg` is the ground).
+  `check_ui.py` now reads the tokens out of the kit and fails on one that is
+  not there.
+- **The navigation lives in `ui/src/App.svelte`.** Three main sections (the
+  feed, the catalog, the saved) and two sub-screens (the channel, the profile).
+  The address of the screen is in the hash (`#/feed`, `#/saved`, `#/cat`,
+  `#/channel/<name>`, `#/me`), and the history of the browser holds the
+  screens: `pushState` with the depth inside the app, and `popstate` brings
+  the screen back. The arrow in the header calls `history.back()` only when
+  the depth is greater than zero, so it never takes the reader off the site.
+- **Only the active screen is mounted.** With every screen mounted at once the
+  sub-screens went out for an empty channel and the server answered 400. The
+  shell keeps the place of the scroll of every screen (`scrolls`) and restores
+  it after the screen has said that it is ready.
+- **The feed waits for the subscriptions.** `search_posts` with an empty list
+  of channels returns the whole cache, so the request must not go out before
+  `$stateReady`. The feed used to ask for the posts before the subscriptions
+  arrived, and the channels of other people flashed on the screen.
+- **The session is set in one place.** The screen of the entry used to set the
+  session and read the state, and the shell did it again after the sign-in:
+  the feed was mounted twice and the posts were asked for twice. The screen of
+  the entry now only says that the sign-in is done.
+- **A reference to a name that does not exist breaks the application.** In
+  Svelte it is a warning, not an error, and the page falls on the transition.
+  `npm run check` runs `svelte-check` with `--fail-on-warnings`, and it is in
+  CI: the page of a channel had `title` instead of `heading` and the whole
+  application fell on the way back from it.
 - **`ui_paths_check.py` walks the interface in a browser and is a service
   script.** It is not in the image and not in the tests, and it needs a running
   stand with its data directory. After the move to the kit it was rewritten to
