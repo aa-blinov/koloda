@@ -26,13 +26,19 @@
   let busy = false;
   let problem = '';
 
-  $: if (open) {
+  // Поля наполняются один раз — при открытии. Пока окно открыто, их нельзя
+  // трогать: сброс имени на каждый ввод стирал бы то, что человек напечатал.
+  let wasOpen = false;
+  $: if (open && !wasOpen) {
+    wasOpen = true;
     name = collection ? collection.name : '';
     picked = collection ? [...(collection.channels || [])] : [];
     problem = '';
+  } else if (!open) {
+    wasOpen = false;
   }
 
-  $: available = $subs.filter((name) => !picked.includes(name));
+  $: available = $subs.filter((channel) => !picked.includes(channel));
 
   function toggle(channelName, on) {
     picked = on

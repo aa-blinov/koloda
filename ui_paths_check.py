@@ -869,7 +869,9 @@ def run(device_filter, only):
                 except Skip as skipped:
                     results.append((label, title, "SKIP", str(skipped)))
                 except Exception as failed:
-                    results.append((label, title, "FAIL", str(failed).splitlines()[0][:200]))
+                    # Сообщение может быть пустым: без проверки сама проверка падала
+            message = str(failed).strip().splitlines()
+            results.append((label, title, "FAIL", (message[0] if message else "без сообщения")[:200]))
                 finally:
                     ctx.close()
         browser.close()
