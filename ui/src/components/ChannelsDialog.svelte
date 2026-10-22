@@ -461,11 +461,11 @@
   }
 
   .state {
-    overflow: hidden;
+    /* Состояние истории длинное: обрезанное «дальше т…» ничего не говорит,
+       поэтому строка переносится, а имя канала остаётся в одну строку. */
     font-size: 12px;
     color: var(--ui-ink-faint);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
   }
 
   .bar {
