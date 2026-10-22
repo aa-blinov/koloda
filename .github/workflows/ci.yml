@@ -13,11 +13,25 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Интерфейс собирается: без сборки тесты и образ не видят того, что
+      # увидит человек. Ки�� Monos ставится из репозитория, версия зафиксирована
+      # в ui/package.json.
+      - name: Зависимости интерфейса
+        working-directory: ui
+        run: npm ci
+
+      - name: Интерфейс собирается
+        working-directory: ui
+        run: npm run build
 
       - name: Тесты
         run: python3 -m unittest -v
 
-      - name: Целостность разметки
+      - name: Целостность интерфейса
         run: python3 check_ui.py
 
       # Сборка ловит главную поломку этого проекта: новый файл в репозитории

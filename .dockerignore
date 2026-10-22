@@ -4,3 +4,6 @@ __pycache__/
 session.session
 .env
 .git/
+# Зависимости и сборка интерфейса: в образ едет только ui/dist
+ui/node_modules/
+ui/dist/

@@ -83,6 +83,8 @@ Confirmed by the code:
   screen, and the mark can be taken back. A post that a refresh puts above the
   screen is not marked: it stays unread until the reader scrolls past it. Loading
   the next page marks nothing.
+- An unread post says so: a dot and the word next to the name of the channel,
+  so the state is not carried by the shade of the text alone.
 - The next page of the feed loads when the reader scrolls near its end; the
   button stays as the way to load it when that does not happen.
 - The search runs over the posts of the feed and over the names in the catalog.
@@ -96,10 +98,16 @@ Confirmed by the code:
 - The media of a private channel comes over MTProto: up to 15 MB, of the types
   JPEG, PNG, WebP, GIF and MP4, kept on disk in a cache of up to 500 MB and
   served with Range.
+- A post can be saved to the profile: public and private alike. The saved list
+  shows both, and only the posts of the profile that saved them.
 - The backup file `koloda-lenta.jsonl` holds the channels and the read marks; a
   plain text list holds the channel links.
-- The theme (dark by default) and the font (JetBrains Mono) are kept in the
-  profile and survive a reload.
+- The interface is on the Monos kit: the palette, the radii, the spacing and the
+  controls are the kit's, and the product adds only the column of the feed, the
+  text of a post and the rows of the catalog.
+- The palette (Gruvbox by default) and the lightness (dark by default, or the
+  one of the system) are kept in the profile and survive a reload. The font is
+  JetBrains Mono by default, and can be sans or serif.
 - The answers above 1 KB are compressed with gzip; the images, the video and
   the fonts are not.
 - The request log is off by default.
@@ -189,9 +197,9 @@ and 0 forks, and it was created on 2026-10-15.
   profile.
 - **The touch targets are large enough.** On a phone the buttons and the
   segments are at least 44 px, and the bottom bar is exactly 64 px.
-- **The contrast of the text is at least 4.5:1** on every surface in both
-  themes, and `ThemeContrastTest` checks it by reading the tokens out of
-  `index.html`.
+- **The contrast of the text is at least 4.5:1** on every surface in every
+  palette, and `ThemeContrastTest` checks it by reading the tokens out of the
+  kit. A colour of one's own breaks the theme, and `check_ui.py` fails on it.
 - **The theme can follow the system.** The "as in the system" option of the
   profile watches `prefers-color-scheme`.
 - **A standard for screen readers has not been set.** The markup carries the

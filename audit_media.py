@@ -10,10 +10,21 @@
     docker compose cp feed:/data/feed.db ./feed.db && python3 audit_media.py
 
 Нужен интернет. Служебный инструмент, в образ не попадает и в тестах не гоняется.
+
+Коды возврата:
+    0 — расхождений нет и проверка полная
+    1 — есть расхождения
+    2 — проверять нечего (в базе нет постов)
+    3 — проверка неполная: часть каналов не удалось проверить
+
+Код 3 важен: раньше аудит рапортовал «расхождений: 0» и выходил с нулём именно
+тогда, когда парсер переставал видеть посты, — то есть зеленел ровно при той
+поломке, ради которой он написан.
 """
 import json
 import sqlite3
 import sys
+import time
 
 import app
 
@@ -32,6 +43,30 @@ def ident(items):
     return [(m.get("k"), (m.get("u") or "").split("?")[0]) for m in items]
 
 
+AUDIT_MAX_PAGES = 40   # страниц на канал: хватает на всю догруженную историю
+AUDIT_PAUSE = 2.0      # секунд между страницами, чтобы не мешать t.me
+
+
+def fetch_window(channel):
+    """Посты канала на всю глубину, а не только на первой странице.
+
+    Медиа старых постов в базе тоже может поехать, а первая страница про него
+    ничего не скажет. Страницы идут с паузой, как идёт фон, чтобы не мешать
+    t.me.
+    """
+    posts = []
+    before = None
+    for page in range(AUDIT_MAX_PAGES):
+        _, chunk = app.fetch_channel(channel, before=before)
+        if not chunk:
+            break
+        posts.extend(chunk)
+        before = min(chunk, key=lambda p: p["msg_id"])["msg_id"]
+        if page + 1 < AUDIT_MAX_PAGES:
+            time.sleep(AUDIT_PAUSE)
+    return posts
+
+
 def main(path):
     db = sqlite3.connect(path)
     channels = [r[0] for r in db.execute("SELECT DISTINCT channel FROM posts")]
@@ -43,11 +78,14 @@ def main(path):
         return 2
     print(f"{path}: постов {total}, каналов {len(channels)}")
     wrong = []
+    skipped = []
+    compared = 0
     for channel in channels:
         try:
-            _, fetched = app.fetch_channel(channel)
+            fetched = fetch_window(channel)
         except Exception as exc:  # канал мог закрыться или отдать не то
             print(f"  {channel}: не проверен ({exc})")
+            skipped.append(channel)
             continue
         stored = {msg: media(med) for msg, med in db.execute(
             "SELECT msg_id,media FROM posts WHERE channel=?", (channel,))}
@@ -56,9 +94,10 @@ def main(path):
             old = stored.get(msg_id)
             if old is None:
                 continue  # поста ещё нет в базе, это не расхождение
+            compared += 1
             if ident(old) == ident(items):
                 continue
-            if [m for m in old if "emoji" in m["u"]] and items:
+            if [m for m in old if "emoji" in (m.get("u") or "")] and items:
                 what = "эмодзи вместо медиа"
             elif items and not old:
                 what = "медиа потеряно в базе"
@@ -67,10 +106,19 @@ def main(path):
             else:
                 what = "адрес или состав устарели"
             wrong.append((channel, msg_id, what))
-    print(f"расхождений: {len(wrong)} из {total}")
+    print(f"проверено каналов: {len(channels) - len(skipped)} из {len(channels)}, "
+          f"сверено постов: {compared}")
+    print(f"расхождений: {len(wrong)}")
     for channel, msg_id, what in wrong[:40]:
         print(f"  {channel}/{msg_id}: {what}")
-    return 1 if wrong else 0
+    if wrong:
+        return 1
+    if skipped:
+        # Проверка неполная: зелёный результат здесь означал бы, что мы ничего
+        # не увидели, а не то, что всё в порядке.
+        print(f"не проверены каналы: {', '.join(skipped)}")
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

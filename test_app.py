@@ -850,16 +850,16 @@ class FeedAPITest(unittest.TestCase):
         status, _ = self.register("profile_settings", "long-password")
         self.assertEqual(status, 201)
         status, payload = self.request("/api/settings")
-        self.assertEqual(payload["settings"], {"theme": "dark", "font": "mono"})
+        self.assertEqual(payload["settings"], {"theme": "gruvbox", "mode": "dark", "font": "mono"})
         status, _ = self.request("/api/settings", method="PUT",
-                                 data={"theme": "light", "font": "serif"})
+                                 data={"theme": "github", "mode": "light", "font": "serif"})
         self.assertEqual(status, 200)
         status, state = self.request("/api/state")
-        self.assertEqual(state["settings"], {"theme": "light", "font": "serif"})
+        self.assertEqual(state["settings"], {"theme": "github", "mode": "light", "font": "serif"})
         status, payload = self.request("/api/settings", method="PUT", data={"theme": "neon"})
         self.assertEqual(status, 400)
         status, payload = self.request("/api/settings")
-        self.assertEqual(payload["settings"], {"theme": "light", "font": "serif"})
+        self.assertEqual(payload["settings"], {"theme": "github", "mode": "light", "font": "serif"})
         self.cookie = ""
         self.assertEqual(self.request("/api/settings")[0], 401)
 
@@ -955,10 +955,10 @@ class FeedAPITest(unittest.TestCase):
 
     def test_partial_settings_update_keeps_the_other_field(self):
         self.register("settings_partial", "long-password")
-        self.request("/api/settings", method="PUT", data={"theme": "light", "font": "mono"})
-        status, payload = self.request("/api/settings", method="PUT", data={"theme": "dark"})
+        self.request("/api/settings", method="PUT", data={"theme": "github", "font": "mono"})
+        status, payload = self.request("/api/settings", method="PUT", data={"theme": "dracula"})
         self.assertEqual(status, 200)
-        self.assertEqual(payload["settings"], {"theme": "dark", "font": "mono"})
+        self.assertEqual(payload["settings"], {"theme": "dracula", "mode": "dark", "font": "mono"})
 
     def test_empty_feed_does_not_leak_the_whole_cache(self):
         # без подписок лента пустая: пустой список каналов не должен отдавать
@@ -1081,26 +1081,46 @@ class FetchChannelTest(unittest.TestCase):
                 app.fetch_channel("durov")
 
 
+
+UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
+UI_SRC = os.path.join(UI_DIR, "src")
+
+
+def read_ui(relative):
+    """Читает файл интерфейса: исходники лежат в ui/src."""
+    with open(os.path.join(UI_SRC, relative), encoding="utf-8") as page:
+        return page.read()
+
+
+def run_node(script):
+    """Запускает ES-модуль в node и отдаёт его вывод.
+
+    Модуль пишется во временный файл с расширением .mjs: без него node
+    принял бы код за общий скрипт и не дал бы импортов.
+    """
+    with tempfile.TemporaryDirectory() as temp:
+        path = os.path.join(temp, "module.mjs")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(script)
+        return subprocess.run(["node", path], capture_output=True, text=True, check=True).stdout
+
+
 class HistoryTextTest(unittest.TestCase):
-    """Строки догрузки собирает браузер: берём функции из index.html и считаем их в node."""
+    """Строки догрузки собирает браузер: берём функции из ui/src/lib/history.js и считаем их в node."""
 
     @unittest.skipUnless(shutil.which("node"), "нужен node")
     def test_channel_line_says_loading_only_once(self):
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
-        with open(path, encoding="utf-8") as page:
-            html = page.read()
-        functions = "\n".join(re.search(r"^function %s\(.*?^}" % name, html, re.S | re.M).group(0)
-                              for name in ("historyDetail", "channelHistoryText"))
+        source = read_ui("lib/history.js")
         cases = [
             ({"state": "loading", "fetched": 8}, "true", "Загружаем старые публикации канала: 8 из 500"),
             ({"state": "waiting", "fetched": 0}, "true", "Старые публикации канала: в очереди"),
             ({"state": "paused", "fetched": 40}, "true", "Старые публикации канала: t.me не отвечает, повторим позже"),
             ({"state": "done", "fetched": 13}, "false", "вся история загружена"),
         ]
-        script = functions + "\n" + "\n".join(
+        script = source + "\n" + "\n".join(
             "console.log(channelHistoryText(%s, 500, %s));" % (json.dumps(ch), pending)
             for ch, pending, _ in cases)
-        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout
+        out = run_node(script)
         self.assertEqual(out.splitlines(), [expected for _, _, expected in cases])
 
 
@@ -1109,23 +1129,24 @@ class CollectionFeedTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "нужен node")
     def test_collection_feed_takes_only_its_subscribed_channels(self):
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
-        with open(path, encoding="utf-8") as page:
-            html = page.read()
-        lookup = re.search(r"^const collectionOf = .*$", html, re.M).group(0)
-        feed = re.search(r"^function feedChannels\(\).*?^}", html, re.S | re.M).group(0)
+        source = read_ui("lib/feed.js")
         cases = [
-            ("''", "[]", ["alpha", "beta"], ["alpha", "beta"]),
-            ("'c:1'", "[{id: 1, name: 'Новости', channels: ['alpha', 'gamma']}]", ["alpha", "beta"], ["alpha"]),
-            ("'c:2'", "[{id: 1, name: 'Новости', channels: ['alpha']}]", ["alpha", "beta"], []),
-            ("'beta'", "[]", ["alpha", "beta"], ["beta"]),
+            # вся подписка
+            (None, None, ["alpha", "beta"], ["alpha", "beta"]),
+            # коллекция: только те каналы, что ещё в подписках
+            (None, {"id": 1, "name": "Новости", "channels": ["alpha", "gamma"]}, ["alpha", "beta"], ["alpha"]),
+            (None, {"id": 1, "name": "Новости", "channels": ["alpha"]}, ["alpha", "beta"], ["alpha"]),
+            # канал, которого в подписках нет, ленты не показывает
+            ("c:2", None, ["alpha", "beta"], []),
+            ("beta", None, ["alpha", "beta"], ["beta"]),
         ]
-        script = "var tab = '', collections = [], subsList = [];\nvar subs = () => subsList;\n" + lookup + "\n" + feed + "\n" + "\n".join(
-            "tab = %s; collections = %s; subsList = %s; console.log(JSON.stringify(feedChannels()));"
-            % (selected, collections, json.dumps(subscribed))
-            for selected, collections, subscribed, _ in cases)
-        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout
-        self.assertEqual([json.loads(line) for line in out.splitlines()], [expected for *_, expected in cases])
+        script = source + "\n" + "\n".join(
+            "console.log(JSON.stringify(feedChannels(%s, %s, %s)));"
+            % (json.dumps(tab), json.dumps(collection), json.dumps(subscribed))
+            for tab, collection, subscribed, _ in cases)
+        out = run_node(script)
+        self.assertEqual([json.loads(line) for line in out.splitlines()],
+                         [expected for *_, expected in cases])
 
 
 class BackfillLoopTest(unittest.TestCase):
@@ -1627,64 +1648,67 @@ def contrast(a, b):
 
 
 class ThemeContrastTest(unittest.TestCase):
-    """Пары текста и фона в обеих темах держат 4.5:1, как записано в README."""
+    """Контраст пар текста и фона считается по палитре кита: свой цвет в продукте запрещён.
 
-    TEXT_ON_BG = [
-        ("fg", "bg"), ("fg", "surf"), ("fg", "raise"),
-        ("dim", "bg"), ("dim", "surf"), ("dim", "raise"),
-        ("faint", "bg"), ("faint", "surf"), ("faint", "raise"),
-        ("acc", "bg"), ("acc", "surf"), ("acc", "raise"),
-        ("error", "bg"), ("error", "surf"), ("paid", "raise"),
-        ("on-acc-cont", "acc-cont"), ("on-sec-cont", "sec-cont"), ("acc-ink", "acc"),
-        ("inv-fg", "inv-surf"), ("inv-acc", "inv-surf"),
-    ]
+    Палитра пришла из кита, поэтому проверяем её, а не свои переменные: так тест
+    ловит и смену палитры в ките, и появление своего цвета в интерфейсе.
+    """
+
+    # Текстовые роли на странице и на карточке. Роли-сигналы (точки, заливки)
+    # текстом не бывают: для слова есть отдельные *-text роли.
+    PAIRS = [("ink", "bg"), ("ink", "surface"), ("ink-soft", "bg"), ("ink-soft", "surface"),
+             ("accent-text", "bg"), ("accent-text", "surface"), ("danger-text", "surface"),
+             ("warning-text", "surface"), ("success-text", "surface"), ("info-text", "surface")]
 
     @classmethod
     def setUpClass(cls):
-        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
-            html = page.read()
-        dark = re.search(r":root\{(.*?)\}", html, re.S).group(1)
-        light = re.search(r':root\[data-theme="light"\]\{(.*?)\}', html, re.S).group(1)
-        cls.themes = {
-            "dark": cls.tokens(dark),
-            "light": {**cls.tokens(dark), **cls.tokens(light)},
-        }
+        themes = os.path.join(UI_DIR, "node_modules", "@monos", "ui", "src", "styles", "themes.css")
+        if not os.path.exists(themes):
+            raise unittest.SkipTest("кит не установлен: нет ui/node_modules")
+        with open(themes, encoding="utf-8") as page:
+            css = page.read()
+        cls.themes = []
+        for block in re.findall(r"(:root[^\{]*)\{(.*?)\}", css, re.S):
+            selector, body = block
+            tokens = dict(re.findall(r"--ui-([\w-]+):\s*(#[0-9a-fA-F]{6})", body))
+            if tokens:
+                cls.themes.append((selector.strip(), tokens))
 
-    @staticmethod
-    def tokens(block):
-        return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", block))
-
-    def test_text_pairs_reach_4_5_in_both_themes(self):
-        for theme, tokens in self.themes.items():
-            for text, bg in self.TEXT_ON_BG:
-                with self.subTest(theme=theme, text=text, bg=bg):
+    def test_every_theme_pair_clears_4_5(self):
+        self.assertTrue(self.themes, "палитра кита не разобралась")
+        for selector, tokens in self.themes:
+            for text, bg in self.PAIRS:
+                with self.subTest(theme=selector, text=text, bg=bg):
                     self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
 
 
 class SpacingScaleTest(unittest.TestCase):
-    """Отступы берутся из шкалы --sp-N: литерал вне шкалы сбивает ритм, и тест его ловит."""
+    """Отступы берутся из шкалы кита: литерал вне шкалы сбивает ритм, и тест его ловит."""
 
-    # 2 px остаются для волосяных зазоров, 0 и отрицательные значения задают оптические сдвиги
-    HAIRLINE = {0, 2}
+    # Шкала кита: hair 2, tight 4, field 6, snug 8, input 10, base 12,
+    # comfortable 16, roomy 24, section 32.
+    SCALE = {0, 2, 4, 6, 8, 10, 12, 16, 24, 32}
     SPACING = re.compile(r"(?<![\w-])(?:padding|margin|gap)(?:-(?:top|right|bottom|left))?:([^;{}]*)")
 
-    @classmethod
-    def setUpClass(cls):
-        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
-            cls.html = page.read()
+    def product_css(self):
+        parts = []
+        for name in sorted(os.listdir(os.path.join(UI_SRC))):
+            if not name.endswith(".svelte"):
+                continue
+            with open(os.path.join(UI_SRC, name), encoding="utf-8") as page:
+                text = page.read()
+            for block in re.findall(r"<style>(.*?)</style>", text, re.S):
+                parts.append(block)
+        with open(os.path.join(UI_SRC, "app.css"), encoding="utf-8") as page:
+            parts.append(page.read())
+        return "\n".join(parts)
 
     def test_literal_spacing_stays_on_the_scale(self):
-        style = self.html[self.html.index("<style>"):self.html.index("</style>")]
+        style = self.product_css()
         literals = sorted({int(px) for value in self.SPACING.findall(style)
-                           for px in re.findall(r"(?<![\w.-])(\d+)px", value)} - self.HAIRLINE)
+                           for px in re.findall(r"(?<![\w.-])(\d+)px", value)} - self.SCALE)
         self.assertEqual(literals, [])
 
-    def test_every_spacing_token_is_declared(self):
-        root = self.html[self.html.index(":root{"):self.html.index("}", self.html.index(":root{"))]
-        declared = set(re.findall(r"--sp-(\d+):", root))
-        used = set(re.findall(r"var\(--sp-(\d+)\)", self.html))
-        self.assertTrue(used)
-        self.assertEqual(used - declared, set())
 
 
 class FontFileTest(unittest.TestCase):
@@ -1899,14 +1923,19 @@ class ShellNesting(HTMLParser):
 
 
 class GuestNavigationTest(unittest.TestCase):
-    """Гость видит экран входа, а не нижнюю панель: она должна жить внутри оболочки приложения."""
+    """Гость видит экран входа, а не панель разделов: она должна жить внутри оболочки приложения."""
 
-    def test_tab_bar_lives_inside_app_shell(self):
-        nesting = ShellNesting()
-        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
-            nesting.feed(page.read())
-        self.assertIn("appShell", nesting.parents["tabBar"])
-        self.assertNotIn("appShell", nesting.parents["authScreen"])
+    def test_sections_are_rendered_only_for_a_signed_in_profile(self):
+        with open(os.path.join(UI_SRC, "App.svelte"), encoding="utf-8") as page:
+            source = page.read()
+        # Экран входа и разделы — ветки одного условия: у гостя панели нет.
+        self.assertIn("!$session", source)
+        self.assertIn("{:else}", source)
+        guest = source.index("!$session")
+        header = source.index("<header")
+        self.assertLess(guest, header, "панель разделов показывается гостю")
+        self.assertIn("AuthScreen", source)
+
 
 
 class AvatarRetryTest(unittest.TestCase):
@@ -1944,23 +1973,26 @@ class FreshMediaPlaceholderTest(unittest.TestCase):
     """Кадр с протухшей ссылкой ждёт свежую пустым: битой картинки с подписью быть не должно."""
 
     def test_broken_frame_is_emptied_before_fresh_links_are_asked(self):
-        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
+        with open(os.path.join(UI_SRC, "components", "PostCard.svelte"), encoding="utf-8") as page:
             text = page.read()
-        start = text.index("document.addEventListener('error'")
-        handler = text[start:text.index("}, true);", start)]
+        handler = text[text.index("async function reload"):text.index("function openLightbox")]
         self.assertIn("removeAttribute('src')", handler)
-        self.assertLess(handler.index("removeAttribute('src')"), handler.index("freshMedia(post.dataset.post)"))
+        self.assertLess(handler.index("removeAttribute('src')"), handler.index("api.media"))
 
 
 class TapFeedbackTest(unittest.TestCase):
     """Нажатие не рисует синюю подсветку браузера, а клавиатурный фокус остаётся видимым."""
 
     def test_tap_highlight_is_off_and_keyboard_focus_stays(self):
-        with open(os.path.join(app.BASE, "index.html"), encoding="utf-8") as page:
-            html = page.read()
-        self.assertIn("-webkit-tap-highlight-color:transparent", html)
-        self.assertIn(":is(button,a,[role=button]):active{opacity:.72}", html)
-        self.assertIn(":focus-visible{outline:2px solid", html)
+        with open(os.path.join(UI_SRC, "app.css"), encoding="utf-8") as page:
+            css = page.read()
+        self.assertIn("-webkit-tap-highlight-color: transparent", css)
+        self.assertIn(":active", css)
+        # Кольцо фокуса даёт база кита: своё убирать нельзя, иначе его не будет.
+        base = os.path.join(UI_DIR, "node_modules", "@monos", "ui", "src", "styles", "base.css")
+        if os.path.exists(base):
+            with open(base, encoding="utf-8") as page:
+                self.assertIn(":focus-visible", page.read())
 
 
 class DatabaseModeTest(unittest.TestCase):
@@ -2058,16 +2090,30 @@ class PreviewAuthTest(unittest.TestCase):
 
 
 class ResponseCompressionTest(unittest.TestCase):
-    """Раздаваемый файл весит 167 КБ и раньше уходил без сжатия."""
+    """Собранный интерфейс весит сотни килобайт и должен уходить сжатым."""
 
-    def test_html_is_gzipped_when_the_client_accepts_it(self):
+    def built_assets(self):
+        assets = os.path.join(UI_DIR, "dist", "assets")
+        if not os.path.isdir(assets):
+            return []
+        return [os.path.join(assets, name) for name in sorted(os.listdir(assets))
+                if name.endswith(".js") or name.endswith(".css")]
+
+    def test_built_assets_are_gzipped_when_the_client_accepts_it(self):
+        assets = self.built_assets()
+        if not assets:
+            raise unittest.SkipTest("интерфейс не собран: нет ui/dist/assets")
+        biggest = max(assets, key=os.path.getsize)
+        name = os.path.basename(biggest)
         with feed_server() as server:
-            req = Request(server.base + "/", headers={"Accept-Encoding": "gzip, br"})
+            req = Request(server.base + "/assets/" + name, headers={"Accept-Encoding": "gzip, br"})
             with urlopen(req, timeout=5) as response:
                 encoding = response.headers.get("Content-Encoding")
                 body = response.read()
+                cache = response.headers.get("Cache-Control")
         self.assertEqual(encoding, "gzip")
-        self.assertIn(b"<!doctype html>", gzip.decompress(body).lower())
+        self.assertIn("immutable", cache)
+        self.assertTrue(gzip.decompress(body))
 
     def test_plain_client_still_gets_usable_html(self):
         with feed_server() as server:
@@ -2161,3 +2207,341 @@ class TgLinkRenewTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFixesTest(unittest.TestCase):
+    """Проверки правок после ревью: каждая ловит свой дефект.
+
+    Собраны в один класс, потому что относятся к разным местам проекта, а
+    набор тестов должен оставаться быстрым: тяжёлые случаи проверяются на
+    точечных примерах, а не на живых каналах.
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="koloda-review-test-")
+        self.previous_db = app.DB
+        app.DB = self.temp.name + "/feed.db"
+        self.db = app.connect()
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+        self.cookie = ""
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        app.wait_refresh_idle()
+        app._failed.clear()
+        self.db.close()
+        app.DB = self.previous_db
+        self.temp.cleanup()
+
+    def request(self, path, method="GET", data=None):
+        headers = {}
+        payload = None
+        if data is not None:
+            payload = json.dumps(data).encode()
+            headers["Content-Type"] = "application/json"
+        if self.cookie:
+            headers["Cookie"] = self.cookie
+        req = Request(self.base + path, data=payload, headers=headers, method=method)
+        try:
+            with urlopen(req, timeout=5) as response:
+                cookie = response.headers.get("Set-Cookie")
+                if cookie:
+                    self.cookie = cookie.split(";", 1)[0]
+                return response.status, json.loads(response.read())
+        except HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    def post_raw(self, path, body):
+        """Запрос с телом, которое не является json: так проверяем защиту разбора."""
+        req = Request(self.base + path, data=body,
+                      headers={"Content-Type": "application/json", "Cookie": self.cookie},
+                      method="POST")
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status
+        except HTTPError as exc:
+            return exc.code
+
+    def register(self, name, password="password123"):
+        self.cookie = ""
+        email = "rev%s@example.com" % os.urandom(4).hex()
+        with patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email"):
+            status, _ = self.request("/api/auth/register", method="POST", data={
+                "username": name, "password": password, "email": email})
+        if status == 202:
+            self.db.execute("UPDATE accounts SET email_verified=1 WHERE username=?", (name,))
+            self.db.commit()
+            status, _ = self.request("/api/auth/login", method="POST",
+                                     data={"username": name, "password": password})
+        status = 201 if status == 200 else status  # профиль создан и вход выполнен
+        self.assertEqual(status, 201)
+        return self.db.execute("SELECT profile FROM accounts WHERE username=?", (name,)).fetchone()[0]
+
+    def subscribe(self, profile, channel="alpha"):
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES (?, ?)", (profile, channel))
+        self.db.commit()
+
+    def seed_post(self, channel="alpha", msg_id=1, text="пост"):
+        self.db.execute("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (channel, msg_id, "https://t.me/%s/%d" % (channel, msg_id), text,
+                         None, None, 1_700_000_000, None, None, None, None, None, None))
+        self.db.commit()
+
+    # --- разбор страницы t.me ---
+
+    def test_word_captcha_in_a_post_does_not_block_the_channel(self):
+        """Слово «captcha» в тексте поста не делает канал недоступным.
+
+        Раньше признак блокировки искался по всему html, и канал вроде @telegram
+        (в посте есть «captcha support») оказывался недоступен целиком.
+        """
+        html = ('<meta property="og:title" content="Канал"/>'
+                '<div class="tgme_widget_message" data-post="alpha/1">'
+                '<div class="tgme_widget_message_text js-message_text">про captcha support</div></div>')
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = html.encode()
+            title, posts = app.fetch_channel("alpha")
+        self.assertEqual(title, "Канал")
+        self.assertEqual(len(posts), 1)
+        self.assertIn("captcha", posts[0]["text"])
+
+    def test_flood_page_without_posts_asks_to_wait(self):
+        """Страница без постов и с признаком блокировки — это «подождать», а не «нет канала»."""
+        html = '<meta property="og:title" content="Too Many Requests"/>'
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = html.encode()
+            with self.assertRaises(ValueError) as ctx:
+                app.fetch_channel("alpha")
+        self.assertIn("подождать", str(ctx.exception))
+
+    def test_reply_and_forward_are_read_from_the_live_markup(self):
+        """Ответ и пересылка приходят с теми классами, которые отдаёт Telegram сегодня."""
+        chunk = ('<div class="tgme_widget_message" data-post="alpha/1">'
+                 '<span class="tgme_widget_message_forwarded_from_name">'
+                 '<span dir="auto">Источник</span></span>'
+                 '<a class="tgme_widget_message_reply user-color-default" href="https://t.me/alpha/2">'
+                 '<div class="tgme_widget_message_author accent_color">'
+                 '<span class="tgme_widget_message_author_name" dir="auto">Автор</span></div>'
+                 '<div class="tgme_widget_message_text js-message_reply_text" dir="auto">ответ</div></a>'
+                 '<div class="tgme_widget_message_text js-message_text" dir="auto">своё</div></div>')
+        quote = app.parse_quote(chunk)
+        self.assertEqual(quote["author"], "Автор")
+        self.assertEqual(quote["text"], "ответ")
+        self.assertEqual(quote["url"], "https://t.me/alpha/2")
+        self.assertEqual(app.parse_fwd(chunk)["name"], "Источник")
+
+    # --- числа, которые не влезают в базу ---
+
+    def test_huge_post_number_is_a_bad_request_not_a_crash(self):
+        """Число длиннее 19 цифр не влезает в INTEGER: раньше сервер рвал соединение."""
+        profile = self.register("huge_media")
+        self.subscribe(profile)
+        self.seed_post()
+        status, _ = self.request("/api/media?post=alpha/" + "9" * 25)
+        self.assertEqual(status, 400)
+
+    def test_saved_post_with_a_huge_number_is_rejected(self):
+        profile = self.register("huge_saved")
+        self.seed_post()
+        status, _ = self.request("/api/saved", method="POST",
+                                  data={"channel": "alpha", "msg_id": 10 ** 30, "on": True})
+        self.assertEqual(status, 400)
+
+    # --- тело запроса, которое не разобралось ---
+
+    def test_link_poll_with_a_broken_body_answers_400(self):
+        self.register("poll_broken")
+        self.assertEqual(self.post_raw("/api/tg/link/poll", b"{broken json"), 400)
+        self.assertEqual(self.post_raw("/api/tg/link/cancel", b"{broken json"), 400)
+
+    # --- сохранённые посты ---
+
+    def test_private_post_can_be_saved_and_is_shown(self):
+        """Приватный пост сохранялся и показывался: он лежит в своей таблице."""
+        profile = self.register("private_saver")
+        key = "private:-1001234567"
+        self.db.execute("INSERT INTO private_posts VALUES (?,?,?,?,?,?,?,?)",
+                        (profile, key, 5, "https://t.me/c/1/5", "приватный пост",
+                         None, None, 1_700_000_000))
+        self.db.commit()
+        status, _ = self.request("/api/saved", method="POST",
+                                  data={"channel": key, "msg_id": 5, "on": True})
+        self.assertEqual(status, 200)
+        status, payload = self.request("/api/saved")
+        self.assertEqual(status, 200)
+        self.assertEqual([(p["channel"], p["msg_id"]) for p in payload["posts"]], [(key, 5)])
+
+    def test_saved_post_of_a_stranger_is_not_shown(self):
+        """Чужие приватные посты в список сохранённого не попадают."""
+        self.register("owner")
+        owner = self.db.execute("SELECT profile FROM accounts WHERE username='owner'").fetchone()[0]
+        self.db.execute("INSERT INTO private_posts VALUES (?,?,?,?,?,?,?,?)",
+                        (owner, "private:-1001234567", 5, "https://t.me/c/1/5", "чужой",
+                         None, None, 1_700_000_000))
+        self.db.execute("INSERT INTO saved_posts VALUES (?,?,?,?)",
+                        (owner, "private:-1001234567", 5, 1_700_000_000))
+        self.db.commit()
+        self.cookie = ""
+        self.register("stranger")
+        status, payload = self.request("/api/saved")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["posts"], [])
+
+    def test_saved_list_pages_through_public_and_private_posts(self):
+        """Список сохранённого собирается из двух таблиц: страницы идут без пропусков."""
+        profile = self.register("mixed_saver")
+        key = "private:-1001234567"
+        for i in range(1, 80):
+            self.seed_post("alpha", i, "публичный %d" % i)
+            self.db.execute("INSERT INTO private_posts VALUES (?,?,?,?,?,?,?,?)",
+                            (profile, key, i, "https://t.me/c/1/%d" % i,
+                             "приватный %d" % i, None, None, 1_700_000_000))
+            self.db.commit()
+            self.request("/api/saved", "POST", {"channel": "alpha", "msg_id": i, "on": True})
+            self.request("/api/saved", "POST", {"channel": key, "msg_id": i, "on": True})
+        status, first = self.request("/api/saved")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(first["posts"]), 80)
+        self.assertTrue(first["has_more"])
+        status, second = self.request("/api/saved?" + urlencode({
+            "before_saved": first["next"]["saved_at"], "before_channel": first["next"]["channel"],
+            "before_id": first["next"]["msg_id"]}))
+        self.assertEqual(len(second["posts"]), 78)
+        self.assertFalse(second["has_more"])
+        seen = [(p["channel"], p["msg_id"]) for p in first["posts"] + second["posts"]]
+        self.assertEqual(len(set(seen)), 158)
+        self.assertEqual(len({c for c, _ in seen}), 2)
+
+    # --- протокол ---
+    def test_head_answer_has_no_body(self):
+        """Ответ на HEAD не должен содержать тело: иначе портится соединение."""
+        req = Request(self.base + "/api/health", method="HEAD")
+        try:
+            with urlopen(req, timeout=5) as response:
+                status, body = response.status, response.read()
+        except HTTPError as exc:
+            status, body = exc.code, exc.read()
+        self.assertEqual(body, b"")
+        self.assertIn(status, (200, 405))
+
+    # --- база ---
+
+    def test_connect_survives_duplicate_and_empty_emails(self):
+        """Старые базы с пустыми или одинаковыми почтами не должны ронять сервис.
+
+        Такой базы ещё нет: уникальный индекс создаётся при первом подключении,
+        и раньше его создание падало — вместе с ним падал и весь сервис.
+        """
+        path = os.path.join(self.temp.name, "legacy.db")
+        legacy = sqlite3.connect(path)
+        legacy.executescript(app.SCHEMA)
+        legacy.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)",
+                       ("a@example.com", "p1", "salt", "digest", 0, "", 0))
+        legacy.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)",
+                       ("b@example.com", "p2", "salt", "digest", 0, "", 0))
+        legacy.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)",
+                       ("c@example.com", "p3", "salt", "digest", 0, "same@example.com", 0))
+        legacy.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?)",
+                       ("d@example.com", "p4", "salt", "digest", 0, "same@example.com", 0))
+        legacy.commit()
+        legacy.close()
+        previous = app.DB
+        app.DB = path
+        try:
+            db = app.connect()
+            rows = db.execute("SELECT email FROM accounts WHERE email IS NOT NULL").fetchall()
+            self.assertEqual(len(rows), 1)
+            db.close()
+        finally:
+            app.DB = previous
+
+    def test_private_subscription_survives_a_full_state_save(self):
+        """Полная замена состояния не должна стирать подписку на приватный канал."""
+        profile = self.register("state_saver")
+        app.save_state(self.db, profile, {"subs": ["private:-1001234567"], "reads": []})
+        rows = self.db.execute("SELECT channel FROM user_subs WHERE profile=?", (profile,)).fetchall()
+        self.assertEqual([r[0] for r in rows], ["private:-1001234567"])
+
+    # --- каталог ---
+
+    def test_catalog_skips_a_channel_with_a_bad_name(self):
+        """Имя из внешнего каталога проверяется так же, как ввод человека."""
+        payload = {"channels": [{"username": "плохое имя", "name": "Плохой"},
+                                 {"username": "good_name", "name": "Хороший"}]}
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = json.dumps(payload).encode()
+            found = app.search_catalog()
+        self.assertEqual([c["username"] for c in found], ["good_name"])
+
+    # --- фон ---
+
+    def test_media_sweep_retries_soon_after_an_error(self):
+        """После ошибки t.me канал повторяется скоро, а не через шесть часов."""
+        profile = self.register("sweep_user")
+        self.subscribe(profile, "alpha")
+        app._media_swept.pop("alpha", None)
+        app._media_delay.pop("alpha", None)
+        with patch.object(app, "media_sweep", side_effect=ValueError("t.me не отвечает")):
+            app.media_step(self.db)
+        self.assertLess(app._media_delay["alpha"], app.MEDIA_SWEEP_EVERY)
+        with patch.object(app, "media_sweep"):
+            app._media_swept["alpha"] = 0
+            app.media_step(self.db)
+        self.assertEqual(app._media_delay["alpha"], app.MEDIA_SWEEP_EVERY)
+
+    # --- аудит медиа ---
+
+    def test_audit_media_reports_an_incomplete_check(self):
+        """Аудит не должен зеленеть, когда проверить ничего не удалось."""
+        import audit_media
+        path = os.path.join(self.temp.name, "audit.db")
+        db = sqlite3.connect(path)
+        db.executescript(app.SCHEMA)
+        db.execute("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   ("alpha", 1, "https://t.me/alpha/1", "текст", None, None, 1,
+                    None, None, None, None, None, None))
+        db.commit()
+        db.close()
+        with patch.object(app, "fetch_channel", side_effect=ValueError("канал не найден")):
+            code = audit_media.main(path)
+        self.assertEqual(code, 3)
+
+    # --- интерфейс ---
+
+    def source(self, name):
+        path = os.path.join(UI_SRC, name)
+        with open(path, encoding="utf-8") as page:
+            return page.read()
+
+    def test_catalog_description_uses_the_field_the_server_sends(self):
+        """Сервер отдаёт desc, а не description: описание канала должно быть видно."""
+        html = self.source("components/CatalogView.svelte")
+        self.assertIn("channel.desc", html)
+        self.assertNotIn("channel.description", html)
+
+    def test_channel_title_uses_the_field_the_server_sends(self):
+        """Сервер отдаёт titles (словарь), а не title: заголовок канала должен обновляться."""
+        html = self.source("components/ChannelView.svelte")
+        self.assertIn("answer.titles", html)
+
+    def test_raw_markup_is_only_used_where_the_server_cleaned_it(self):
+        """{@html} — только там, где разметку прислал и почистил сервер."""
+        allowed = {"post.text", "tgQr", "paths[name]", "paths[name] || ''"}
+        found = set()
+        for root, _dirs, files in os.walk(UI_SRC):
+            for name in files:
+                if not name.endswith(".svelte"):
+                    continue
+                with open(os.path.join(root, name), encoding="utf-8") as page:
+                    found.update(re.findall(r"\{@html\s+([^}]+)\}", page.read()))
+        self.assertTrue(found)
+        for expression in found:
+            with self.subTest(expression=expression):
+                self.assertIn(expression, allowed)
+
+

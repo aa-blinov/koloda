@@ -1,0 +1,29 @@
+{
+  "name": "koloda-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "The interface of Koloda: the Monos kit, Svelte 4 and Vite.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "check": "svelte-check --tsconfig ./jsconfig.json"
+  },
+  "dependencies": {
+    "@monos/ui": "github:aa-blinov/monos-ui#v1.0.3"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.0.1",
+    "@testing-library/svelte": "^5.2.8",
+    "autoprefixer": "^10.4.16",
+    "jsdom": "^24.1.1",
+    "postcss": "^8.4.32",
+    "svelte": "^4.2.7",
+    "svelte-check": "^4.4.8",
+    "tailwindcss": "^3.4.0",
+    "vite": "^5.0.8",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: koloda
-description: A reader for public Telegram channels. One warm palette in two themes, one monospaced face, cards on a ground, and icons drawn as inline SVG in one stroke.
+description: A reader for public Telegram channels on the Monos kit: warm palettes, one monospaced face, cards on a ground, and icons drawn as inline SVG in one stroke.
 colors:
   dark:
     bg: "#282828"
@@ -109,14 +109,31 @@ The confirmed rejections:
 - No second typeface inside a screen. The serif face is a setting of the
   profile, not a choice per component.
 
+## Where the system lives
+
+The system is the [Monos kit](https://github.com/aa-blinov/monos-ui): the
+palettes, the radius, the spacing scale, the controls and the icons of the
+interface. Koloda takes the kit as it is and adds only what belongs to the
+product: the column of the feed, the text of a post, the album of the frames
+and the rows of the catalog.
+
+The kit is a dependency with a fixed version (`ui/package.json`), and its tokens
+are the only source of colour, radius and spacing in the product. A colour of
+one's own breaks the theme, and `check_ui.py` fails on it.
+
+The rules below describe the product on top of the kit. Where the kit and this
+document used to disagree, the kit wins.
+
 **Key characteristics:**
 
-- One palette in two themes, chosen by the profile and stored with it.
+- The palette and the lightness are chosen by the profile and stored with it:
+  one of the six palettes of the kit, dark or light or as in the system.
 - One typeface, JetBrains Mono, served from the address of the service
   itself, so the page does not ask a third party for a font.
-- One radius, 6 px, on every rectangle. The pill belongs to the search, the
-  circle to the dots and to the scrollbar.
-- One spacing scale of 4 px. A value outside the scale is rounded up.
+- One radius, the one of the kit, on every rectangle. The pill belongs to the
+  search, the circle to the dots and to the scrollbar.
+- One spacing scale, the one of the kit: 2, 4, 6, 8, 10, 12, 16, 24 and 32 px.
+  A value outside the scale is not written at all.
 - Depth is tone. A shadow appears only on the dialog and when a card is
   lifted.
 - Icons are inline SVG, 16 px, one stroke, `currentColor`.

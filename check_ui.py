@@ -1,83 +1,162 @@
 #!/usr/bin/env python3
-"""Проверка целостности index.html без браузера.
+"""Проверка целостности интерфейса без браузера.
 
-Ловит класс ошибок, из-за которого интерфейс молча ломается: скрипт ссылается
-на id, которого нет в разметке, или использует класс без соответствующих
-стилей. В обоих случаях в консоли нет ошибок: просто ничего не работает.
+Интерфейс теперь собирается: исходники в ui/src, готовые файлы в ui/dist.
+Проверка ловит то, что не видно до первого запроса в браузере: несуществующий
+компонент, иконку без пути, цвет вне токенов, отступ вне шкалы, ссылку на
+внешний скрипт.
 
-Запуск: python3 check_ui.py
+    python3 check_ui.py
+
+Ни одного аргумента: файлы читаются рядом с собой.
 """
+import os
 import re
 import sys
 
-HTML = open(__file__.replace("check_ui.py", "index.html"), encoding="utf-8").read()
+BASE = os.path.dirname(os.path.abspath(__file__))
+UI = os.path.join(BASE, "ui")
+SRC = os.path.join(UI, "src")
+DIST = os.path.join(UI, "dist")
 
-# --- id, на которые ссылается скрипт: $('#foo') и getElementById('foo') ---
-used = set(re.findall(r"\$\('#([\w-]+)'\)", HTML))
-used |= set(re.findall(r"getElementById\('([\w-]+)'\)", HTML))
+problems = []
 
-# --- id, объявленные в разметке: id="foo" (в том числе в разметке внутри <script>) ---
-declared = set(re.findall(r'id="([\w-]+)"', HTML))
 
-missing = sorted(used - declared)
-if missing:
-    print("НЕТ В РАЗМЕТКЕ:", ", ".join(missing))
-    sys.exit(1)
-print(f"id: {len(used)} используется, все найдены")
+def fail(message):
+    problems.append(message)
 
-# --- классы, которые скрипт вешает через classList.add / className ---
-toggled = set(re.findall(r"classList\.(?:add|remove)\('([\w-]+)'\)", HTML))
-css_classes = set(re.findall(r"\.([a-zA-Z][\w-]*)\s*[,{:]", HTML))
 
-# classList.add('open') означает состояние, а не имя класса в разметке
-missing_css = sorted(c for c in toggled if c not in css_classes)
-if missing_css:
-    print("КЛАСС БЕЗ СТИЛЕЙ:", ", ".join(missing_css))
-    sys.exit(1)
-print(f"классы-переключатели: {len(toggled)}, у всех есть стили")
+def read(path):
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
 
-# --- оверлеи обязаны быть position:fixed, иначе раздвигают страницу ---
-overlays = re.findall(r'<div class="ov[^"]*" id="([\w-]+)"', HTML)
-fixed = len(re.findall(r"\.ov\s*\{[^}]*position:\s*fixed", HTML))
-if overlays and not fixed:
-    print("ОВЕРЛЕЙ БЕЗ position:fixed, раздвинет страницу")
-    sys.exit(1)
-print(f"оверлеи: {len(overlays)}, position:fixed есть")
 
-# --- режимы формы: setAuthMode обязан знать каждый режим, в который его зовут.
-#     Вызов с незнакомым именем не падает: форма молча остаётся в прежнем виде.
-auth_mode = re.search(r"function setAuthMode\(mode\)\{.*?\n\}", HTML, re.S)
-if not auth_mode:
-    print("НЕТ ФУНКЦИИ setAuthMode")
-    sys.exit(1)
-auth_mode = auth_mode.group(0)
-known = set(re.findall(r"=mode==='(\w+)'", auth_mode))
-unknown = sorted(set(re.findall(r"setAuthMode\('(\w+)'\)", HTML)) - known)
-if unknown:
-    print("НЕИЗВЕСТНЫЙ РЕЖИМ ФОРМЫ:", ", ".join(unknown))
+def svelte_files():
+    found = []
+    for root, _dirs, files in os.walk(SRC):
+        for name in sorted(files):
+            if name.endswith(".svelte") or name.endswith(".js"):
+                found.append(os.path.join(root, name))
+    return sorted(found)
+
+
+# --- исходники на месте ---
+
+for needed in ("package.json", "vite.config.js", "tailwind.config.js", "index.html"):
+    if not os.path.exists(os.path.join(UI, needed)):
+        fail("НЕТ ФАЙЛА: ui/%s" % needed)
+for needed in ("main.js", "App.svelte", "app.css"):
+    if not os.path.exists(os.path.join(SRC, needed)):
+        fail("НЕТ ФАЙЛА: ui/src/%s" % needed)
+
+if problems:
+    for line in problems:
+        print(line)
     sys.exit(1)
 
-# --- кнопка отправки: у неё своя надпись для части режимов, и прятать её можно
-#     только там, где надписи нет. Иначе режим остаётся с текстом «нажми кнопку»
-#     и без самой кнопки — как было с подтверждением почты.
-label_expr = re.search(r"\$\('#authSubmit'\)\.textContent=([^;]+);", HTML)
-hidden_expr = re.search(r"\$\('#authSubmit'\)\.hidden=([^;]+);", HTML)
-if not label_expr or not hidden_expr:
-    print("КНОПКЕ ОТПРАВКИ НЕТ НАДПИСИ ИЛИ СКРЫТИЯ")
-    sys.exit(1)
-labeled = set(re.findall(r"(\w+)\?'[^']*'", label_expr.group(1)))
-hid = {flag.strip() for flag in hidden_expr.group(1).split("||")}
-lost = sorted(labeled & hid)
-if lost:
-    print("КНОПКА СПРЯТАНА ТАМ, ГДЕ У НЕЁ ЕСТЬ НАДПИСЬ:", ", ".join(lost))
-    sys.exit(1)
-print(f"режимы формы: {len(known)}, все вызовы известны; "
-      f"кнопка на месте во всех {len(labeled)} режимах с надписью")
+files = svelte_files()
+sources = {path: read(path) for path in files}
 
-# --- внешние скрипты не должны появляться: сервис работает без сборки ---
-if re.search(r"<script[^>]+src=", HTML):
-    print("ВНЕШНИЙ СКРИПТ: сборка не нужна, но он подключается извне")
-    sys.exit(1)
+# --- каждый импорт с относительным путём ведёт в существующий файл ---
+
+IMPORT = re.compile(r"""(?:from|import)\s+['"](\.[^'"]+)['"]""")
+for path, text in sources.items():
+    for target in IMPORT.findall(text):
+        if target.endswith(".css"):
+            continue
+        resolved = os.path.normpath(os.path.join(os.path.dirname(path), target))
+        if not any(resolved == other or resolved + ".svelte" == other
+                   or resolved + ".js" == other for other in sources):
+            fail("НЕТ ФАЙЛА: %s импортирует %s" % (os.path.relpath(path, BASE), target))
+
+# --- каждая иконка нарисована ---
+
+icon_source = sources.get(os.path.join(SRC, "components", "Icon.svelte"), "")
+icon_names = set(re.findall(r"^\s{4}([a-z]+):\s*'", icon_source, re.M))
+if not icon_names:
+    fail("ИКОНКИ: в Icon.svelte нет ни одной иконки")
+used = set()
+for path, text in sources.items():
+    if path.endswith("Icon.svelte"):
+        continue
+    used.update(re.findall(r'<Icon\s+name="([a-z]+)"', text))
+    used.update(re.findall(r"icon:\s*'([a-z]+)'", text))
+for name in sorted(used - icon_names):
+    fail("ИКОНКА БЕЗ ПУТИ: %s" % name)
+print("иконок нарисовано: %d, использовано: %d" % (len(icon_names), len(used)))
+
+# --- цвет приходит из токенов кита, а не из своего ---
+
+# Свой цвет в разметке ломает тему: палитра перестаёт переключаться.
+HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+for path, text in sources.items():
+    if path.endswith(("Icon.svelte",)):
+        continue
+    for line in text.splitlines():
+        code = line.split("//")[0]
+        if HEX.search(code):
+            fail("СВОЙ ЦВЕТ: %s: %s" % (os.path.relpath(path, BASE), line.strip()[:90]))
+print("своих цветов нет: цвета только из токенов кита")
+
+# --- отступы на шкале кита ---
+
+SCALE = {2, 4, 6, 8, 10, 12, 16, 20, 24, 32}
+SPACING = re.compile(r"(?<![\w-])(?:padding|margin|gap)(?:-(?:top|right|bottom|left))?\s*:\s*([^;{}]*)")
+for path, text in sources.items():
+    for value in SPACING.findall(text):
+        for px in re.findall(r"(?<![\w.-])(\d+)px", value):
+            if int(px) not in SCALE:
+                fail("ОТСТУП ВНЕ ШКАЛЫ: %s: %spx" % (os.path.relpath(path, BASE), px))
+print("отступы на шкале кита")
+
+# --- стили кита подключены ---
+
+kit_styles = any("@monos/ui/styles.css" in text for text in sources.values())
+if not kit_styles:
+    fail("НЕТ СТИЛЕЙ КИТА: ни один файл не подключает @monos/ui/styles.css")
+print("стили кита подключены")
+
+# --- внешних скриптов нет ---
+
+entry = read(os.path.join(UI, "index.html"))
+if re.search(r"<script[^>]+src=[\"']https?://", entry):
+    fail("ВНЕШНИЙ СКРИПТ: сборка не нужна, а скрипт подключается извне")
+if re.search(r"<link[^>]+href=[\"']https?://", entry):
+    fail("ВНЕШНИЙ СКРИПТ: внешняя таблица стилей")
+if "cdn" in entry:
+    fail("ВНЕШНИЙ СКРИПТ: ссылка на cdn")
 print("внешних скриптов нет")
+
+# --- палитра выбирается атрибутом, как это делает ки�� ---
+
+if "data-theme" not in entry or "data-mode" not in entry:
+    fail("НЕТ ТЕМЫ: в разметке нет data-theme и data-mode")
+print("тема и светлота выбираются атрибутом")
+
+# --- собранный вывод ---
+
+if os.path.isdir(DIST):
+    built_index = os.path.join(DIST, "index.html")
+    if not os.path.exists(built_index):
+        fail("СБОРКА: в ui/dist нет index.html")
+    else:
+        page = read(built_index)
+        assets = re.findall(r'(?:src|href)="(/assets/[^"]+)"', page)
+        if not assets:
+            fail("СБОРКА: собранный index.html не ссылается на файлы сборки")
+        for asset in assets:
+            if not os.path.exists(os.path.join(DIST, asset.lstrip("/"))):
+                fail("СБОРКА: нет файла %s" % asset)
+        if "<script>" in page and "type=\"module\"" not in page:
+            fail("СБОРКА: в собранной странице есть обычный скрипт")
+        print("сборка на месте: %d файлов в assets" % len(assets))
+else:
+    print("сборки нет: ui/dist её соберёт npm run build")
+
+if problems:
+    print()
+    for line in problems:
+        print(line)
+    sys.exit(1)
 
 print("\nвсё в порядке")

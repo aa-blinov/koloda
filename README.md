@@ -110,9 +110,10 @@ browser -> app.py (ThreadingHTTPServer) -> SQLite (feed.db)
                                   \-> tg.py -> Telegram          private channels, by QR login
 ```
 
-The service is one Python process on the standard library alone, and the whole
-interface is one `index.html`: markup, styles and script in a single file, with
-no build step and no script from outside. The only dependency in the image is
+The service is one Python process on the standard library alone. The interface
+is a Svelte 4 app built with Vite on the [Monos](https://github.com/aa-blinov/monos-ui)
+kit: the sources are in `ui/`, the ready files in `ui/dist`, and the server hands
+over the built files. The only dependency of the service in the image is
 `telethon==1.45.0`, and it is imported only when a profile connects Telegram.
 
 Posts come from the public preview page `t.me/s/<username>`. Telegram serves it
@@ -199,16 +200,23 @@ same values from `TG_API_ID` and `TG_API_HASH`.
 ## Development
 
 ```bash
+cd ui && npm ci                  # the dependencies of the interface, once
+cd ui && npm run build           # the interface: the sources in ui/src, the files in ui/dist
+cd ui && npm run dev             # the interface on http://127.0.0.1:5180, the API is proxied
 docker compose up -d --build    # rebuild after a change to the code
 docker compose logs -f           # the log
 docker compose down              # stop
 ```
 
-The tests and the check of the markup run on every push in GitHub Actions:
+The server hands over the built interface, so after a change in `ui/` the build
+has to be repeated. The image builds the interface itself, in the `ui` stage of
+the Dockerfile.
+
+The tests and the check of the interface run on every push in GitHub Actions:
 
 ```bash
-python3 -m unittest -v           # 133 tests: no network, no Telegram, a temporary database
-python3 check_ui.py              # the integrity of index.html, without a browser
+python3 -m unittest -v           # the tests: no network, no Telegram, a temporary database
+python3 check_ui.py              # the integrity of the interface, without a browser
 docker build -t koloda:ci .      # the image builds
 ```
 
@@ -217,7 +225,8 @@ name: a new module without a line in `COPY` builds and then fails at the first
 request.
 
 The audit of the media compares the database with what t.me serves right now.
-It needs the internet, and it is not part of the tests:
+It needs the internet, so it is not part of the test run; only its exit code is
+covered, and that without the network:
 
 ```bash
 docker compose exec -T feed python3 -c "import sqlite3;s=sqlite3.connect('/data/feed.db');d=sqlite3.connect('/tmp/feed.db');s.backup(d);d.close();s.close()" && docker compose cp feed:/tmp/feed.db ./feed.db && docker compose exec -T feed rm /tmp/feed.db && python3 audit_media.py
@@ -227,6 +236,12 @@ The copy is made with SQLite inside the container: the database runs in WAL, so
 copying the single file `feed.db` could lose the last records. The script finds
 the posts where an emoji stayed in the database instead of a photo, the lost
 frames of an album and the stale addresses.
+
+The script says how much it managed to check and returns a code: `0` when
+everything matches, `1` when there are mismatches, `2` when there is nothing to
+check, and `3` when the check was incomplete. The third code matters: zero
+mismatches over a check that saw nothing is a broken parser, not a clean
+result.
 
 The user paths are described in `docs/user-paths.md`, each with an ID. The
 browser check walks the paths that can be checked on a running stand. It needs
@@ -246,14 +261,14 @@ needs posts which the stand does not have is SKIP, not PASS.
 | Path | What it holds |
 | --- | --- |
 | `app.py` | The server: the parsing of t.me, the API, the profiles, the sessions, the letters, the serving of the interface. |
-| `index.html` | The interface: markup, styles and script in one file, no build. |
+| `ui/` | The interface: Svelte 4, Vite and the Monos kit. The sources in `ui/src`, the build in `ui/dist`. |
 | `tg.py` | The Telegram layer: the login by link and the reading of the private channels. |
 | `qrsvg.py`, `qrcodegen.py` | The QR code of the login link. `qrcodegen.py` is the encoder from Project Nayuki, unchanged. |
 | `test_app.py` | The tests. |
 | `check_ui.py` | The integrity of the markup, without a browser. |
 | `ui_paths_check.py` | The user paths of `docs/user-paths.md` in a browser, on a running stand. A service script: not in the image, not in the tests. |
 | `docs/user-paths.md` | The user paths, with their IDs and what checks them. |
-| `audit_media.py` | The audit of the media against t.me. A service script: it is not in the image and it is not in the tests. |
+| `audit_media.py` | The audit of the media against t.me. A service script: it is not in the image. Only its exit code is covered by the tests, without the network. |
 | `sync.py`, `serve.py` | The old variant with Telethon and RSS. The current service does not call them. |
 | `fonts/` | JetBrains Mono, served from the address of the service itself. |
 | `docs/` | The screenshots of this file. |

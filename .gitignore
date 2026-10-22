@@ -11,3 +11,7 @@ docker-compose.override.yml
 # The house standard's own files. The rule above
 # was meant for the repository's config, not for these.
 !.impeccable/config.json
+
+# The interface: the dependencies and the build do not belong in the repository.
+ui/node_modules/
+ui/dist/
