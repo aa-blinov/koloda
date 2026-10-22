@@ -285,7 +285,13 @@
     };
   });
 
-  $: if (feedMode) load(false);
+  // Смена режима (лента ↔ сохранённое) перечитывает список. При первом
+  // показе загрузку делает onMount: иначе запрос уходил бы дважды.
+  let lastFeedMode = feedMode;
+  $: if (feedMode !== lastFeedMode) {
+    lastFeedMode = feedMode;
+    load(false);
+  }
 </script>
 
 <div class="pull" data-drag={pullHeight ? '1' : null} style="height: {pullHeight}px">
