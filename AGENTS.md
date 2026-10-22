@@ -131,6 +131,14 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   broken parser. The same goes for the exit code of any check of the live data.
 - **`sync.py` and `serve.py` are the old variant with Telethon and RSS.** The
   current service does not call them. Do not touch them without being asked.
+- **`ui_paths_check.py` walks the interface in a browser and is a service
+  script.** It is not in the image and not in the tests, and it needs a running
+  stand with its data directory. After the move to the kit it was rewritten to
+  the new markup: the windows are the kit's dialogs and are found by their role,
+  and where the layout changed, the check looks by the role and the label. The
+  steps of the collection paths changed with the interface: a collection is now
+  created in the list of the channels, and its channels are ticked in the
+  editor. `check_ui.py` compiles the script, so a typo in it cannot hide.
 
 ## Style / safety rails
 
