@@ -128,7 +128,7 @@
       </IconButton>
     </span>
 
-    <span class="count" aria-live="polite">{total > 1 ? `${index + 1} из ${total}` : ''}</span>
+    <span class="count" id="lbN" aria-live="polite">{total > 1 ? `${index + 1} из ${total}` : ''}</span>
   </div>
 </Modal>
 

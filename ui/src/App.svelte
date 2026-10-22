@@ -40,6 +40,7 @@
   let search = '';
   let channelsOpen = false;
   let collection = null;      // редактируемая коллекция
+  let collectionChannel = ''; // канал, чьи коллекции правятся
   let collectionFilter = null; // коллекция, по которой отфильтрована лента
   let lightbox = null;
   let booting = true;
@@ -314,9 +315,22 @@
       collection = event.detail;
       channelsOpen = false;
     }}
+    on:channelCollections={(event) => {
+      collectionChannel = event.detail;
+      collection = null;
+      channelsOpen = false;
+    }}
   />
 
-  <CollectionDialog open={Boolean(collection)} {collection} on:close={() => (collection = null)} />
+  <CollectionDialog
+    open={Boolean(collection) || Boolean(collectionChannel)}
+    {collection}
+    channel={collectionChannel}
+    on:close={() => {
+      collection = null;
+      collectionChannel = '';
+    }}
+  />
 
   <Lightbox items={lightbox} on:close={() => (lightbox = null)} />
 

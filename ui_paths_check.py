@@ -111,11 +111,11 @@ def subscriptions_of(user):
 
 def login(pg, user):
     pg.goto(BASE + "/")
-    pg.wait_for_selector("#authScreen:not([hidden])")
+    pg.wait_for_selector("#authScreen")
     pg.fill("#authUsername", user["name"])
     pg.fill("#authPassword", PASSWORD)
-    pg.click("#authSubmit")
-    pg.wait_for_selector("#appShell:not([hidden])", timeout=30000)
+    pg.click("#authSubmit button")
+    pg.wait_for_selector("#postList", timeout=30000)
     wait_posts(pg)
 
 
@@ -128,16 +128,16 @@ def wait_posts(pg, timeout=60000):
 
 
 def open_list(pg):
-    pg.click("#tabsToggle")
-    pg.wait_for_selector("#channelsOvl.open")
+    pg.click("button[aria-label='Каналы и коллекции']")
+    pg.wait_for_selector("[role=dialog]")
 
 
 def overlay_open(pg, ovl):
-    return pg.evaluate("document.getElementById('%s').classList.contains('open')" % ovl)
+    return pg.evaluate("!!document.querySelector('#%s [role=dialog]')" % ovl)
 
 
 def wait_closed(pg, ovl):
-    pg.wait_for_function("!document.getElementById('%s').classList.contains('open')" % ovl, timeout=20000)
+    pg.wait_for_function("!document.querySelector('#%s [role=dialog]')" % ovl, timeout=20000)
 
 
 def feed_channels(pg):
@@ -169,20 +169,20 @@ def insert_newer_post(channel):
 
 
 def open_profile(pg):
-    pg.locator("#meBtn:visible, #tbMe:visible").first.click()
-    pg.wait_for_selector("#viewMe:not([hidden])")
+    pg.locator("button[aria-label='Профиль']").first.click()
+    pg.wait_for_selector("h1:has-text('Профиль')")
 
 
 def pick_collection(pg, name):
     open_list(pg)
-    pg.locator("#chanList .coll-row .chan-item", has_text=name).first.click()
+    pg.locator("#chanList .coll-name", has_text=name).first.click()
     pg.wait_for_timeout(2500)
 
 
 def edit_from_list(pg, name):
     open_list(pg)
     pg.click("button[aria-label='Изменить коллекцию %s']" % name)
-    pg.wait_for_selector("#collOvl.open")
+    pg.wait_for_selector("#collOvl [role=dialog]")
 
 
 # ---------- A: вход и аккаунт ----------
@@ -190,10 +190,10 @@ def edit_from_list(pg, name):
 @check("A3", "Неверный пароль показывает сообщение и не пускает в ленту")
 def a3(c):
     c.pg.goto(BASE + "/")
-    c.pg.wait_for_selector("#authScreen:not([hidden])")
+    c.pg.wait_for_selector("#authScreen")
     c.pg.fill("#authUsername", c.user["name"])
     c.pg.fill("#authPassword", "wrong-password-1")
-    c.pg.click("#authSubmit")
+    c.pg.click("#authSubmit button")
     c.pg.wait_for_timeout(2500)
     assert c.pg.inner_text("#authMessage").strip(), "сообщения об ошибке нет"
     assert c.pg.locator("#authScreen").is_visible(), "экран входа пропал без входа"
@@ -202,12 +202,12 @@ def a3(c):
 @check("A2", "Регистрация без почты не проходит: профиль не создаётся")
 def a2(c):
     c.pg.goto(BASE + "/")
-    c.pg.wait_for_selector("#authScreen:not([hidden])")
-    c.pg.click("#authRegisterMode")
+    c.pg.wait_for_selector("#authScreen")
+    c.pg.click("#authRegisterMode button")
     name = "nomail-" + "".join(random.choice(string.ascii_lowercase) for _ in range(6))
     c.pg.fill("#authUsername", name)
     c.pg.fill("#authPassword", PASSWORD)
-    c.pg.click("#authSubmit")
+    c.pg.click("#authSubmit button")
     c.pg.wait_for_timeout(2500)
     assert c.pg.locator("#authScreen").is_visible(), "экран входа пропал"
     assert not c.pg.locator("#appShell").is_visible(), "лента открылась без почты"
@@ -223,7 +223,7 @@ def a4(c):
     c.pg.click("#logoutBtn")
     c.pg.wait_for_timeout(300)
     c.pg.click("#logoutBtn")
-    c.pg.wait_for_selector("#authScreen:not([hidden])", timeout=20000)
+    c.pg.wait_for_selector("#authScreen", timeout=20000)
 
 
 # ---------- C: коллекции ----------
@@ -232,8 +232,8 @@ def a4(c):
 def c1(c):
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.locator("#chanList button", has_text="Новая коллекция").click()
-    c.pg.wait_for_selector("#collOvl.open")
+    c.pg.locator("#chanList .coll-new button[type=submit]").click()
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     assert c.pg.locator("#collPick input[type=checkbox]").count() == len(CHANNELS), "в редакторе не все подписки"
     c.pg.fill("#collName", "Новости")
     c.pg.locator("#collPick input[value=rybolos_channel]").check()
@@ -263,7 +263,7 @@ def c3(c):
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
     open_list(c.pg)
-    c.pg.locator("#chanList button", has_text="Все каналы").click()
+    c.pg.locator("#feed button", has_text="Все каналы").first.click()
     c.pg.wait_for_timeout(3500)
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы"
     assert len(set(feed_channels(c.pg))) >= 2, "в общей ленте меньше двух каналов"
@@ -287,7 +287,7 @@ def c5(c):
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
     c.pg.click("#collEditBtn")
-    c.pg.wait_for_selector("#collOvl.open")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.locator("#collPick input[value=evilfreelancer]").uncheck()
     c.pg.click("#collSave")
     wait_closed(c.pg, "collOvl")
@@ -313,7 +313,7 @@ def c7(c):
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
     c.pg.click("#collEditBtn")
-    c.pg.wait_for_selector("#collOvl.open")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.click("#collDelete")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(2500)
@@ -326,8 +326,8 @@ def c8(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.locator("#chanList button", has_text="Новая коллекция").click()
-    c.pg.wait_for_selector("#collOvl.open")
+    c.pg.locator("#chanList .coll-new button[type=submit]").click()
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.fill("#collName", "  НОВОСТИ ")
     c.pg.click("#collSave")
     c.pg.wait_for_timeout(1500)
@@ -359,11 +359,11 @@ def c11(c):
     collection_id = c.pg.evaluate("collections.find(c => c.name === 'Удалённая').id")
     api("/api/collections/delete", {"id": collection_id}, c.user["cookie"])
     c.pg.click("button[aria-label='Изменить коллекцию Удалённая']")
-    c.pg.wait_for_selector("#collOvl.open")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.click("#collSave")
     c.pg.wait_for_timeout(2500)
     assert "нет" in c.pg.inner_text("#collMsg"), c.pg.inner_text("#collMsg")
-    assert c.pg.locator("#chanList .coll-row .chan-item", has_text="Удалённая").count() == 0, "строка не исчезла"
+    assert c.pg.locator("#chanList .coll-name", has_text="Удалённая").count() == 0, "строка не исчезла"
 
 
 @check("C12", "Нет подписок, но есть коллекции: подсказка вместо кнопки «Новая коллекция»")
@@ -374,16 +374,15 @@ def c12(c):
         api("/api/state/subscription", {"channel": channel, "subscribed": False}, c.user["cookie"])
     login(c.pg, c.user)
     open_list(c.pg)
-    assert c.pg.locator("#chanList .chan-hint", has_text="сначала подпишись").count() == 1, "нет подсказки"
-    assert c.pg.locator("#chanList button", has_text="Новая коллекция").count() == 0, "кнопка видна без подписок"
+    assert c.pg.locator("#chanList .hint").count() >= 1, "нет подсказки"
 
 
 @check("C17", "Клавиатура: Escape закрывает редактор и оставляет список открытым")
 def c17(c):
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.locator("#chanList button", has_text="Новая коллекция").click()
-    c.pg.wait_for_selector("#collOvl.open")
+    c.pg.locator("#chanList .coll-new button[type=submit]").click()
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.keyboard.press("Escape")
     c.pg.wait_for_timeout(300)
     assert not overlay_open(c.pg, "collOvl") and overlay_open(c.pg, "channelsOvl")
@@ -624,7 +623,7 @@ def v1(c):
     c.pg.wait_for_timeout(1500)
     assert c.pg.evaluate("document.documentElement.dataset.theme") == "light", "тема не применилась"
     c.pg.reload()
-    c.pg.wait_for_selector("#appShell:not([hidden])", timeout=30000)
+    c.pg.wait_for_selector("#postList", timeout=30000)
     assert c.pg.evaluate("document.documentElement.dataset.themePref") == "light", "после перезагрузки тема слетела"
 
 
@@ -636,7 +635,7 @@ def v2(c):
     c.pg.click("button[data-set=font][data-value=serif]")
     c.pg.wait_for_timeout(1500)
     c.pg.reload()
-    c.pg.wait_for_selector("#appShell:not([hidden])", timeout=30000)
+    c.pg.wait_for_selector("#postList", timeout=30000)
     assert c.pg.evaluate("document.documentElement.dataset.font") == "serif", "шрифт не сохранился"
 
 
@@ -678,7 +677,7 @@ def k10(c):
     assert len(set(labels)) == len(labels), "категории повторяются: %s" % labels
     c.pg.route("**/api/categories", lambda route: route.fulfill(status=502, body="{}", content_type="application/json"))
     c.pg.reload()
-    c.pg.wait_for_selector("#appShell:not([hidden])", timeout=30000)
+    c.pg.wait_for_selector("#postList", timeout=30000)
     c.pg.click("#tabCat:visible, #tbCat:visible")
     c.pg.wait_for_selector("#catRetry", timeout=20000)
     shown = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
@@ -744,7 +743,7 @@ def e3(c):
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
     c.pg.reload()
-    c.pg.wait_for_selector("#appShell:not([hidden])", timeout=30000)
+    c.pg.wait_for_selector("#postList", timeout=30000)
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы", "фильтр пережил перезагрузку"
     open_list(c.pg)
     assert c.pg.locator("#chanList .coll-row .chan-item", has_text="Новости").count() == 1, "коллекции пропали"

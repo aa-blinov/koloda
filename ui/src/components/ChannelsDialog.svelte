@@ -81,6 +81,9 @@
 
   const letter = (name) => (String(name || '').trim()[0] || '?').toUpperCase();
 
+  // Коллекции, в которых лежит канал: их число показывает кнопка в строке.
+  const collectionsOf = (name) => $collections.filter((c) => (c.channels || []).includes(name));
+
   function pickChannel(channel) {
     dispatch('openChannel', channel);
   }
@@ -191,10 +194,11 @@
         description="Открой каталог, выбери нужные, и они появятся здесь."
       />
     {:else}
-      <div class="list">
+      <div class="list" id="chanList">
         {#each $subs as channel (channel)}
           {@const item = historyBy.get(channel)}
           {@const name = $titles[channel] || channel}
+          <div class="row">
           <button type="button" class="chan" on:click={() => pickChannel(channel)}>
             <span class="photo" aria-hidden="true">
               {#if $avatars.get(channel) && !broken.has(channel)}
@@ -221,6 +225,17 @@
               </span>
             {/if}
           </button>
+          <!-- Быстрое «в коллекцию»: канал и его коллекции, без похода в каталог. -->
+          <button
+            type="button"
+            class="quiet-btn"
+            on:click={() => dispatch('channelCollections', channel)}
+          >
+            {collectionsOf(channel).length
+              ? 'В коллекциях: ' + collectionsOf(channel).length
+              : 'В коллекцию'}
+          </button>
+          </div>
         {/each}
       </div>
     {/if}
@@ -352,6 +367,31 @@
     flex-direction: column;
     gap: 2px;
     margin-top: 4px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-snug);
+  }
+
+  .quiet-btn {
+    flex: 0 0 auto;
+    min-height: var(--ui-control-touch);
+    padding: 0 var(--ui-space-base);
+    background: none;
+    border: 0;
+    border-radius: var(--ui-radius);
+    color: var(--ui-ink-soft);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .quiet-btn:hover {
+    color: var(--ui-ink);
+    background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
   }
 
   .chan {

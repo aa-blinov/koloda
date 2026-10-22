@@ -114,7 +114,7 @@
   }
 </script>
 
-<main class="auth-screen">
+<main class="auth-screen" id="authScreen">
   <div class="auth-card">
     <Card>
     <div class="auth-brand">
@@ -130,14 +130,17 @@
       <Button variant="text" on:click={() => setMode('login')} aria-pressed={mode === 'login'}>
         Уже есть профиль
       </Button>
+      <span id="authRegisterMode">
       <Button variant="text" on:click={() => setMode('register')} aria-pressed={mode === 'register'}>
         Создать профиль
       </Button>
+      </span>
     </div>
 
     <form on:submit|preventDefault={submit}>
       {#if showEmail}
         <TextField
+          id="authEmail"
           type="email"
           label="Почта"
           bind:value={email}
@@ -149,6 +152,7 @@
 
       {#if showUsername}
         <TextField
+          id="authUsername"
           label="Имя профиля"
           bind:value={username}
           autocomplete="username"
@@ -159,6 +163,7 @@
 
       {#if showPassword}
         <TextField
+          id="authPassword"
           type="password"
           label="Пароль"
           bind:value={password}
@@ -169,6 +174,7 @@
 
       {#if showConfirm}
         <TextField
+          id="authConfirm"
           type="password"
           label="Повтори пароль"
           bind:value={confirm}
@@ -179,19 +185,23 @@
 
       <p class="auth-help">{help[mode] || ''}</p>
 
+      <div id="authMessage" role="status">
       {#if problem}
         <Notice tone="danger" title="Не получилось">{problem}</Notice>
       {/if}
       {#if message}
         <Notice tone="success" title="Готово">{message}</Notice>
       {/if}
+      </div>
       {#if bootError}
         <Notice tone="warning" title="Сервис">{bootError}</Notice>
       {/if}
 
+      <span id="authSubmit" class="submit">
       <Button type="submit" full loading={busy} size="lg">
         {mode === 'register' ? 'Создать профиль' : mode === 'forgot' ? 'Отправить письмо' : mode === 'reset' ? 'Сохранить пароль' : 'Войти'}
       </Button>
+      </span>
 
       <div class="auth-links">
         {#if mode === 'login'}
