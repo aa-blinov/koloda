@@ -189,7 +189,7 @@
   {/if}
 
   {#if categories.length}
-    <div class="filters" role="group" aria-label="Категории">
+    <div class="filters" id="cats" role="group" aria-label="Категории">
       <button
         type="button"
         class="chip"

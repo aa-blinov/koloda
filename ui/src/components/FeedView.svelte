@@ -262,11 +262,11 @@
   <span>Потяни, чтобы обновить</span>
 </div>
 
-<div class="column">
+<div class="column" id="feed">
   <div class="tabs-wrap">
     <button type="button" class="tabs-toggle" on:click={() => dispatch('openChannels')}>
       <Icon name="chevron" size={16} />
-      <span>{tab ? tab : 'Все каналы'}</span>
+      <span id="tabsToggleLabel">{collection ? collection.name : tab ? tab : 'Все каналы'}</span>
       <Icon name="chevron" size={16} />
     </button>
   </div>
@@ -290,6 +290,7 @@
     </Notice>
   {/if}
 
+  <div id="postList">
   {#if loading && !posts.length}
     <div class="skeletons">
       <Skeleton class="h-32" />
@@ -347,6 +348,7 @@
       </p>
     {/if}
   {/if}
+  </div>
 </div>
 
 <style>
