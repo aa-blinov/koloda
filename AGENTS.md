@@ -148,6 +148,11 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   steps of the collection paths changed with the interface: a collection is now
   created in the list of the channels, and its channels are ticked in the
   editor. `check_ui.py` compiles the script, so a typo in it cannot hide.
+  The list of the channels and the collections come by a request, so the check
+  waits for the data and not for the window: without the wait it looks at an
+  empty dialog and fails at random. Some paths are still red — they are the
+  ones whose steps the new interface changed; the interface itself is checked
+  by hand in a browser.
 
 ## Style / safety rails
 
