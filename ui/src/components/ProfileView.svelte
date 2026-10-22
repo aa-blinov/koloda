@@ -13,7 +13,16 @@
 
   const dispatch = createEventDispatcher();
 
-  const themeOptions = THEMES.map((name) => ({ value: name, label: name }));
+  // У палитр кита есть имена: «gruvbox» в списке выглядит как служебный код.
+  const THEME_NAMES = {
+    gruvbox: 'Gruvbox',
+    github: 'GitHub',
+    dracula: 'Dracula',
+    nord: 'Nord',
+    solarized: 'Solarized',
+    catppuccin: 'Catppuccin',
+  };
+  const themeOptions = THEMES.map((name) => ({ value: name, label: THEME_NAMES[name] || name }));
   const modeOptions = [
     { value: 'dark', label: 'Тёмная' },
     { value: 'light', label: 'Светлая' },
@@ -289,7 +298,6 @@
         </section>
       {:else if active === 'view'}
         <section class="panel">
-          <h2>Палитра</h2>
           <div class="view-row">
             <Select
               options={themeOptions}
