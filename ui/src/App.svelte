@@ -20,6 +20,8 @@
   import {
     session,
     subs,
+    setSubscription,
+    showUndo,
     collections as collectionsList,
     settings,
     syncStatus,
@@ -321,12 +323,15 @@
     }}
     on:editCollection={(event) => {
       collection = event.detail;
-      channelsOpen = false;
     }}
     on:channelCollections={(event) => {
       collectionChannel = event.detail;
       collection = null;
-      channelsOpen = false;
+    }}
+    on:unsubscribe={(event) => {
+      const channel = event.detail;
+      setSubscription(channel, false);
+      showUndo('Канал «' + channel + '» убран из ленты.', () => setSubscription(channel, true));
     }}
   />
 

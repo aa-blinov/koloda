@@ -173,20 +173,25 @@
 
   <form class="channel-form" on:submit|preventDefault={addByLink}>
     <TextField
+      id="channelInput"
       label="Канал по ссылке"
       bind:value={link}
       placeholder="@username или t.me/username"
       autocomplete="off"
     />
-    <Button type="submit">Добавить по ссылке</Button>
+    <span id="channelAdd">
+      <Button type="submit">Добавить по ссылке</Button>
+    </span>
   </form>
 
+  <div id="channelState" role="status">
   {#if linkState}
     <Notice tone="success" title="Готово">{linkState}</Notice>
   {/if}
   {#if linkError}
     <Notice tone="danger" title="Не получилось">{linkError}</Notice>
   {/if}
+  </div>
 
   {#if categories.length}
     <div class="filters" id="cats" role="group" aria-label="Категории">

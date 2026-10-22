@@ -106,12 +106,14 @@
 <div class="column ch-page" id="viewChannel">
   <Button variant="text" size="sm" on:click={() => dispatch('back')}>Назад в каталог</Button>
 
-  <h1>{title || channelName}</h1>
-  <p class="ch-meta">@{channelName}</p>
+  <h1 id="chTitle">{title || channelName}</h1>
+  <p class="ch-meta" id="chMeta">@{channelName}</p>
 
   <div class="ch-actions">
-    <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
-    <span id="chColl" class="ch-coll">
+    <span id="chAction">
+      <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
+    </span>
+    <span id="chColl" class="ch-coll" hidden={!subscribed}>
       <Button variant="text" size="sm" on:click={() => dispatch('channelCollections', channelName)}>
         {mine.length ? 'В коллекциях: ' + mine.length : 'В коллекцию'}
       </Button>
@@ -119,7 +121,7 @@
         {mine.length ? 'В коллекциях: ' + mine.map((c) => c.name).join(', ') : 'Пока ни в одной коллекции'}
       </span>
     </span>
-    <a class="ch-link" href={'https://t.me/' + channelName} target="_blank" rel="noopener">
+    <a class="ch-link" id="chTg" href={'https://t.me/' + channelName} target="_blank" rel="noopener">
       <Icon name="external" size={14} />
       Открыть в Telegram
     </a>
