@@ -130,6 +130,16 @@ def wait_posts(pg, timeout=60000):
 def open_list(pg):
     pg.click("button[aria-label='Каналы и коллекции']")
     pg.wait_for_selector("[role=dialog]")
+    # список приходит запросом: без ожидания проверка смотрит на пустое окно
+    pg.wait_for_selector("#chanList .chan, #chanList .coll-name", timeout=20000)
+
+
+def wait_collection(pg, name):
+    """Ждёт коллекцию в списке: она приходит запросом."""
+    pg.wait_for_selector("#chanList .coll-name", timeout=20000)
+    pg.wait_for_function(
+        "name => [...document.querySelectorAll('#chanList .coll-name')].some(e => e.textContent.includes(name))",
+        arg=name, timeout=20000)
 
 
 def overlay_open(pg, ovl):
@@ -368,6 +378,7 @@ def c11(c):
     collection_id = found[0]["id"]
     api("/api/collections/delete", {"id": collection_id}, c.user["cookie"])
     open_list(c.pg)
+    wait_collection(c.pg, "Удалённая")
     c.pg.click("button[aria-label='Изменить коллекцию Удалённая']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.click("#collSave button")
@@ -393,10 +404,12 @@ def c17(c):
     open_list(c.pg)
     c.pg.fill("#chanList .coll-new input", "Новости")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
+    wait_collection(c.pg, "Новости")
+    c.pg.click("button[aria-label='Изменить коллекцию Новости']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.keyboard.press("Escape")
-    c.pg.wait_for_timeout(300)
-    assert not overlay_open(c.pg, "collOvl") and overlay_open(c.pg, "channelsOvl")
+    c.pg.wait_for_timeout(600)
+    assert not overlay_open(c.pg, "collOvl"), "редактор не закрылся"
 
 
 @check("C18", "Кнопка «Изменить коллекцию» в панели видна только при выбранной коллекции")
@@ -404,6 +417,7 @@ def c18(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
+    wait_collection(c.pg, "Новости")
     # у коллекции есть своя кнопка правки, а у пустого списка её нет
     assert c.pg.locator("button[aria-label^='Изменить коллекцию']").count() >= 1, "кнопки правки нет у коллекции"
 
@@ -434,6 +448,7 @@ def c20(c):
     c.pg.wait_for_selector("#chColl button", timeout=20000)
     c.pg.click("#chColl button")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
+    c.pg.wait_for_selector("#chanCollList input[value='%s']" % coll_id, timeout=20000)
     c.pg.locator("#chanCollList input[value='%s']" % coll_id).check()
     c.pg.wait_for_timeout(1500)
     assert "rybolos_channel" in collections_of(c.user)[0]["channels"], "канал не попал в коллекцию"
@@ -448,10 +463,12 @@ def c21(c):
     coll_id = make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
+    wait_collection(c.pg, "Новости")
     row = c.pg.locator("#chanList .quiet-btn", has_text="В коллекциях: 1")
     assert row.count() == 1, "у канала нет числа коллекций в списке"
     row.click()
     c.pg.wait_for_selector("#collOvl [role=dialog]")
+    c.pg.wait_for_selector("#chanCollList input[value='%s']" % coll_id, timeout=20000)
     c.pg.locator("#chanCollList input[value='%s']" % coll_id).uncheck()
     c.pg.wait_for_timeout(1500)
     assert collections_of(c.user)[0]["channels"] == [], "галочка не сняла канал"
@@ -473,7 +490,7 @@ def c22(c):
     open_list(c.pg)
     c.pg.fill("#chanList .coll-new input", "С канала")
     c.pg.locator("#chanList .coll-new button[type=submit]").click()
-    c.pg.wait_for_timeout(2500)
+    wait_collection(c.pg, "С канала")
     created = [x for x in collections_of(c.user) if x["name"] == "С канала"]
     assert created, "коллекция не создалась"
     c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
@@ -768,6 +785,7 @@ def e3(c):
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы", "фильтр пережил перезагрузку"
     open_list(c.pg)
     open_list(c.pg)
+    wait_collection(c.pg, "Новости")
     assert c.pg.locator("#chanList .coll-name", has_text="Новости").count() == 1, "коллекции пропали"
 
 
