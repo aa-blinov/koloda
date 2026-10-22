@@ -213,12 +213,14 @@
           {catRu(item.name)}
         </button>
       {/each}
-      {#if categories.length > 12}
+    </div>
+    {#if categories.length > 12}
+      <div class="cats-more">
         <button type="button" class="chip" aria-pressed={allCategories} on:click={() => (allCategories = !allCategories)}>
           {allCategories ? 'Свернуть' : 'Все категории'}
         </button>
-      {/if}
-    </div>
+      </div>
+    {/if}
   {/if}
 
   <div class="sort-row">

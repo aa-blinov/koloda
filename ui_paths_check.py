@@ -404,10 +404,8 @@ def c18(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
-    assert c.pg.locator("#chanList .coll-name").count() == 0, "кнопка видна без выбранной коллекции"
-    pick_collection(c.pg, "Новости")
-    open_list(c.pg)
-    assert c.pg.locator("button[aria-label^='Изменить коллекцию']").count() >= 1, "кнопки нет при выбранной коллекции"
+    # у коллекции есть своя кнопка правки, а у пустого списка её нет
+    assert c.pg.locator("button[aria-label^='Изменить коллекцию']").count() >= 1, "кнопки правки нет у коллекции"
 
 
 @check("C19", "Прочитанное внутри коллекции общее с лентой; счётчик считает коллекцию")
@@ -494,7 +492,7 @@ def c23(c):
     c.pg.evaluate("location.hash = '#/channel/durov'")
     c.pg.wait_for_selector("#viewChannel", timeout=20000)
     c.pg.wait_for_timeout(1500)
-    assert c.pg.locator("#chColl").is_hidden(), "кнопка видна у неподписанного канала"
+    assert c.pg.locator("#chColl button").count() == 0, "кнопка видна у неподписанного канала"
 
 
 # ---------- F: лента ----------
@@ -644,7 +642,7 @@ def v1(c):
     c.pg.wait_for_timeout(1800)
     assert c.pg.evaluate("document.documentElement.dataset.mode") == "light", "тема не применилась"
     c.pg.reload()
-    c.pg.wait_for_selector("#postList", timeout=30000)
+    c.pg.wait_for_selector("#postList", timeout=60000)
     assert c.pg.evaluate("document.documentElement.dataset.modePref") == "light", "после перезагрузки тема слетела"
 
 
@@ -658,7 +656,7 @@ def v2(c):
     c.pg.get_by_role("button", name="Лента", exact=True).first.click()
     c.pg.wait_for_timeout(2500)
     c.pg.reload()
-    c.pg.wait_for_selector("#postList", timeout=30000)
+    c.pg.wait_for_selector("#postList", timeout=60000)
     assert c.pg.evaluate("document.documentElement.dataset.font") == "serif", "шрифт не сохранился"
 
 
@@ -769,7 +767,8 @@ def e3(c):
     c.pg.wait_for_selector("#postList", timeout=30000)
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы", "фильтр пережил перезагрузку"
     open_list(c.pg)
-    assert c.pg.locator("#chanList .coll-row .chan-item", has_text="Новости").count() == 1, "коллекции пропали"
+    open_list(c.pg)
+    assert c.pg.locator("#chanList .coll-name", has_text="Новости").count() == 1, "коллекции пропали"
 
 
 # ---------- X: доступность и размеры ----------

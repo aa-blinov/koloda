@@ -81,8 +81,13 @@
 
   const letter = (name) => (String(name || '').trim()[0] || '?').toUpperCase();
 
-  // Коллекции, в которых лежит канал: их число показывает кнопка в строке.
-  const collectionsOf = (name) => $collections.filter((c) => (c.channels || []).includes(name));
+  // Сколько коллекций у канала. Зависимость должна быть видна прямо в
+  // разметке: если магазин читать только внутри функции, Svelte не знает, что
+  // кнопка зависит от коллекций, и не перерисует её.
+  $: collectionCounts = $collections.reduce((map, coll) => {
+    (coll.channels || []).forEach((name) => map.set(name, (map.get(name) || 0) + 1));
+    return map;
+  }, new Map());
 
   function pickChannel(channel) {
     dispatch('openChannel', channel);
@@ -237,8 +242,8 @@
             class="quiet-btn"
             on:click={() => dispatch('channelCollections', channel)}
           >
-            {collectionsOf(channel).length
-              ? 'В коллекциях: ' + collectionsOf(channel).length
+            {collectionCounts.get(channel)
+              ? 'В коллекциях: ' + collectionCounts.get(channel)
               : 'В коллекцию'}
           </button>
           </div>
