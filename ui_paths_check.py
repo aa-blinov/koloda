@@ -355,8 +355,10 @@ def c11(c):
     make_collection(c.user, "Удалённая", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.wait_for_function("collections.some(c => c.name === 'Удалённая')", timeout=20000)
-    collection_id = c.pg.evaluate("collections.find(c => c.name === 'Удалённая').id")
+    c.pg.wait_for_timeout(2000)
+    found = [c for c in collections_of(c.user) if c["name"] == "Удалённая"]
+    assert found, "коллекции нет в списке"
+    collection_id = found[0]["id"]
     api("/api/collections/delete", {"id": collection_id}, c.user["cookie"])
     c.pg.click("button[aria-label='Изменить коллекцию Удалённая']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
@@ -418,15 +420,15 @@ def c19(c):
 def c20(c):
     coll_id = make_collection(c.user, "Новости", [])
     login(c.pg, c.user)
-    c.pg.evaluate("openChannel('rybolos_channel')")
-    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
-    c.pg.wait_for_function("!document.getElementById('chColl').hidden", timeout=20000)
-    c.pg.click("#chColl")
-    c.pg.wait_for_selector("#chanCollOvl.open")
+    c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
+    c.pg.wait_for_selector("#chColl button", timeout=20000)
+    c.pg.click("#chColl button")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.locator("#chanCollList input[value='%s']" % coll_id).check()
     c.pg.wait_for_timeout(1500)
     assert "rybolos_channel" in collections_of(c.user)[0]["channels"], "канал не попал в коллекцию"
-    c.pg.click("#chanCollDone")
+    c.pg.locator("#collOvl button", has_text="Отмена").first.click()
     wait_closed(c.pg, "chanCollOvl")
     c.pg.wait_for_timeout(500)
     assert "Новости" in c.pg.inner_text("#chCollState"), c.pg.inner_text("#chCollState")
@@ -440,11 +442,11 @@ def c21(c):
     row = c.pg.locator("#chanList .coll-row button.quiet-btn", has_text="В коллекциях: 1")
     assert row.count() == 1, "у канала нет числа коллекций в списке"
     row.click()
-    c.pg.wait_for_selector("#chanCollOvl.open")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.locator("#chanCollList input[value='%s']" % coll_id).uncheck()
     c.pg.wait_for_timeout(1500)
     assert collections_of(c.user)[0]["channels"] == [], "галочка не сняла канал"
-    c.pg.click("#chanCollDone")
+    c.pg.locator("#collOvl button", has_text="Отмена").first.click()
     wait_closed(c.pg, "chanCollOvl")
     c.pg.wait_for_timeout(500)
     assert c.pg.locator("#chanList .coll-row button.quiet-btn", has_text="В коллекцию").count() >= 1, "подпись не вернулась"
@@ -453,11 +455,11 @@ def c21(c):
 @check("C22", "Со страницы канала можно сразу создать коллекцию с этим каналом", device="both")
 def c22(c):
     login(c.pg, c.user)
-    c.pg.evaluate("openChannel('rybolos_channel')")
-    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
-    c.pg.wait_for_function("!document.getElementById('chColl').hidden", timeout=20000)
-    c.pg.click("#chColl")
-    c.pg.wait_for_selector("#chanCollOvl.open")
+    c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
+    c.pg.wait_for_selector("#chColl button", timeout=20000)
+    c.pg.click("#chColl button")
+    c.pg.wait_for_selector("#collOvl [role=dialog]")
     c.pg.fill("#chanCollNew", "С канала")
     c.pg.click("#chanCollAdd")
     c.pg.wait_for_timeout(2500)
@@ -468,8 +470,8 @@ def c22(c):
 @check("C23", "Канал без подписки не предлагает «В коллекцию»", device="both")
 def c23(c):
     login(c.pg, c.user)
-    c.pg.evaluate("openChannel('durov')")
-    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.evaluate("location.hash = '#/channel/durov'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
     c.pg.wait_for_timeout(1500)
     assert c.pg.locator("#chColl").is_hidden(), "кнопка видна у неподписанного канала"
 
@@ -493,18 +495,18 @@ def f3(c):
     login(c.pg, c.user)
     if len(post_rows(c.pg)) < 3:
         raise Skip("постов меньше трёх")
-    assert c.pg.get_attribute("#readToggle", "aria-pressed") == "true", "по умолчанию прочитанное должно быть спрятано"
+    assert c.pg.get_attribute("#readToggle button", "aria-pressed") == "true", "по умолчанию прочитанное должно быть спрятано"
     for _ in range(3):
         c.pg.evaluate("window.scrollBy(0, 900)")
         c.pg.wait_for_timeout(700)
     c.pg.wait_for_timeout(4000)
     c.pg.click("#readToggle")
     c.pg.wait_for_timeout(3000)
-    assert c.pg.get_attribute("#readToggle", "aria-pressed") == "false", "кнопка не отжалась"
+    assert c.pg.get_attribute("#readToggle button", "aria-pressed") == "false", "кнопка не отжалась"
     assert any(r["read"] for r in post_rows(c.pg)), "прочитанных постов не видно"
     c.pg.click("#readToggle")
     c.pg.wait_for_timeout(2500)
-    assert c.pg.get_attribute("#readToggle", "aria-pressed") == "true", "кнопка не нажалась обратно"
+    assert c.pg.get_attribute("#readToggle button", "aria-pressed") == "true", "кнопка не нажалась обратно"
     assert not any(r["read"] for r in post_rows(c.pg)), "прочитанные не спрятались"
 
 
@@ -521,7 +523,7 @@ def f4(c):
     assert marked, "прокруткой ничего не отметилось, проверка пуста"
     new_post = insert_newer_post(CHANNELS[0])
     # жест «потянуть» вызывает refreshCurrent; на ПК жеста нет, проверяем саму функцию
-    c.pg.evaluate("refreshCurrent()")
+    c.pg.evaluate("window.dispatchEvent(new Event('koloda:refresh'))")
     c.pg.wait_for_function("key => (document.querySelector('#postList .post') || {}).dataset?.post === key",
                            arg=new_post, timeout=20000)
     c.pg.wait_for_timeout(2000)
@@ -706,16 +708,16 @@ def k11(c):
 @check("P1", "Страница канала открывается с заголовком")
 def p1(c):
     login(c.pg, c.user)
-    c.pg.evaluate("openChannel('rybolos_channel')")
-    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
     assert c.pg.inner_text("#chTitle").strip(), "заголовка нет"
 
 
 @check("P2", "Кнопка на странице канала меняет подписку")
 def p2(c):
     login(c.pg, c.user)
-    c.pg.evaluate("openChannel('rybolos_channel')")
-    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
     c.pg.wait_for_function("document.getElementById('chAction').textContent.trim().length > 0", timeout=20000)
     c.pg.wait_for_timeout(1500)
     before = "rybolos_channel" in subscriptions_of(c.user)
@@ -729,8 +731,8 @@ def p2(c):
 @check("P3", "«Открыть в Telegram» ведёт на канал")
 def p3(c):
     login(c.pg, c.user)
-    c.pg.evaluate("openChannel('rybolos_channel')")
-    c.pg.wait_for_selector("#viewChannel:not([hidden])", timeout=20000)
+    c.pg.evaluate("location.hash = '#/channel/rybolos_channel'")
+    c.pg.wait_for_selector("#viewChannel", timeout=20000)
     href = c.pg.get_attribute("#chTg", "href") or ""
     assert href.startswith("https://t.me/") and "rybolos_channel" in href, href
 

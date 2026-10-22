@@ -258,7 +258,7 @@
     {/if}
 
     {#if $undo}
-      <p class="undo-bar" role="status">
+      <p class="undo-bar" id="undoBar" role="status">
         {$undo.text}
         <button type="button" class="underline" on:click={onUndo}>Вернуть</button>
       </p>
@@ -270,6 +270,10 @@
       {feedMode}
       collection={collectionFilter}
       on:lightbox={(event) => (lightbox = event.detail)}
+    on:channelCollections={(event) => {
+      collectionChannel = event.detail;
+      collection = null;
+    }}
     />
   {:else if view === 'catalog'}
     <CatalogView
@@ -287,6 +291,10 @@
         writeHash();
       }}
       on:lightbox={(event) => (lightbox = event.detail)}
+    on:channelCollections={(event) => {
+      collectionChannel = event.detail;
+      collection = null;
+    }}
     />
   {:else if view === 'profile'}
     <ProfileView on:done={() => {}} />

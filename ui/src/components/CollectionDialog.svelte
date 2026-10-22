@@ -111,12 +111,13 @@
     {#if !$collections.length}
       <p class="hint">Коллекций пока нет. Создай первую в списке каналов.</p>
     {:else}
-      <ul class="picks">
+      <ul class="picks" id="chanCollList">
         {#each $collections as coll (coll.id)}
           <li>
             <label>
               <input
                 type="checkbox"
+                value={coll.id}
                 checked={(coll.channels || []).includes(channel)}
                 on:change={(event) => toggleInCollection(coll, event.currentTarget.checked)}
               />
