@@ -109,6 +109,25 @@ for path, text in sources.items():
                 fail("ОТСТУП ВНЕ ШКАЛЫ: %s: %spx" % (os.path.relpath(path, BASE), px))
 print("отступы на шкале кита")
 
+# --- токены кита существуют ---
+
+# Несуществующий токен не выдаёт ошибку: браузер молча рисует прозрачный фон
+# или цвет по умолчанию. Нижняя панель разделов так осталась без подложки.
+KIT_DIR = os.path.join(UI, "node_modules", "@monos", "ui", "src", "styles")
+kit_tokens = set()
+for name in ("tokens.css", "themes.css", "base.css"):
+    kit_path = os.path.join(KIT_DIR, name)
+    if not os.path.exists(kit_path):
+        continue
+    kit_tokens |= set(re.findall(r"(--ui-[a-z0-9-]+)\s*:", read(kit_path)))
+used_tokens = {}
+for path, text in sources.items():
+    for token in re.findall(r"var\((--ui-[a-z0-9-]+)", text):
+        used_tokens.setdefault(token, os.path.relpath(path, BASE))
+for token in sorted(set(used_tokens) - kit_tokens):
+    fail("НЕТ ТОКЕНА: %s: %s" % (token, used_tokens[token]))
+print("токены кита на месте: %d" % len(used_tokens))
+
 # --- стили кита подключены ---
 
 kit_styles = any("@monos/ui/styles.css" in text for text in sources.values())

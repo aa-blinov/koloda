@@ -60,7 +60,8 @@ unread, `u` to take a read mark back, `/` for the search, `?` for the list of
 the keys, `Esc` to close a dialog.
 
 On a phone the same service answers on the address of the machine and the
-layout changes: a bottom bar, a column of one, and an album paged by a swipe.
+layout changes: a bottom bar with the three sections, a column of one, and an
+album paged by a swipe.
 
 The service itself runs under Docker Compose with `restart: unless-stopped`, and
 a healthcheck asks `/api/health` every 30 seconds. On the machine of the owner
@@ -88,6 +89,21 @@ Confirmed by the code:
 - The next page of the feed loads when the reader scrolls near its end; the
   button stays as the way to load it when that does not happen.
 - The search runs over the posts of the feed and over the names in the catalog.
+- The interface has three main sections: the feed, the catalog and the saved
+  posts. They are one tap away: a bottom bar on a phone, a switch in the header
+  on a desktop. Two screens open over them: the channel and the profile; they
+  close with the back arrow in the header, back to where the reader came from.
+- The address follows the screen (`#/feed`, `#/saved`, `#/cat`,
+  `#/channel/<name>`, `#/me`), and the back button of the browser does the same
+  as the arrow in the header. The arrow never takes the reader off the site:
+  at the root it leads to the feed.
+- Every screen remembers its place: the reader returns from the catalog to the
+  post where they left the feed.
+- The search belongs to the section: posts in the feed and in the saved, the
+  names in the catalog. Each section keeps its own query, and on the channel
+  and the profile there is no search at all, because it would not work there.
+- The transition between the screens is short and is skipped when the system
+  asks for less motion.
 - A profile with a password, a session cookie for 30 days, PBKDF2-SHA256 with
   600,000 iterations and a salt of 16 bytes.
 - A profile needs an address. The confirmation of the address and the reset of

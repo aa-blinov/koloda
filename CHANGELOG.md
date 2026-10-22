@@ -15,6 +15,21 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Changed
 
+- The navigation is built anew: three main sections — the feed, the catalog and
+  the saved posts — in a bottom bar on a phone and in a switch in the header on
+  a desktop. The channel and the profile open over them and close with the
+  arrow in the header, back to where the reader came from.
+- The address follows the screen: `#/feed`, `#/saved`, `#/cat`,
+  `#/channel/<name>`, `#/me`. The back button of the browser does the same as
+  the arrow in the header, and the arrow never takes the reader off the site.
+- Every screen remembers its place: the reader returns from the catalog to the
+  post where they left the feed.
+- The search belongs to the section: the posts in the feed and in the saved,
+  the names in the catalog. Each section keeps its own query, and on the
+  channel and the profile there is no search at all, because it would not work
+  there.
+- The change of screen is one short movement, and it is skipped when the
+  system asks for less motion.
 - The search is always in sight: it used to hide behind a magnifier in the
   header, and on a narrow screen the field moves to a second row. The hint says
   what is searched: "по каналу" in the catalog, "по постам" in the feed.
@@ -36,6 +51,20 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- The bottom bar of the phone was transparent: the kit has no token
+  `--ui-canvas`, and the posts of the feed showed through the sections. The
+  checker now knows the tokens of the kit and fails on one that is not there.
+- The feed was mounted twice after the sign-in: the screen of the entry set the
+  session and read the state, and the shell did the same again, so the posts
+  were asked for twice and the screen was rebuilt under the reader.
+- The feed asked for the posts before the subscriptions arrived, and the
+  server answered with the whole cache: the channels of other people flashed
+  on the screen for a moment.
+- The page of a channel had a second "back to the catalog" button next to the
+  arrow in the header.
+- A reference to a name that does not exist on the page of a channel broke the
+  application on the way back from it. The check of the sources fails the
+  build on such a warning now.
 - The exit from the profile broke the connection: the body of the request was
   not read by the route and stayed in the socket, so the reload after the exit
   got "501 Unsupported method ('{}GET')" instead of the screen of the entry.

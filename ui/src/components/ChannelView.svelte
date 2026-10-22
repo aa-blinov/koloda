@@ -24,6 +24,9 @@
   } from '../lib/stores.js';
 
   export let channelName = '';
+  // Ключ экрана: по нему оболочка понимает, что посты готовы и место
+  // прокрутки можно вернуть.
+  export let screenKey = '';
   // Название, которое знает каталог: сервер на странице канала отдаёт его не сразу.
   export let initialTitle = '';
   // Заголовок живёт здесь: prop перезаписывается родителем при каждой его
@@ -68,6 +71,7 @@
       loadAvatars([channelName]);
       await tick();
       markPassed();
+      dispatch('ready', { key: screenKey });
     } catch (err) {
       if (id !== requestId) return;
       failed = true;
@@ -109,8 +113,6 @@
 </script>
 
 <div class="column ch-page" id="viewChannel">
-  <Button variant="text" size="sm" on:click={() => dispatch('back')}>Назад в каталог</Button>
-
   <h1 id="chTitle">{heading || channelName}</h1>
   <p class="ch-meta" id="chMeta">@{channelName}</p>
 
@@ -158,7 +160,7 @@
       <PostCard
         {post}
         read={$reads.has(postKey(post))}
-        title={$titles[post.channel] || title}
+        title={$titles[post.channel] || heading}
         avatar={$avatars.get(post.channel) || ''}
         saved={saved.has(postKey(post))}
         on:lightbox={(event) => dispatch('lightbox', event.detail)}

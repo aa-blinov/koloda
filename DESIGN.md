@@ -75,9 +75,8 @@ spacing:
 
 # Design system: koloda
 
-The interface is one file, `index.html`: the markup, the styles and the script
-in the same place, with no build step and nothing loaded from outside. Every
-value below comes from the `:root` block in that file, and the CSS is the
+The interface is built from the sources in `ui/src` and served from `ui/dist`.
+Every value below comes from the tokens of the kit, and the CSS is the
 normative layer. Where this document and the tokens disagree, the tokens are
 right.
 
@@ -236,11 +235,39 @@ becomes 16 and 28 becomes 32.
 Two breakpoints. Below 900 px the search field takes a row of its own, because
 five items in the bar do not fit and the field was the one that collapsed.
 Below 640 px the layout becomes a phone: one column, the padding drops to 16
-px, a bottom bar of four tabs appears, and the channel list becomes a dialog
-that covers the page.
+px, and the channel list becomes a dialog that covers the page.
 
-The bottom bar is 64 px tall, and the pill under the current icon is 64 by 32
-and centred on the 24 px icon.
+The bottom bar is 64 px tall, and the sections in it are the three main
+screens: the feed, the catalog and the saved. On a wide screen the same three
+sections sit in the header as a switch, and the bottom bar is not shown at
+all: a finger does not reach the bottom of a wide screen.
+
+## Navigation
+
+The interface has five screens and three of them are main ones.
+
+- **Main:** the feed, the catalog and the saved posts. They are peers: one tap
+  away, always in the same place, and the current one is said out loud by the
+  colour and by `aria-current`.
+- **Sub:** the channel and the profile. They open from a main screen and close
+  with the arrow in the header, back to where the reader came from. On them
+  the bottom bar is hidden and the arrow takes its place: the reader is one
+  step deep, and the way out is where they came from.
+
+The address of the screen is in the hash: `#/feed`, `#/saved`, `#/cat`,
+`#/channel/<name>`, `#/me`. Every screen goes into the history of the
+browser, so the back button of the browser does the same as the arrow in the
+header. The arrow of the header never leaves the site: at the root it leads
+to the feed.
+
+A screen that is opened again finds the reader where they were: the place of
+the scroll is kept per screen, and it is restored after the content of the
+screen has arrived. The pictures of the posts load later than the posts
+themselves, so the place is confirmed for a moment after the screen appears.
+
+The change of screen is one short movement of 220 ms: forward the new screen
+comes from below, backward from above. The system asks for less motion, and
+then there is no movement at all.
 
 ## Elevation & Depth
 
@@ -328,8 +355,11 @@ the type, so no button has a fill or a frame at rest.
 
 ### The bottom bar on a phone
 
-- Four columns, 64 px tall, the icon above the label at 12 px.
-- The pill under the current icon is 64 by 32 and sits 8 px from the top.
+- Three columns, 64 px tall, the icon above the label at 12 px.
+- The icon is 20 px, the label is 11 px, and the gap between them is 2 px.
+- The bar is a solid ground: the posts do not show through it.
+- The bar is hidden on the sub-screens: there the arrow in the header leads
+  back.
 
 ## Do's and Don'ts
 

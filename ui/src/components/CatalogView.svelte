@@ -15,13 +15,19 @@
 
   const dispatch = createEventDispatcher();
 
+  // Ключ экрана: по нему оболочка понимает, что список готов и место
+  // прокрутки можно вернуть.
+  export let screenKey = '';
+  // Запрос, с которым открылся каталог: чтобы список не грузился дважды.
+  export let initialQuery = '';
+
   const sorts = [
     { value: 'subs', label: 'По подписчикам' },
     { value: 'fresh', label: 'По свежести' },
     { value: 'name', label: 'По названию' },
   ];
 
-  let query = '';
+  let query = initialQuery;
   let category = 'all';
   let categories = [];
   let sort = 'subs';
@@ -70,6 +76,7 @@
       offset += found.length;
       hasMore = Boolean(answer.has_more);
       loadAvatars(channels.map((c) => c.username));
+      dispatch('ready', { key: screenKey });
     } catch (err) {
       if (id !== requestId) return;
       failed = true;

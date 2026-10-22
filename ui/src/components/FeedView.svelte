@@ -21,10 +21,15 @@
     loadAvatars,
     showUndo,
     setSubscription,
+    stateReady,
   } from '../lib/stores.js';
   import { feedChannels } from '../lib/feed.js';
 
   export let feedMode = 'feed';
+  // Ключ экрана: оболочка по нему понимает, что место прокрутки можно вернуть.
+  export let screenKey = '';
+  // Запрос, с которым открылся раздел: чтобы лента не грузилась дважды.
+  export let initialQuery = '';
   // Коллекция, по которой отфильтрована лента. Пусто — показываем все подписки.
   export let collection = null;
 
@@ -37,7 +42,7 @@
   let loading = false;
   let failed = false;
   let showRead = false;
-  let query = '';
+  let query = initialQuery;
   let tab = ''; // the channel filter inside the feed
   let savedPosts = new Set();
   let focusIndex = -1;
@@ -115,6 +120,7 @@
       loadAvatars(posts.map((p) => p.channel));
       await tick();
       markPassed();
+      dispatch('ready', { key: screenKey });
     } catch (err) {
       // Отменённый запрос — это не ошибка: его заменил следующий.
       if (id !== requestId || (err && err.name === 'AbortError')) return;
@@ -270,12 +276,19 @@
     pullHeight = 0;
   }
 
+  // Лента ждёт подписок: без них запрос ушёл бы без каналов, а сервер отдал
+  // бы весь кэш — на экране мелькнули бы чужие каналы.
+  let started = false;
+  $: if ($stateReady && !started) {
+    started = true;
+    load(false);
+  }
+
   onMount(() => {
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('koloda:search', onSearch);
     window.addEventListener('koloda:refresh', onRefresh);
     window.addEventListener('koloda:key', onKey);
-    load(false);
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('koloda:search', onSearch);

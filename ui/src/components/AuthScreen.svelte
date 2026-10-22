@@ -8,7 +8,6 @@
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
-  import { session, loadAccountState } from '../lib/stores.js';
 
   export let bootError = '';
 
@@ -96,9 +95,10 @@
   }
 
   async function afterLogin() {
-    const me = await api.me();
-    session.set(me);
-    await loadAccountState({ migrate: true });
+    // Профиль читает оболочка: она же ставит сессию и грузит состояние.
+    // Если сделать это здесь, а потом ещё раз там, лента mounts дважды и
+    // запрос уходит дважды.
+    await api.me();
     dispatch('done');
   }
 
