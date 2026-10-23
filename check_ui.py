@@ -166,6 +166,57 @@ if "data-theme" not in entry or "data-mode" not in entry:
     fail("НЕТ ТЕМЫ: в разметке нет data-theme и data-mode")
 print("тема и светлота выбираются атрибутом")
 
+# --- мобильные правила: вырез, цель касания, поле ввода, hover только с мышью ---
+
+def hover_unwrapped(text):
+    """Строки с :hover { без @media (hover: hover) на строке выше."""
+    lines = text.splitlines()
+    bad = []
+    for index, line in enumerate(lines):
+        if not re.search(r":hover\s*\{", line):
+            continue
+        previous = next((lines[i] for i in range(index - 1, -1, -1) if lines[i].strip()), "")
+        if "@media (hover: hover)" not in previous:
+            bad.append(index + 1)
+    return bad
+
+
+index_html = read(os.path.join(UI, "index.html"))
+if "viewport-fit=cover" not in index_html:
+    fail("ВЫРЕЗ: в meta viewport нет viewport-fit=cover, отступы env() не работают")
+
+def media_block(css, query):
+    """Весь блок @media целиком, по парным скобкам: внутри него есть вложенные правила."""
+    start = css.find(query)
+    if start < 0:
+        return ""
+    depth = 0
+    for index in range(css.index("{", start), len(css)):
+        if css[index] == "{":
+            depth += 1
+        elif css[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return css[start:index + 1]
+    return ""
+
+
+app_css = read(os.path.join(SRC, "app.css"))
+coarse = media_block(app_css, "@media (pointer: coarse)")
+if "min-height: 44px" not in coarse:
+    fail("ЦЕЛЬ КАСАНИЯ: в app.css нет правила min-height: 44px для пальца")
+if "font-size: 16px" not in coarse:
+    fail("ПОЛЕ: в app.css нет шрифта 16 px для полей на пальце (iOS увеличит страницу)")
+
+for path in [os.path.join(SRC, "app.css"), os.path.join(SRC, "App.svelte")] + svelte_files():
+    if not path.endswith((".css", ".svelte")):
+        continue
+    bad = hover_unwrapped(read(path))
+    if bad:
+        fail("HOVER: без @media (hover: hover) на касании залипает: %s, строки %s"
+             % (os.path.relpath(path, BASE), ", ".join(map(str, bad))))
+print("мобильные правила на месте")
+
 # --- собранный вывод ---
 
 if os.path.isdir(DIST):

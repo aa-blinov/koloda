@@ -213,8 +213,10 @@
     text-transform: uppercase;
   }
 
-  .ch-link:hover {
-    color: var(--ui-accent-text);
+  @media (hover: hover) {
+    .ch-link:hover {
+      color: var(--ui-accent-text);
+    }
   }
 
   .skeletons {

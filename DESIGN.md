@@ -458,6 +458,31 @@ the type, so no button has a fill or a frame at rest.
   the column of the posts, so that the eye goes from the field to the list
   without a turn.
 
+### Mobile rules
+
+Checked on a phone emulation at 390 by 844 and 360 by 640, and in landscape at
+844 by 390. The rules are kept by `check_ui.py` where a string can show them,
+and by hand in a browser where it cannot.
+
+- A tap target is at least 44 px in both directions on a finger device
+  (`pointer: coarse`). The small text buttons, the catalog chips and the link
+  "Open in Telegram" are raised to 44 px there, and only there: a mouse keeps
+  the compact size.
+- A field is 16 px on a finger device. iOS enlarges the page when a field with
+  less text is focused.
+- A hover style lives inside `@media (hover: hover)`. After a tap on a phone the
+  hover sticks, and a card or a channel row looks chosen when it is not.
+- The labels of the bottom bar are 12 px at least; nothing visible is smaller.
+- The deck keeps its height turned sideways: the buttons move to a column on the
+  right, so the card is not squeezed to a strip under them.
+- The channel rows of the dialog give the name the whole line; the actions go
+  under it. Beside the avatar and the state the name was cut to two letters.
+- The page keeps clear of the notch and the home bar: `viewport-fit=cover` in the
+  meta tag, `env(safe-area-inset-*)` on the top bar, the bottom bar and the sides.
+  This is not checked on a real iPhone: the emulation returns zero for the insets.
+- Who asks for less motion does not see the rise of the next card or the
+  transitions of the deck; the card changes at once.
+
 ## Do's and Don'ts
 
 ### Do:

@@ -115,13 +115,13 @@ def login(pg, user):
     pg.fill("#authUsername", user["name"])
     pg.fill("#authPassword", PASSWORD)
     pg.click("#authSubmit button")
-    pg.wait_for_selector("#postList", timeout=30000)
+    pg.wait_for_selector("#postList, #deck", timeout=30000)
     wait_posts(pg)
 
 
 def wait_posts(pg, timeout=60000):
     try:
-        pg.wait_for_selector("#postList .post", timeout=timeout)
+        pg.wait_for_selector("#postList .post, #deck .post", timeout=timeout)
     except Exception:
         pass
     pg.wait_for_timeout(1500)
@@ -486,6 +486,11 @@ def c22(c):
     c.pg.wait_for_selector("#chColl button", timeout=20000)
     c.pg.click("#chColl button")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
+    # Список каналов открывается из шапки ленты: со страницы канала шапка — подэкран, и кнопки там нет.
+    c.pg.locator("#collOvl button", has_text="Отмена").first.click()
+    wait_closed(c.pg, "collOvl")
+    c.pg.evaluate("location.hash = '#/feed'")
+    c.pg.wait_for_selector("#postList, #deck", timeout=30000)
     # коллекцию создают в списке каналов, а канал отмечают отсюда
     open_list(c.pg)
     c.pg.fill("#chanList .coll-new input", "С канала")
@@ -620,7 +625,7 @@ def f15(c):
     wait_closed(c.pg, "lightbox")
 
 
-@check("F20", "Потянуть ленту вниз обновляет её", device="phone")
+@check("F20", "В колоде протяжка не обновляет ленту, кнопка «Обновить» обновляет", device="phone")
 def f20(c):
     login(c.pg, c.user)
     c.pg.evaluate("window.scrollTo(0, 0)")
@@ -628,15 +633,17 @@ def f20(c):
     cdp = c.ctx.new_cdp_session(c.pg)
     seen = []
     c.pg.on("request", lambda r: seen.append(r.url) if "/api/feed" in r.url else None)
+    # Протяжка вниз в колоде — прокрутка карточки, а не обновление: запроса быть не должно.
     cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": 200, "y": 200}]})
     for dy in (40, 80, 120):
         cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": 200, "y": 200 + dy}]})
         c.pg.wait_for_timeout(60)
-    height = c.pg.evaluate("document.getElementById('pull').style.height")
     cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
     c.pg.wait_for_timeout(2000)
-    assert height == "48px", "индикатор не вырос: %r" % height
-    assert seen, "запроса ленты при отпускании не было"
+    assert not seen, "протяжка в колоде обновила ленту: %s" % seen
+    c.pg.click("#deck button:has-text('Обновить')")
+    c.pg.wait_for_timeout(2000)
+    assert seen, "кнопка «Обновить» не запросила ленту"
 
 
 # ---------- H, V, D: профиль ----------
@@ -715,7 +722,7 @@ def k10(c):
     assert len(set(labels)) == len(labels), "категории повторяются: %s" % labels
     c.pg.route("**/api/categories", lambda route: route.fulfill(status=502, body="{}", content_type="application/json"))
     c.pg.reload()
-    c.pg.wait_for_selector("#postList", timeout=30000)
+    c.pg.wait_for_selector("#postList, #deck", timeout=30000)
     c.pg.get_by_role("button", name="Каталог", exact=True).first.click()
     c.pg.wait_for_selector("#catRetry", timeout=20000)
     shown = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
@@ -725,18 +732,17 @@ def k10(c):
     c.pg.wait_for_function("document.querySelectorAll('#cats button').length > 2", timeout=20000)
 
 
-@check("K11", "Телефон: «Все категории» показывает все чипы в несколько строк", device="phone")
+@check("K11", "Телефон: «Все категории» показывает все чипы, и они помещаются по ширине", device="phone")
 def k11(c):
     login(c.pg, c.user)
-    c.pg.click("#tbCat:visible, #tabCat:visible")
-    c.pg.wait_for_selector("#cats button")
-    c.pg.wait_for_timeout(1000)
-    expand = c.pg.locator("#catExpand")
-    if not expand.is_visible():
-        raise Skip("все категории помещаются в одну строку")
-    expand.click()
+    c.pg.click("nav.tabs button:has-text('Каталог')")
+    c.pg.wait_for_selector("#cats button", timeout=20000)
+    c.pg.wait_for_timeout(800)
+    more = c.pg.locator(".cats-more button")
+    if not more.count():
+        raise Skip("все категории помещаются без кнопки «Все категории»")
+    more.first.click()
     c.pg.wait_for_timeout(500)
-    assert c.pg.evaluate("document.getElementById('cats').classList.contains('wrap')"), "ряд не развернулся"
     right = c.pg.evaluate("Math.max(...[...document.querySelectorAll('#cats button')].map(b => b.getBoundingClientRect().right))")
     assert right <= c.pg.evaluate("innerWidth") + 1, "чипы выходят за экран: %s" % right
 
@@ -781,7 +787,7 @@ def e3(c):
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
     c.pg.reload()
-    c.pg.wait_for_selector("#postList", timeout=30000)
+    c.pg.wait_for_selector("#postList, #deck", timeout=30000)
     assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы", "фильтр пережил перезагрузку"
     open_list(c.pg)
     open_list(c.pg)
@@ -794,7 +800,7 @@ def e3(c):
 @check("X3", "Нажимаемые зоны не ниже 44 px на телефоне", device="phone")
 def x3(c):
     login(c.pg, c.user)
-    sizes = c.pg.evaluate("""() => [...document.querySelectorAll('header button, #readToggle button, .feed-bar button')]
+    sizes = c.pg.evaluate("""() => [...document.querySelectorAll('header button, #readToggle button, .feed-bar button, #deck button')]
         .filter(e => e.offsetParent !== null).map(e => [e.id || e.textContent.trim().slice(0, 12),
         Math.round(e.getBoundingClientRect().height)])""")
     small = [s for s in sizes if s[1] < 44]

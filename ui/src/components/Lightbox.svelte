@@ -184,8 +184,10 @@
     transition: background var(--ui-duration-fast);
   }
 
-  .chip:hover {
-    background: color-mix(in srgb, var(--ui-bg) 82%, transparent);
+  @media (hover: hover) {
+    .chip:hover {
+      background: color-mix(in srgb, var(--ui-bg) 82%, transparent);
+    }
   }
 
   .prev {

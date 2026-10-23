@@ -195,6 +195,18 @@ export async function loadAccountState({ migrate = false, legacy = null } = {}) 
   }
   stateReady.set(true);
   replayPending();
+  refreshCollections();
+}
+
+// Коллекции нужны и странице канала, и ленте, а не только окну каналов: без
+// этой загрузки они были пустыми, пока окно каналов не открыли.
+export async function refreshCollections() {
+  try {
+    const answer = await api.collections();
+    collections.set((answer && answer.collections) || []);
+  } catch (err) {
+    // Список остаётся прежним: окна показывают то, что уже загружено.
+  }
 }
 
 export async function pullState() {

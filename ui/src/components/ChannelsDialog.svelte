@@ -392,6 +392,18 @@
     gap: var(--ui-space-snug);
   }
 
+  /* На телефоне название занимает всю строку, а действия уходят под него: в
+     один ряд с аватаром и статусом имя обрезалось до двух букв. */
+  @media (max-width: 900px), (pointer: coarse) {
+    .row {
+      flex-wrap: wrap;
+    }
+
+    .row > .chan {
+      flex: 1 1 100%;
+    }
+  }
+
   .quiet-btn {
     flex: 0 0 auto;
     min-height: var(--ui-control-touch);
@@ -406,9 +418,11 @@
     white-space: nowrap;
   }
 
-  .quiet-btn:hover {
-    color: var(--ui-ink);
-    background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+  @media (hover: hover) {
+    .quiet-btn:hover {
+      color: var(--ui-ink);
+      background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+    }
   }
 
   .chan {
@@ -427,8 +441,10 @@
     cursor: pointer;
   }
 
-  .chan:hover {
-    background: var(--ui-surface);
+  @media (hover: hover) {
+    .chan:hover {
+      background: var(--ui-surface);
+    }
   }
 
   .photo {
@@ -519,8 +535,10 @@
     cursor: pointer;
   }
 
-  .coll-name:hover .name {
-    color: var(--ui-accent-text);
+  @media (hover: hover) {
+    .coll-name:hover .name {
+      color: var(--ui-accent-text);
+    }
   }
 
   .count {

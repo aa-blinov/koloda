@@ -171,6 +171,11 @@
   function onLocation(event) {
     const next = screenFromHash();
     if (hashOf(next) === current) return;
+    // Окно поверх экрана не переживает смену экрана: иначе оно висит над лентой
+    // и перехватывает нажатия, а «Назад» листает экраны под ним.
+    collection = null;
+    collectionChannel = '';
+    channelsOpen = false;
     scrolls.set(screenKey, window.scrollY);
     const d = event && event.state && typeof event.state.depth === 'number' ? event.state.depth : 0;
     direction = d < depth ? 'back' : 'forward';
@@ -745,8 +750,10 @@
     cursor: pointer;
   }
 
-  .back:hover {
-    background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+  @media (hover: hover) {
+    .back:hover {
+      background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+    }
   }
 
   .search {
@@ -872,7 +879,7 @@
     border: 0;
     color: var(--ui-ink-muted);
     font: inherit;
-    font-size: 11px;
+    font-size: 12px;
     cursor: pointer;
   }
 
@@ -935,6 +942,11 @@
 
     .bar {
       padding-bottom: var(--ui-space-tight);
+    }
+
+    /* Полноэкранный телефон: шапка не должна уйти под часы и вырез. */
+    .topbar {
+      padding-top: env(safe-area-inset-top);
     }
   }
 

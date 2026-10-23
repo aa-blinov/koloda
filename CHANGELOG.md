@@ -24,6 +24,11 @@ All notable changes to koloda. Versions are ordered newest first.
 - The next card of the deck rises with the finger, and a post with pictures
   shows its first picture as the face of the card. The line "Вернуть" after a
   gesture lies over the deck instead of pushing it down on every gesture.
+- The phone is checked against the usual rules of touch interfaces. Tap targets
+  are at least 44 px, the fields are 16 px so iOS does not zoom the page, the
+  hover does not stick after a tap, the labels of the bottom bar are 12 px, and
+  the deck keeps its height turned sideways. The channel rows of the dialog show
+  the whole name, and the page keeps clear of the notch and the home bar.
 - The "all channels" dropdown is gone: the folder with the channels and the
   collections does the same, and two controls with one action say nothing. The
   filter that is on is named by a chip with a cross, and the cross takes it
@@ -68,6 +73,15 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- The catalog's "All categories" button changed its own label and nothing
+  else: the row of chips now wraps when it is open.
+- On a phone the catalog column stretched to the width of its chips, about
+  750 px on a screen of 390, and the right part of the screen was cut off.
+- The collections of the reader were not loaded until the channels dialog
+  was opened: the channel page and the dialog of a channel showed no
+  collections after a reload.
+- A dialog left open stayed on top of the next screen and took the clicks.
+  Changing the screen now closes it.
 - The gesture "pull to refresh" was gone: the three handlers were written, but
   nothing was signed to them, so the feed could not be pulled down. It works
   again at the top of the feed, and while the refresh runs the indicator stays
