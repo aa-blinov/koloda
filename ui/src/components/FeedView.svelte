@@ -5,6 +5,7 @@
    */
   import { onMount, onDestroy, tick } from 'svelte';
   import { createEventDispatcher } from 'svelte';
+  import { fly } from 'svelte/transition';
   import { Button, Chip, EmptyState, Notice, Skeleton, Spinner } from '@monos/ui';
 
   import PostCard from './PostCard.svelte';
@@ -30,6 +31,9 @@
   export let feedMode = 'feed';
   // Ключ экрана: оболочка по нему понимает, что место прокрутки можно вернуть.
   export let screenKey = '';
+  // Колода: на телефоне лента показывается по одной карточке, без вертикальной
+  // прокрутки. На широком экране остаётся обычный список.
+  export let deck = false;
   // Запрос, с которым открылся раздел: чтобы лента не грузилась дважды.
   export let initialQuery = '';
   // Коллекция, по которой отфильтрована лента. Пусто — показываем все подписки.
@@ -125,7 +129,8 @@
         : '';
       loadAvatars(posts.map((p) => p.channel));
       await tick();
-      markPassed();
+      // В колоде отметка ставится жестом, а не прокруткой: прокрутки там нет.
+      if (!deck) markPassed();
       dispatch('ready', { key: screenKey });
     } catch (err) {
       // Отменённый запрос — это не ошибка: его заменил следующий.
@@ -143,6 +148,28 @@
     if (loading || !hasMore) return;
     load(true);
   }
+
+  // --- колода: по одной карточке, без вертикальной прокрутки ---
+
+  // Куда улетает карточка, когда её оттолкнули.
+  let flyX = 0;
+
+  function deckSwipe(event) {
+    const { direction } = event.detail;
+    flyX = direction === 'right' ? window.innerWidth : -window.innerWidth;
+    posts = posts.slice(1);
+    // Колода скоро кончится: заранее берём следующую страницу.
+    if (posts.length <= 3 && hasMore && !loading) load(true);
+  }
+
+  $: currentDay = posts.length ? dayLabel(posts[0].ts) : '';
+  // Пустая колода: то ли всё прочитано, то ли искать нечего.
+  $: deckEmptyTitle = query ? 'Ничего не нашлось' : subs.length ? 'Ты всё прочитал' : 'Пока пусто';
+  $: deckEmptyText = query
+    ? 'Измени запрос или выбери канал.'
+    : subs.length
+      ? 'Новых публикаций нет. Загляни позже или проверь сейчас.'
+      : 'Добавь канал в каталоге — и публикации появятся здесь.';
 
   // The next page arrives when the reader comes close to the end of the column.
   let loadMoreSeen = false;
@@ -358,6 +385,68 @@
   on:touchcancel={onTouchEnd}
 />
 
+{#if deck}
+  <!-- Колода: одна карточка, без вертикальной прокрутки. Вправо прочитано,
+       влево сохранить. -->
+  <div class="deck" id="deck">
+    <div class="deck-top">
+      <span class="deck-date">{currentDay}</span>
+      <div class="deck-tools">
+        {#if filterName}
+          <Chip tone="accent" removable removeLabel="Снять фильтр" on:remove={() => dispatch('tab', '')}>
+            {filterName}
+          </Chip>
+        {/if}
+        <span id="readToggle" class="read-toggle">
+          <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
+            {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
+          </Button>
+        </span>
+        <Button variant="text" size="sm" on:click={() => load(false)}>Обновить</Button>
+      </div>
+    </div>
+
+    <div class="deck-stack">
+      {#if loading && !posts.length}
+        <div class="skeletons">
+          <Skeleton class="h-32" />
+          <Skeleton class="h-32" />
+        </div>
+      {:else if failed}
+        <EmptyState title="Не удалось загрузить ленту" description="Проверь соединение и попробуй ещё раз.">
+          <svelte:fragment slot="actions">
+            <Button on:click={() => load(false)}>Попробовать снова</Button>
+          </svelte:fragment>
+        </EmptyState>
+      {:else if !posts.length}
+        <EmptyState title={deckEmptyTitle} description={deckEmptyText}>
+          <svelte:fragment slot="actions">
+            <Button on:click={() => load(false)}>Проверить новые</Button>
+          </svelte:fragment>
+        </EmptyState>
+      {:else}
+        {#each posts.slice(0, 2) as post, i (postKey(post))}
+          <div class="deck-card" class:behind={i === 1} out:fly={{ x: flyX, duration: 190 }}>
+            <PostCard
+              {post}
+              read={$reads.has(postKey(post))}
+              title={$titles[post.channel]}
+              avatar={$avatars.get(post.channel) || ''}
+              saved={savedPosts.has(postKey(post))}
+              on:openChannel={(event) => pickChannel(event.detail)}
+              on:lightbox={(event) => dispatch('lightbox', event.detail)}
+              on:toggleSave={toggleSave}
+              on:save={savePost}
+              on:swipe={deckSwipe}
+            />
+          </div>
+        {/each}
+      {/if}
+    </div>
+
+    <p class="deck-hint">Тяни карточку вправо, чтобы отметить прочитанным, влево, чтобы сохранить.</p>
+  </div>
+{:else}
 <div
   class="pull"
   data-busy={refreshing ? '1' : null}
@@ -465,8 +554,77 @@
   {/if}
   </div>
 </div>
+{/if}
 
 <style>
+  /* --- колода: одна карточка, без вертикальной прокрутки --- */
+
+  .deck {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-snug);
+    height: 100%;
+    padding: var(--ui-space-snug) var(--ui-space-comfortable) var(--ui-space-base);
+  }
+
+  .deck-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ui-space-snug);
+    flex-wrap: wrap;
+  }
+
+  .deck-date {
+    color: var(--ui-ink-faint);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .deck-tools {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-snug);
+    flex-wrap: wrap;
+  }
+
+  .deck-stack {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 460px;
+    margin: 0 auto;
+  }
+
+  .deck-card {
+    position: absolute;
+    inset: 0 0 20px 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Следующая карточка лежит под текущей и чуть меньше: видно, что колода
+     не кончилась. */
+  .deck-card.behind {
+    inset: 0;
+    transform: scale(0.95) translateY(12px);
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .deck-card:not(.behind) {
+    z-index: 1;
+  }
+
+  .deck-hint {
+    color: var(--ui-ink-faint);
+    font-size: 12px;
+    text-align: center;
+  }
+
   .feed-title {
     font-size: 20px;
     line-height: 1.25;

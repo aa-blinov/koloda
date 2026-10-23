@@ -79,9 +79,9 @@ The interface is in Russian; the labels quoted here are translated.
   Read posts stay out of the feed on the next open: the "Hide read" button above
   the feed is on by default, and turning it off brings them back. New posts do
   not change the feed by themselves. The pull-down gesture at the top of the
-  feed refreshes it on a phone, and the read posts leave the screen. A post that the refresh puts above the screen stays unread until you
-  scroll past it. Until the refresh, what you read in this session stays in
-  place.
+  feed refreshes it on a desktop, and the read posts leave the screen. A post
+  that the refresh puts above the screen stays unread until you scroll past
+  it. Until the refresh, what you read in this session stays in place.
 - **Search.** Over the posts of the feed and over the names in the catalog. The
   search waits 320 ms after the last keystroke.
 - **Channel tabs.** A quick jump to one channel.
@@ -92,11 +92,12 @@ The interface is in Russian; the labels quoted here are translated.
   until play is pressed.
 - **Profiles.** You sign in with a name and a password, and every profile has
   its own feed. The password is reset by a link to a confirmed address.
-- **Swipe on a phone.** A post card is dragged sideways: to the right it is
-  marked read, to the left it is saved. The card follows the finger and says
-  what will happen, the action can be taken back, and the scroll of the feed
-  is not disturbed. The buttons under the post stay for the mouse and for a
-  screen reader.
+- **A deck on a phone.** The feed on a phone is a deck of cards, one post at a
+  time, with no vertical scroll of the column. A card is dragged sideways: to
+  the right it is marked read, to the left it is saved. The card follows the
+  finger and says what will happen, the action can be taken back, and the next
+  post comes forward. On a wide screen the same feed stays a column: there is
+  a mouse, and a column is read by scrolling.
 
 ## Screenshots
 

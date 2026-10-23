@@ -52,9 +52,10 @@ person never reaches another.
 
 ## Operating Context
 
-The service is a page in a browser tab that stays open next to a chat. The feed
-is refreshed by pulling down at the top of the list; nothing arrives on its
-own. The reader moves through the posts with the
+The service is a page in a browser tab that stays open next to a chat. On a
+wide screen the feed is a column and is refreshed by pulling down at the top of
+the list; on a phone it is a deck of cards and is refreshed by the button over
+it. Nothing arrives on its own. The reader moves through the posts with the
 keyboard: `j` and `k` for the next and the previous post, `n` for the first
 unread, `u` to take a read mark back, `/` for the search, `?` for the list of
 the keys, `Esc` to close a dialog.
@@ -83,13 +84,18 @@ Confirmed by the code:
 - A post counts as read once the reader has scrolled it above the top of the
   screen, and the mark can be taken back. A post that a refresh puts above the
   screen is not marked: it stays unread until the reader scrolls past it. Loading
-  the next page marks nothing.
-- On a phone the post card is also dragged sideways, as in the apps for
-  meetings: to the right it is marked read, to the left it is saved. The card
-  follows the finger and says what will happen, and the action can be taken
-  back. The vertical scroll of the feed is not disturbed: the gesture counts as
-  horizontal only when it clearly is one. The buttons under the post stay: a
-  screen reader cannot drag a card.
+  the next page marks nothing. In the deck of a phone the card is marked read
+  by the swipe, not by the scroll.
+- On a phone the feed is a **deck**: one post at a time, no vertical scroll of
+  the column. The card is dragged sideways, as in the apps for meetings: to the
+  right it is marked read, to the left it is saved. The card follows the
+  finger, says what will happen, and the action can be taken back. A post
+  that was on the screen has been seen, so a saved post is read as well and
+  does not come back to the deck. The next page arrives when the deck runs
+  low. On a wide screen the same feed stays a column: there is a mouse, and
+  the column is read by scrolling.
+- The vertical scroll of the feed is only on the wide screen. The card scrolls
+  inside itself when the post is longer than the card.
 - An unread post says so: a dot and the word next to the name of the channel,
   so the state is not carried by the shade of the text alone.
 - The next page of the feed loads when the reader scrolls near its end; the
@@ -154,9 +160,9 @@ Deliberately not true, and worth knowing before a change:
 
 - The project carries no licence file.
 - There is no automatic update.
-- Nothing arrives in the browser by itself: the new posts wait for the pull
-  gesture on a phone. On a desktop the feed refreshes when the page reloads or
-  the channel changes.
+- Nothing arrives in the browser by itself: the new posts wait for the reader.
+  On a phone the deck has a button over it, on a desktop the feed refreshes
+  when the page reloads or the channel changes.
 - The history of a channel stops at 500 posts, and the rest is only in Telegram.
 - A private channel is not read through `t.me/s`. It needs the login of the
   reader, and the file of the session is a ready-made login into the account.
