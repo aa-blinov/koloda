@@ -92,6 +92,11 @@ The interface is in Russian; the labels quoted here are translated.
   until play is pressed.
 - **Profiles.** You sign in with a name and a password, and every profile has
   its own feed. The password is reset by a link to a confirmed address.
+- **Swipe on a phone.** A post card is dragged sideways: to the right it is
+  marked read, to the left it is saved. The card follows the finger and says
+  what will happen, the action can be taken back, and the scroll of the feed
+  is not disturbed. The buttons under the post stay for the mouse and for a
+  screen reader.
 
 ## Screenshots
 

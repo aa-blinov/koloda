@@ -114,7 +114,10 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Added
 
-- Nothing yet.
+- The post card on a phone is now dragged sideways, as in the apps for
+  meetings: to the right it is marked read, to the left it is saved. The card
+  follows the finger and says what will happen, the action can be taken back,
+  and the scroll of the feed is not disturbed.
 
 ### Fixed
 

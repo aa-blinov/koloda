@@ -162,6 +162,12 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   the feed is lines of posts, the catalog is a grid, the saved is a bookmark,
   the channels are a folder, the profile is a person. `check_ui.py` fails when
   two signs collide.
+- **A gesture that fights the scroll is a broken gesture.** The card is dragged
+  sideways, and the vertical scroll of the feed is stronger: the drag counts
+  as horizontal only from 14 px and only when it is clearly horizontal, and
+  `touch-action: pan-y` leaves the vertical to the browser. The word of the
+  action is stamped on the side of the card that stays in sight: the card
+  goes right, the word stays left.
 - **A button without a listener looks broken and is broken.** The "all
   channels" button of the feed fired an event that nobody was listening to,
   and the reader saw a button that does nothing. The same with the gesture

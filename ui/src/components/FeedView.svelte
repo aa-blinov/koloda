@@ -232,6 +232,20 @@
     savedPosts = new Set(savedPosts);
   }
 
+  // Сохранение жестом влево: то же действие, что и кнопка, только без
+  // нажатия. Кнопка переключает, жест — сохраняет.
+  function savePost(event) {
+    const { post } = event.detail;
+    api.setSaved(post.channel, post.msg_id, true).catch(() => {});
+    savedPosts.add(postKey(post));
+    savedPosts = new Set(savedPosts);
+    showUndo('Публикация сохранена.', () => {
+      api.setSaved(post.channel, post.msg_id, false).catch(() => {});
+      savedPosts.delete(postKey(post));
+      savedPosts = new Set(savedPosts);
+    });
+  }
+
   function toggleReadAll() {
     setShowRead(!$showRead);
   }
@@ -432,6 +446,7 @@
           on:openChannel={(event) => pickChannel(event.detail)}
           on:lightbox={(event) => dispatch('lightbox', event.detail)}
           on:toggleSave={toggleSave}
+          on:save={savePost}
         />
       {/each}
     {/each}

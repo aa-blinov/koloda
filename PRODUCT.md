@@ -84,6 +84,12 @@ Confirmed by the code:
   screen, and the mark can be taken back. A post that a refresh puts above the
   screen is not marked: it stays unread until the reader scrolls past it. Loading
   the next page marks nothing.
+- On a phone the post card is also dragged sideways, as in the apps for
+  meetings: to the right it is marked read, to the left it is saved. The card
+  follows the finger and says what will happen, and the action can be taken
+  back. The vertical scroll of the feed is not disturbed: the gesture counts as
+  horizontal only when it clearly is one. The buttons under the post stay: a
+  screen reader cannot drag a card.
 - An unread post says so: a dot and the word next to the name of the channel,
   so the state is not carried by the shade of the text alone.
 - The next page of the feed loads when the reader scrolls near its end; the
