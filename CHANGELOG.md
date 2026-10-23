@@ -15,6 +15,15 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Changed
 
+- The search stands in the top right corner of the window, and the filters of
+  the feed — the channel picker and "hide the read ones" — stand under it with
+  the same edge. On a phone the filters stand above the feed: the header has
+  no room for them.
+- The choice to hide the read ones is remembered on the device: a switch that
+  returns to its old position every time is useless.
+- A phone in the lying position is wider than 900 px, and there the sidebar
+  stood at the side, where the finger does not reach. The layout of the phone
+  is now chosen by the pointer as well as by the width.
 - The navigation is not the same on the two screens any more. On a wide screen
   the three sections stand in a sidebar on the left, with the name of the
   service above them and the channels and the profile below; on a phone the
@@ -46,6 +55,9 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- The "all channels" button of the feed did nothing: it fired an event that
+  nobody was listening to. It opens the list of the channels and the
+  collections now.
 - The bottom bar of the phone was transparent: the kit has no token
   `--ui-canvas`, and the posts of the feed showed through the sections. The
   checker now knows the tokens of the kit and fails on one that is not there.

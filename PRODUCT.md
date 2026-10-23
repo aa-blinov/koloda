@@ -110,6 +110,10 @@ Confirmed by the code:
 - The search belongs to the section: posts in the feed and in the saved, the
   names in the catalog. Each section keeps its own query, and on the channel
   and the profile there is no search at all, because it would not work there.
+- The search stands in the top right corner of the window, and the filters of
+  the feed — the channel picker and "hide the read ones" — stand under it with
+  the same edge. On a phone the filters stand above the feed, and the choice
+  to hide the read ones is remembered on the device.
 - The transition between the screens is short and is skipped when the system
   asks for less motion.
 - A profile with a password, a session cookie for 30 days, PBKDF2-SHA256 with

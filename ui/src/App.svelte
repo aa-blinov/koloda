@@ -13,7 +13,7 @@
    *   history, and the hash follows the screen.
    */
   import { onMount, tick } from 'svelte';
-  import { NavItem, IconButton, SearchField, Toaster } from '@monos/ui';
+  import { NavItem, Button, IconButton, SearchField, Toaster } from '@monos/ui';
 
   import AuthScreen from './components/AuthScreen.svelte';
   import FeedView from './components/FeedView.svelte';
@@ -33,6 +33,8 @@
     syncStatus,
     undo,
     setSubscription,
+    setShowRead,
+    showRead,
     showUndo,
     collections as collectionsList,
     drainStateOps,
@@ -64,6 +66,9 @@
   let collection = null;
   let collectionChannel = '';
   let collectionFilterId = null;
+  // Фильтр по каналу внутри ленты. Он в оболочке, потому что его видно и в
+  // шапке под поиском, и над лентой на телефоне — и нажимает его одно и то же.
+  let feedTab = '';
   let anim = 0;
   // Глубина внутри приложения: сколько переходов сделано от корня. По ней
   // «назад» знает, есть ли куда вернуться, и не выбрасывает читателя с сайта.
@@ -422,47 +427,69 @@
              открывается лупой — иначе шапка не помещается. На подэкранах поиска
              нет: там он и не работает, и молчаливое поле сбивает с толку. -->
         {#if !isSub}
-          <div id="koloda-search" class="search" class:open={searchOpen}>
-            <SearchField
-              bind:value={search}
-              label="Поиск"
-              placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
-              clearLabel="Очистить"
-              on:input={onSearchInput}
-            />
-          </div>
-          <span class="search-toggle">
-            <IconButton
-              label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
-              variant="ghost"
-              size="lg"
-              on:click={toggleSearch}
-            >
-              <Icon name={searchOpen ? 'close' : 'search'} />
-            </IconButton>
-          </span>
-        {/if}
+          <div class="bar-right">
+            <div id="koloda-search" class="search" class:open={searchOpen}>
+              <SearchField
+                bind:value={search}
+                label="Поиск"
+                placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
+                clearLabel="Очистить"
+                on:input={onSearchInput}
+              />
+            </div>
+            <span class="search-toggle">
+              <IconButton
+                label={searchOpen ? 'Закрыть поиск' : 'Поиск'}
+                variant="ghost"
+                size="lg"
+                on:click={toggleSearch}
+              >
+                <Icon name={searchOpen ? 'close' : 'search'} />
+              </IconButton>
+            </span>
 
-        <!-- На широком экране каналы и профиль живут в боковой панели: в шапке
-             им места нет, а на телефоне боковой панели нет. -->
-        <div class="head-icons">
-          <IconButton
-            label="Каналы и коллекции"
-            variant="ghost"
-            size="lg"
-            on:click={() => (channelsOpen = true)}
-          >
-            <Icon name="folder" />
-          </IconButton>
-          <IconButton
-            label="Профиль"
-            variant="ghost"
-            size="lg"
-            on:click={openProfile}
-          >
-            <Icon name="user" />
-          </IconButton>
-        </div>
+            <!-- На широком экране каналы и профиль живут в боковой панели: в
+                 шапке им места нет, а на телефоне боковой панели нет. -->
+            <div class="head-icons">
+              <IconButton
+                label="Каналы и коллекции"
+                variant="ghost"
+                size="lg"
+                on:click={() => (channelsOpen = true)}
+              >
+                <Icon name="folder" />
+              </IconButton>
+              <IconButton
+                label="Профиль"
+                variant="ghost"
+                size="lg"
+                on:click={openProfile}
+              >
+                <Icon name="user" />
+              </IconButton>
+            </div>
+
+            <!-- Фильтры ленты: на широком экране они под поиском, справа от
+                 него; на телефоне — над лентой, там шапка для них тесна. -->
+            {#if feedMode === 'feed' && view === 'feed'}
+              <div class="filters">
+                <button type="button" class="pick" on:click={() => (channelsOpen = true)}>
+                  <Icon name="chevron" size={16} />
+                  <span>{collectionFilter ? collectionFilter.name : feedTab || 'Все каналы'}</span>
+                  <Icon name="chevron" size={16} />
+                </button>
+                <Button
+                  variant="text"
+                  size="sm"
+                  on:click={() => setShowRead(!$showRead)}
+                  aria-pressed={!$showRead}
+                >
+                  {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
+                </Button>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       {#if $syncStatus}
@@ -497,10 +524,18 @@
           <FeedView
             {feedMode}
             {screenKey}
+            tab={feedTab}
             initialQuery={search}
             collection={collectionFilter}
             on:ready={onReady}
             on:clearCollection={() => (collectionFilterId = null)}
+            on:openChannels={() => (channelsOpen = true)}
+            on:tab={(event) => {
+              // Клик по имени канала в посте — это фильтр, второй клик снимает
+              // его. Коллекция при этом снимается: два фильтра сразу не живут.
+              feedTab = feedTab === event.detail ? '' : event.detail;
+              if (!feedTab && collectionFilterId) collectionFilterId = null;
+            }}
             on:lightbox={(event) => (lightbox = event.detail)}
             on:channelCollections={(event) => {
               collectionChannel = event.detail;
@@ -657,6 +692,41 @@
     gap: var(--ui-space-field);
   }
 
+  /* Правая часть шапки: поиск и фильтры. На телефоне это один ряд, на широком
+     экране — столбик у самого края окна. */
+  .bar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-base);
+    margin-left: auto;
+  }
+
+  /* Фильтры ленты в шапке: на телефоне их здесь нет, они стоят над лентой. */
+  .filters {
+    display: none;
+    align-items: center;
+    gap: var(--ui-space-base);
+  }
+
+  .pick {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-tight);
+    min-height: 32px;
+    padding: 0 var(--ui-space-snug);
+    background: none;
+    border: 0;
+    border-radius: var(--ui-radius);
+    color: var(--ui-ink);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .pick:hover {
+    background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+  }
+
   .brand {
     display: inline-flex;
     align-items: center;
@@ -804,7 +874,10 @@
     cursor: pointer;
   }
 
-  @media (max-width: 900px) {
+  /* Телефон: узкий экран или палец вместо мыши. Телефон в лежачем положении
+     шире 900 px, и там боковая панель была бы сбоку — а палец до низа не
+     дотягивается. */
+  @media (max-width: 900px), (pointer: coarse) {
     .search-toggle {
       display: inline-flex;
       margin-left: auto;
@@ -836,7 +909,7 @@
     }
   }
 
-  @media (min-width: 901px) {
+  @media (min-width: 901px) and (pointer: fine) {
     /* На широком экране разделы стоят в боковой панели: все назначения видны
        сразу и названы, а место занимает то, что на телефоне занимает палец. */
     .side {
@@ -884,17 +957,27 @@
       border-top: 1px solid var(--ui-line);
     }
 
-    /* Поиск на широком экране стоит справа от шапки: слева уже есть панель
-       разделов, и два ряда знакомых рядом мешают друг другу. Шапка по ширине
-       колонки с постами, иначе поиск повисает над пустым местом. */
+    /* Поиск стоит в правом верхнем углу окна, а фильтры ленты — под ним, с
+       тем же правым краем: глаз идёт от поля к постам без поворота. В колонке
+       flex-basis становится высотой, поэтому ширину задаём прямо. */
     .search {
       display: flex;
-      flex: 0 1 360px;
-      margin-left: auto;
+      flex: 0 0 auto;
+      width: 360px;
     }
 
     .bar {
-      max-width: 748px;
+      max-width: none;
+    }
+
+    .bar-right {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: var(--ui-space-snug);
+    }
+
+    .filters {
+      display: flex;
     }
 
     .brand {
