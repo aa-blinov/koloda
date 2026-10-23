@@ -133,9 +133,15 @@
     }
     swiping = false;
     const dx = swipeX;
-    swipeX = 0;
-    if (dx >= SWIPE_TRIGGER) swipeRead();
-    else if (dx <= -SWIPE_TRIGGER) swipeSave();
+    if (dx >= SWIPE_TRIGGER) {
+      swipeRead();
+      dispatch('swipe', { direction: 'right', post });
+    } else if (dx <= -SWIPE_TRIGGER) {
+      swipeSave();
+      dispatch('swipe', { direction: 'left', post });
+    } else {
+      swipeX = 0;
+    }
   }
 
   function swipeRead() {
@@ -145,8 +151,10 @@
   }
 
   function swipeSave() {
-    if (saved) return;
-    dispatch('save', { post });
+    // Пост, который стоял на экране, уже прочитан. Если оставить его
+    // непрочитанным, он вернётся в колоду сразу же.
+    if (!read) markRead(postKey(post));
+    if (!saved) dispatch('save', { post });
   }
 
   $: tilt = Math.max(-9, Math.min(9, swipeX / 26));

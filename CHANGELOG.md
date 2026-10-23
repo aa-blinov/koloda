@@ -114,6 +114,11 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Added
 
+- The feed on a phone is now a deck of cards, one post at a time, with no
+  vertical scroll of the column: the card is dragged sideways, to the right it
+  is marked read, to the left it is saved, the card follows the finger and says
+  what will happen, the action can be taken back, and the next post comes
+  forward. On a wide screen the same feed stays a column.
 - The post card on a phone is now dragged sideways, as in the apps for
   meetings: to the right it is marked read, to the left it is saved. The card
   follows the finger and says what will happen, the action can be taken back,

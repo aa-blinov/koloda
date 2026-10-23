@@ -26,6 +26,7 @@
 
   import Icon from './components/Icon.svelte';
   import { api } from './lib/api.js';
+  import { phone } from './lib/layout.js';
   import { searchValue } from './lib/search.js';
   import {
     session,
@@ -413,7 +414,7 @@
     </nav>
   </aside>
 
-  <div class="shell">
+  <div class="shell" class:deck-shell={$phone}>
     <header class="topbar">
       <div class="bar" class:searching={searchOpen}>
         <!-- Имя сервиса: на телефоне боковой панели нет, и шапка с одним
@@ -534,6 +535,7 @@
           <FeedView
             {feedMode}
             {screenKey}
+            deck={$phone}
             tab={feedTab}
             initialQuery={search}
             collection={collectionFilter}
@@ -764,6 +766,29 @@
 
   .screens {
     min-height: 60vh;
+  }
+
+  /* Колода: страница не прокручивается, карточка занимает всё, что осталось
+     от шапки и нижней панели. */
+  .deck-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--koloda-tabs) - env(safe-area-inset-bottom));
+    height: calc(100dvh - var(--koloda-tabs) - env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+
+  .deck-shell .topbar {
+    flex: 0 0 auto;
+  }
+
+  .deck-shell .screens,
+  .deck-shell .screen,
+  .deck-shell .screen-in {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   /* Появление экрана: вперёд — из-под низа, назад — сверху. Два одинаковых

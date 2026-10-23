@@ -163,11 +163,17 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   the channels are a folder, the profile is a person. `check_ui.py` fails when
   two signs collide.
 - **A gesture that fights the scroll is a broken gesture.** The card is dragged
-  sideways, and the vertical scroll of the feed is stronger: the drag counts
+  sideways, and the vertical scroll of the card is stronger: the drag counts
   as horizontal only from 14 px and only when it is clearly horizontal, and
   `touch-action: pan-y` leaves the vertical to the browser. The word of the
   action is stamped on the side of the card that stays in sight: the card
   goes right, the word stays left.
+- **The phone has no vertical scroll of the feed.** It is a deck: one card, and
+  the page does not scroll at all — the shell takes the height of the window
+  (`100dvh`) minus the bottom bar, and the card scrolls inside itself. The
+  wide screen keeps the column. The phone is chosen by the same query in the
+  styles and in `ui/src/lib/layout.js`; if they disagree, the interface will
+  show one thing and behave like another.
 - **A button without a listener looks broken and is broken.** The "all
   channels" button of the feed fired an event that nobody was listening to,
   and the reader saw a button that does nothing. The same with the gesture

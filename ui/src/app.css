@@ -80,8 +80,9 @@ body {
   --koloda-side: 232px;
 }
 
-/* На телефоне снизу стоит панель разделов: под неё нужен запас. */
-@media (max-width: 900px) {
+/* На телефоне снизу стоит панель разделов: под неё нужен запас. Тот же
+   запрос, что и в раскладке: телефон в лежачем положении шире 900 px. */
+@media (max-width: 900px), (pointer: coarse) {
   body {
     padding-bottom: calc(var(--koloda-tabs) + env(safe-area-inset-bottom));
   }

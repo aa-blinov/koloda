@@ -403,21 +403,27 @@ the type, so no button has a fill or a frame at rest.
 - The bar is hidden on the sub-screens: there the arrow in the header leads
   back.
 
-### The gesture on a post card
+### The deck on a phone
 
-- The card is dragged sideways on a phone: to the right it is marked read, to
-  the left it is saved. The card follows the finger and turns with it, up to
-  nine degrees.
+- One card at a time, no vertical scroll of the column: the page does not
+  scroll at all, the card takes the height that is left from the header and
+  the bottom bar.
+- The card is dragged sideways: to the right it is marked read, to the left it
+  is saved. The card follows the finger and turns with it, up to nine degrees.
 - The word of the action is stamped on the card, on the side that stays in
   sight: the card goes to the right, the word stays on the left.
 - The gesture counts as horizontal only from 14 px and only when it is clearly
-  horizontal, so the scroll of the feed is not disturbed. The action happens
+  horizontal, so the scroll of the card is not disturbed. The action happens
   from 92 px. `touch-action: pan-y` gives the vertical scroll to the browser
   and keeps the horizontal for the card.
+- The next card lies under the current one, smaller and dimmer: the deck is
+  seen to continue.
+- A post longer than the card scrolls inside the card, and the scroll of the
+  card does not reach the page.
 - The buttons under the post stay: a screen reader cannot drag a card, and the
   buttons name the actions.
-- On a desktop the card does not move: there is no dragging of cards with a
-  mouse.
+- On a wide screen the feed is a column, not a deck: there is a mouse, and a
+  column is read by scrolling.
 
 ### The sidebar on a wide screen
 
