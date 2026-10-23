@@ -11,6 +11,7 @@ const LS = {
   read: 'koloda.reads',
   pending: 'koloda.pending',
   view: 'koloda.view',
+  hideRead: 'koloda.hideRead',
   migrated: 'koloda.migrated',
 };
 
@@ -28,6 +29,16 @@ export const avatars = writable(new Map());
 export const syncStatus = writable(null);
 export const undo = writable(null);
 export const stateReady = writable(false);
+
+// Прятать ли прочитанные. Выбор помнится на устройстве: выключатель, который
+// каждый раз встаёт в исходное положение, никому не нужен.
+export const showRead = writable(readLocal(LS.hideRead, false));
+
+export function setShowRead(value) {
+  const next = Boolean(value);
+  showRead.set(next);
+  writeLocal(LS.hideRead, next);
+}
 
 export const isSubscribed = derived(subs, ($subs) => new Set($subs));
 

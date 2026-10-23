@@ -265,6 +265,19 @@ channels and the profile stay in the header as two signs. The header on a
 phone holds the name of the service on the left and the search, the channels
 and the profile on the right.
 
+The screen of a phone in the lying position is wider than 900 px, and there the
+sidebar would be at the side, where the finger does not reach. The width alone
+is not the sign of a phone: the **pointer** is. The layout of the phone is
+chosen by `(pointer: coarse)` as well as by the narrow width, and the sidebar
+only appears where the pointer is a mouse.
+
+**The search stands in the top right corner of the window**, and the filters
+of the feed — the channel picker and "hide the read ones" — stand under it,
+with the same right edge. The eye goes from the field to the posts without a
+turn. On a phone the header has no room for the filters, and they stand above
+the feed instead. The same filters in both places, one state: the filters
+live in the shell, and the feed only draws the posts.
+
 The signs are not decoration and not one sign for everything:
 
 - the feed is **lines of posts**;

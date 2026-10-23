@@ -21,6 +21,8 @@
     loadAvatars,
     showUndo,
     setSubscription,
+    setShowRead,
+    showRead,
     stateReady,
   } from '../lib/stores.js';
   import { feedChannels } from '../lib/feed.js';
@@ -41,9 +43,10 @@
   let cursor = null;
   let loading = false;
   let failed = false;
-  let showRead = false;
   let query = initialQuery;
-  let tab = ''; // the channel filter inside the feed
+  // Фильтр по каналу внутри ленты живёт в оболочке: на широком экране он
+  // стоит в шапке под поиском, на телефоне — над лентой.
+  export let tab = '';
   let savedPosts = new Set();
   let focusIndex = -1;
   let requestId = 0;
@@ -105,7 +108,7 @@
           params.set('before_channel', cursor.channel);
           params.set('before_id', cursor.msg_id);
         }
-        if (!showRead) params.set('hide_read', '1');
+        if (!$showRead) params.set('hide_read', '1');
         answer = await api.feed(params);
         cursor = answer.next || null;
       }
@@ -227,15 +230,26 @@
   }
 
   function toggleReadAll() {
-    showRead = !showRead;
-    load(false);
+    setShowRead(!$showRead);
   }
 
   // Клик по имени канала в посте — это фильтр ленты, а не переход на страницу
   // канала: второй клик снимает фильтр. Страница канала открывается из каталога.
   function pickChannel(channel) {
-    tab = tab === channel ? '' : channel;
-    if (!tab && collection) dispatch('clearCollection');
+    dispatch('tab', channel);
+  }
+
+  // Фильтр по каналу и «скрыть прочитанные» приходят из оболочки: нажали там
+  // — лента перечиталась здесь.
+  let lastTab = tab;
+  $: if (tab !== lastTab) {
+    lastTab = tab;
+    load(false);
+  }
+
+  let lastShowRead = $showRead;
+  $: if ($showRead !== lastShowRead) {
+    lastShowRead = $showRead;
     load(false);
   }
 
@@ -313,29 +327,35 @@
 </div>
 
 <div class="column" id="feed">
-  <div class="tabs-wrap">
-    <button type="button" class="tabs-toggle" on:click={() => dispatch('openChannels')}>
-      <Icon name="chevron" size={16} />
-      <span id="tabsToggleLabel">{collection ? collection.name : tab ? tab : 'Все каналы'}</span>
-      <Icon name="chevron" size={16} />
-    </button>
-  </div>
+  <!-- Фильтры ленты: на широком экране они стоят в шапке под поиском,
+       на телефоне — здесь. -->
+  {#if feedMode === 'feed'}
+    <div class="tabs-wrap phone-only">
+      <button type="button" class="tabs-toggle" on:click={() => dispatch('openChannels')}>
+        <Icon name="chevron" size={16} />
+        <span id="tabsToggleLabel">{collection ? collection.name : tab ? tab : 'Все каналы'}</span>
+        <Icon name="chevron" size={16} />
+      </button>
+    </div>
+  {/if}
 
   {#if feedMode === 'saved'}
     <h1 class="feed-title">Сохранённые публикации</h1>
     <p class="fresh">То, что ты отметил «Сохранить». Порядок — по времени сохранения.</p>
   {/if}
 
-  <div class="feed-bar">
-    <span id="readToggle" class="read-toggle">
-      <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!showRead}>
-        {showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
-      </Button>
-    </span>
-    {#if tab || collection}
-      <Button variant="text" size="sm" on:click={() => pickChannel('')}>Все каналы</Button>
-    {/if}
-  </div>
+  {#if feedMode === 'feed'}
+    <div class="feed-bar phone-only">
+      <span id="readToggle" class="read-toggle">
+        <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
+          {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
+        </Button>
+      </span>
+      {#if tab || collection}
+        <Button variant="text" size="sm" on:click={() => pickChannel('')}>Все каналы</Button>
+      {/if}
+    </div>
+  {/if}
 
   {#if searchHint}
     <p class="fresh" role="status">{searchHint}</p>
@@ -463,5 +483,13 @@
     font-size: 12px;
     text-align: center;
     padding: var(--ui-space-comfortable) 0 var(--ui-space-roomy);
+  }
+
+  /* На широком экране фильтры стоят в шапке под поиском: там глаз идёт от
+     поля к постам, а здесь они оторваны от поиска. */
+  @media (min-width: 901px) and (pointer: fine) {
+    .phone-only {
+      display: none;
+    }
   }
 </style>
