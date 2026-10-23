@@ -59,6 +59,10 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- The gesture "pull to refresh" was gone: the three handlers were written, but
+  nothing was signed to them, so the feed could not be pulled down. It works
+  again at the top of the feed, and while the refresh runs the indicator stays
+  on the screen and says "Обновляю…".
 - The "all channels" button of the feed did nothing: it fired an event that
   nobody was listening to. It opens the list of the channels and the
   collections now.

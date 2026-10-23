@@ -173,7 +173,7 @@
 
   // Обновление ленты по событию: так же обновляет жест «потянуть вниз».
   function onRefresh() {
-    load(false);
+    pullRefresh();
   }
 
   function onSearch(event) {
@@ -271,7 +271,11 @@
   // --- the gesture "pull to refresh" ---
 
   function onTouchStart(event) {
+    // Жест только в самом верху ленты и одним пальцем, и не внутри окна:
+    // в просмотрщике и в диалогах тянуть нечего.
     if (window.scrollY > 0) return;
+    if (event.touches.length !== 1) return;
+    if (event.target && event.target.closest && event.target.closest('[role="dialog"]')) return;
     lastTouch = event.touches[0].clientY;
     pulling = true;
   }
@@ -291,6 +295,15 @@
     pulling = false;
     if (pullHeight > 48) onRefresh();
     pullHeight = 0;
+  }
+
+  // Пока идёт обновление, индикатор виден: иначе жест выглядит как ничего
+  // не сделавший.
+  let refreshing = false;
+
+  function pullRefresh() {
+    refreshing = true;
+    load(false).finally(() => (refreshing = false));
   }
 
   // Лента ждёт подписок: без них запрос ушёл бы без каналов, а сервер отдал
@@ -324,9 +337,21 @@
   }
 </script>
 
-<div class="pull" data-drag={pullHeight ? '1' : null} style="height: {pullHeight}px">
+<svelte:window
+  on:touchstart={onTouchStart}
+  on:touchmove|passive={onTouchMove}
+  on:touchend={onTouchEnd}
+  on:touchcancel={onTouchEnd}
+/>
+
+<div
+  class="pull"
+  data-busy={refreshing ? '1' : null}
+  data-drag={pullHeight ? '1' : null}
+  style="height: {refreshing ? 40 : pullHeight}px"
+>
   <Icon name="refresh" />
-  <span>Потяни, чтобы обновить</span>
+  <span>{refreshing ? 'Обновляю…' : 'Потяни, чтобы обновить'}</span>
 </div>
 
 <div class="column" id="feed">

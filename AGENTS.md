@@ -164,9 +164,12 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   two signs collide.
 - **A button without a listener looks broken and is broken.** The "all
   channels" button of the feed fired an event that nobody was listening to,
-  and the reader saw a button that does nothing. Every `dispatch` in the
-  components needs a handler in `App.svelte`; a click on a control that
-  changes nothing has to be checked in the browser.
+  and the reader saw a button that does nothing. The same with the gesture
+  "pull to refresh": the three handlers were written, but nothing was signed
+  to them, so the feed could not be pulled down. Every `dispatch` in the
+  components needs a handler in `App.svelte`, and every handler needs a
+  listener; a click or a gesture that changes nothing has to be checked in
+  the browser.
 - **The filters of the feed live in the shell, not in the feed.** The channel
   picker and "hide the read ones" stand in the header under the search on a
   wide screen and above the feed on a phone. One state, two places: the state
