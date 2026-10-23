@@ -9,7 +9,7 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { when, nfmt, viewsText, postKey, postLink } from '../lib/format.js';
-  import { markRead, markUnread } from '../lib/stores.js';
+  import { markRead, markUnread, showUndo } from '../lib/stores.js';
 
   export let post;
   export let read = false;
@@ -93,6 +93,64 @@
     else window.prompt('Ссылка на публикацию', url);
   }
 
+  // --- жест по карточке, как в приложениях для знакомств ---
+  //
+  // Вправо — отметить прочитанным, влево — сохранить. Вертикаль остаётся
+  // прокрутке ленты: жест признаётся горизонтальным только когда он явно
+  // горизонтальный, иначе лента едет мимо.
+  let swipeX = 0;
+  let swiping = false;
+  let startX = 0;
+  let startY = 0;
+
+  const SWIPE_START = 14; // с какого смещения жест считается горизонтальным
+  const SWIPE_TRIGGER = 92; // с какого смещения действие срабатывает
+
+  function onTouchStart(event) {
+    if (event.touches.length !== 1) return;
+    startX = event.touches[0].clientX;
+    startY = event.touches[0].clientY;
+    swipeX = 0;
+    swiping = false;
+  }
+
+  function onTouchMove(event) {
+    if (event.touches.length !== 1) return;
+    const dx = event.touches[0].clientX - startX;
+    const dy = event.touches[0].clientY - startY;
+    if (!swiping) {
+      if (Math.abs(dx) < SWIPE_START) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      swiping = true;
+    }
+    swipeX = dx;
+  }
+
+  function onTouchEnd() {
+    if (!swiping) {
+      swipeX = 0;
+      return;
+    }
+    swiping = false;
+    const dx = swipeX;
+    swipeX = 0;
+    if (dx >= SWIPE_TRIGGER) swipeRead();
+    else if (dx <= -SWIPE_TRIGGER) swipeSave();
+  }
+
+  function swipeRead() {
+    if (read) return;
+    markRead(postKey(post));
+    showUndo('Публикация отмечена прочитанной.', () => markUnread(postKey(post)));
+  }
+
+  function swipeSave() {
+    if (saved) return;
+    dispatch('save', { post });
+  }
+
+  $: tilt = Math.max(-9, Math.min(9, swipeX / 26));
+
   function toggleSave() {
     dispatch('toggleSave', { post, saved });
   }
@@ -103,7 +161,24 @@
   }
 </script>
 
-<article class="post" class:read data-post={postKey(post)}>
+<article
+  class="post"
+  class:read
+  class:swiping
+  data-post={postKey(post)}
+  style="--swipe: {swipeX}px; --tilt: {tilt}deg"
+  on:touchstart={onTouchStart}
+  on:touchmove|passive={onTouchMove}
+  on:touchend={onTouchEnd}
+  on:touchcancel={onTouchEnd}
+>
+  <!-- Штамп с той стороны, которая остаётся на виду: карточка уезжает
+       в другую, и надпись была бы за краем экрана. -->
+  {#if swiping && swipeX > 8}
+    <span class="stamp stamp-left">Прочитано</span>
+  {:else if swiping && swipeX < -8}
+    <span class="stamp stamp-right">Сохранить</span>
+  {/if}
   <div class="meta">
     <!-- Непрочитанность стоит рядом с кнопкой, а не внутри неё: иначе
          скринридер читает «Не прочитано Pavel Zloi» вместо названия канала. -->

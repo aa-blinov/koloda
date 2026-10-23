@@ -148,7 +148,42 @@ body {
   border-radius: var(--ui-radius);
   padding: var(--ui-space-comfortable) var(--ui-space-roomy);
   margin-bottom: var(--ui-space-base);
+  transition: opacity 0.18s, transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+  /* Вертикаль — браузеру, горизонталь — нам: жест по карточке не должен
+     мешать прокрутке ленты. */
+  touch-action: pan-y;
+}
+
+.post.swiping {
   transition: opacity 0.18s;
+  transform: translateX(var(--swipe, 0px)) rotate(var(--tilt, 0deg));
+}
+
+/* Штампы жеста: как в приложениях для знакомств, только словами. */
+.stamp {
+  position: absolute;
+  top: var(--ui-space-base);
+  z-index: 2;
+  padding: var(--ui-space-tight) var(--ui-space-snug);
+  border: 2px solid currentColor;
+  border-radius: var(--ui-radius);
+  background: var(--ui-bg);
+  color: var(--ui-accent-text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.stamp-right {
+  right: var(--ui-space-base);
+  transform: rotate(7deg);
+}
+
+.stamp-left {
+  left: var(--ui-space-base);
+  transform: rotate(-7deg);
 }
 
 .post.read {
