@@ -5,7 +5,7 @@
    */
   import { onMount, onDestroy, tick } from 'svelte';
   import { createEventDispatcher } from 'svelte';
-  import { Button, EmptyState, Notice, Skeleton, Spinner } from '@monos/ui';
+  import { Button, Chip, EmptyState, Notice, Skeleton, Spinner } from '@monos/ui';
 
   import PostCard from './PostCard.svelte';
   import Icon from './Icon.svelte';
@@ -58,6 +58,9 @@
 
   // The day separator: a post of another day starts a new group.
   $: groups = groupByDay(posts);
+
+  // Имя действующего фильтра: коллекция или канал.
+  $: filterName = collection ? collection.name : tab;
 
   function groupByDay(items) {
     const out = [];
@@ -327,18 +330,6 @@
 </div>
 
 <div class="column" id="feed">
-  <!-- Фильтры ленты: на широком экране они стоят в шапке под поиском,
-       на телефоне — здесь. -->
-  {#if feedMode === 'feed'}
-    <div class="tabs-wrap phone-only">
-      <button type="button" class="tabs-toggle" on:click={() => dispatch('openChannels')}>
-        <Icon name="chevron" size={16} />
-        <span id="tabsToggleLabel">{collection ? collection.name : tab ? tab : 'Все каналы'}</span>
-        <Icon name="chevron" size={16} />
-      </button>
-    </div>
-  {/if}
-
   {#if feedMode === 'saved'}
     <h1 class="feed-title">Сохранённые публикации</h1>
     <p class="fresh">То, что ты отметил «Сохранить». Порядок — по времени сохранения.</p>
@@ -346,14 +337,19 @@
 
   {#if feedMode === 'feed'}
     <div class="feed-bar phone-only">
+      <!-- Выбор канала и коллекции делается через папку: отдельного списка
+           «Все каналы» не нужно, действие у них одно. Здесь только то, чем
+           фильтр снять, и переключатель прочитанного. -->
+      {#if filterName}
+        <Chip tone="accent" removable removeLabel="Снять фильтр" on:remove={() => dispatch('tab', '')}>
+          {filterName}
+        </Chip>
+      {/if}
       <span id="readToggle" class="read-toggle">
         <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
           {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
         </Button>
       </span>
-      {#if tab || collection}
-        <Button variant="text" size="sm" on:click={() => pickChannel('')}>Все каналы</Button>
-      {/if}
     </div>
   {/if}
 
@@ -431,31 +427,6 @@
 </div>
 
 <style>
-  .tabs-wrap {
-    position: relative;
-    max-width: 748px;
-    margin: 0 auto;
-    padding: var(--ui-space-base) var(--ui-space-roomy) var(--ui-space-snug);
-  }
-
-  .tabs-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--ui-space-snug);
-    width: 100%;
-    min-height: 44px;
-    padding: var(--ui-space-base);
-    font: inherit;
-    font-size: 14px;
-    text-align: left;
-    cursor: pointer;
-    background: none;
-    border: 0;
-    border-bottom: 1px solid var(--ui-line);
-    border-radius: 0;
-    color: var(--ui-ink);
-  }
-
   .feed-title {
     font-size: 20px;
     line-height: 1.25;

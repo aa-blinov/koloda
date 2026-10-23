@@ -111,9 +111,13 @@ Confirmed by the code:
   names in the catalog. Each section keeps its own query, and on the channel
   and the profile there is no search at all, because it would not work there.
 - The search stands in the top right corner of the window, and the filters of
-  the feed — the channel picker and "hide the read ones" — stand under it with
-  the same edge. On a phone the filters stand above the feed, and the choice
-  to hide the read ones is remembered on the device.
+  the feed — the chosen channel or collection and "hide the read ones" — stand
+  under it with the same edge. On a phone the filters stand above the feed,
+  and the choice to hide the read ones is remembered on the device.
+- The channel and the collection are chosen in one place: the folder with the
+  channels and the collections. There is no second list with the same action.
+  A filter that is on is named by a label with a cross, and the cross takes
+  it off.
 - The transition between the screens is short and is skipped when the system
   asks for less motion.
 - A profile with a password, a session cookie for 30 days, PBKDF2-SHA256 with
