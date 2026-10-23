@@ -409,19 +409,42 @@ the type, so no button has a fill or a frame at rest.
   scroll at all, the card takes the height that is left from the header and
   the bottom bar.
 - The card is dragged sideways: to the right it is marked read, to the left it
-  is saved. The card follows the finger and turns with it, up to nine degrees.
+  is saved. The card follows the finger and turns with it, up to fourteen
+  degrees. It is a surface with a 24 px corner and a lifted shadow, and it fills
+  the space between the header and the buttons.
 - The word of the action is stamped on the card, on the side that stays in
   sight: the card goes to the right, the word stays on the left.
 - The gesture counts as horizontal only from 14 px and only when it is clearly
   horizontal, so the scroll of the card is not disturbed. The action happens
   from 92 px. `touch-action: pan-y` gives the vertical scroll to the browser
   and keeps the horizontal for the card.
-- The next card lies under the current one, smaller and dimmer: the deck is
-  seen to continue.
+- The next card lies under the current one, narrower by 12 px on each side,
+  and its bottom edge is 12 px below the current card's: a strip of it shows
+  at the bottom, so the deck is seen to continue. At rest the next card is an
+  empty frame: its text shows only as it rises.
+- The next card rises with the finger and is at full size when the drag
+  reaches the trigger. It does not lag behind the finger. When the current card
+  leaves, the next one is already at full size and settles into its place.
+- A post with pictures shows its first picture as the face of the card, filling
+  the space between the text and the buttons. The other pictures are hidden, and
+  the counter in the corner says how many there are.
+- The line "Вернуть" after a gesture lies over the deck and does not push the
+  deck down. The two buttons over the deck are the quiet kind of the kit: no
+  capitals.
+- The card flies off the screen and only then leaves the deck. It does not snap
+  back to the centre first.
+- The stamp grows with the drag: faint at the start, full at 100 px. The word
+  of the read mark is in the success colour, the word of the save in the accent.
+- Under the deck there are two round buttons, 60 px across, with a caption
+  under each. They do what the gesture does: the left saves, the right marks
+  read.
 - A post longer than the card scrolls inside the card, and the scroll of the
   card does not reach the page.
 - The buttons under the post stay: a screen reader cannot drag a card, and the
-  buttons name the actions.
+  buttons name the actions. In the deck the save button under the post is left
+  out, because the round button under the deck saves.
+- The channel's avatar on the card is round. The name keeps the size of the
+  feed: a larger one cut the name off next to the views and the time.
 - On a wide screen the feed is a column, not a deck: there is a mouse, and a
   column is read by scrolling.
 

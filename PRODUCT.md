@@ -89,7 +89,12 @@ Confirmed by the code:
 - On a phone the feed is a **deck**: one post at a time, no vertical scroll of
   the column. The card is dragged sideways, as in the apps for meetings: to the
   right it is marked read, to the left it is saved. The card follows the
-  finger, says what will happen, and the action can be taken back. A post
+  finger, says what will happen, and the action can be taken back. Two round
+  buttons under the deck do the same without a gesture: the left saves, the
+  right marks read. Pulling the card down scrolls it and does not refresh the
+  feed; the button over the deck does that. The next post rises with the
+  finger. A post with pictures shows its first picture as the face of the card,
+  and the other pictures are hidden behind a counter. A post
   that was on the screen has been seen, so a saved post is read as well and
   does not come back to the deck. The next page arrives when the deck runs
   low. On a wide screen the same feed stays a column: there is a mouse, and

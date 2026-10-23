@@ -16,6 +16,8 @@
   export let title = '';
   export let avatar = '';
   export let saved = false;
+  // Верхняя карточка колоды: только она принимает жест и команды кнопок.
+  export let front = false;
 
   const dispatch = createEventDispatcher();
 
@@ -100,14 +102,17 @@
   // горизонтальный, иначе лента едет мимо.
   let swipeX = 0;
   let swiping = false;
+  let flying = false;
   let startX = 0;
   let startY = 0;
 
   const SWIPE_START = 14; // с какого смещения жест считается горизонтальным
   const SWIPE_TRIGGER = 92; // с какого смещения действие срабатывает
+  const FLY = 600; // куда уезжает карточка: за край экрана
+  const FLY_MS = 220; // сколько ждём, пока карточка уедет, и только потом убираем
 
   function onTouchStart(event) {
-    if (event.touches.length !== 1) return;
+    if (!front || event.touches.length !== 1) return;
     startX = event.touches[0].clientX;
     startY = event.touches[0].clientY;
     swipeX = 0;
@@ -115,7 +120,7 @@
   }
 
   function onTouchMove(event) {
-    if (event.touches.length !== 1) return;
+    if (!front || event.touches.length !== 1) return;
     const dx = event.touches[0].clientX - startX;
     const dy = event.touches[0].clientY - startY;
     if (!swiping) {
@@ -124,24 +129,41 @@
       swiping = true;
     }
     swipeX = dx;
+    dispatch('lift', Math.min(1, Math.abs(dx) / SWIPE_TRIGGER));
   }
 
   function onTouchEnd() {
+    if (!front) return;
     if (!swiping) {
       swipeX = 0;
       return;
     }
     swiping = false;
-    const dx = swipeX;
-    if (dx >= SWIPE_TRIGGER) {
-      swipeRead();
-      dispatch('swipe', { direction: 'right', post });
-    } else if (dx <= -SWIPE_TRIGGER) {
-      swipeSave();
-      dispatch('swipe', { direction: 'left', post });
-    } else {
+    if (swipeX >= SWIPE_TRIGGER) commit('right');
+    else if (swipeX <= -SWIPE_TRIGGER) commit('left');
+    else {
       swipeX = 0;
+      dispatch('lift', 0);
     }
+  }
+
+  // Жест и кнопки под колодой идут одним путём: карточка уезжает за край, и
+  // только потом колода её убирает. Повторное нажатие во время полёта ничего
+  // не делает. Следующая карточка поднимается до полного размера.
+  function commit(direction) {
+    if (flying) return;
+    flying = true;
+    swiping = false;
+    dispatch('lift', 1);
+    swipeX = direction === 'right' ? FLY : -FLY;
+    if (direction === 'right') swipeRead();
+    else swipeSave();
+    setTimeout(() => dispatch('swipe', { direction, post }), FLY_MS);
+  }
+
+  // Кнопки под колодой шлют команду сюда: её принимает только верхняя карточка.
+  function onDeckAction(event) {
+    if (front) commit(event.detail);
   }
 
   function swipeRead() {
@@ -157,7 +179,7 @@
     if (!saved) dispatch('save', { post });
   }
 
-  $: tilt = Math.max(-9, Math.min(9, swipeX / 26));
+  $: tilt = Math.max(-14, Math.min(14, swipeX / 18));
 
   function toggleSave() {
     dispatch('toggleSave', { post, saved });
@@ -173,19 +195,21 @@
   class="post"
   class:read
   class:swiping
+  class:flying
   data-post={postKey(post)}
   style="--swipe: {swipeX}px; --tilt: {tilt}deg"
   on:touchstart={onTouchStart}
   on:touchmove|passive={onTouchMove}
   on:touchend={onTouchEnd}
   on:touchcancel={onTouchEnd}
+  on:deckaction={onDeckAction}
 >
   <!-- Штамп с той стороны, которая остаётся на виду: карточка уезжает
        в другую, и надпись была бы за краем экрана. -->
   {#if swiping && swipeX > 8}
-    <span class="stamp stamp-left">Прочитано</span>
+    <span class="stamp stamp-left" style:opacity={Math.min(1, swipeX / 100)}>Прочитано</span>
   {:else if swiping && swipeX < -8}
-    <span class="stamp stamp-right">Сохранить</span>
+    <span class="stamp stamp-right" style:opacity={Math.min(1, -swipeX / 100)}>Сохранить</span>
   {/if}
   <div class="meta">
     <!-- Непрочитанность стоит рядом с кнопкой, а не внутри неё: иначе
@@ -318,7 +342,7 @@
   {/if}
 
   <div class="post-actions">
-    <Button variant="text" size="sm" on:click={toggleSave} aria-pressed={saved}>
+    <Button class="act-save" variant="text" size="sm" on:click={toggleSave} aria-pressed={saved}>
       {saved ? 'Сохранено' : 'Сохранить'}
     </Button>
     <Button variant="text" size="sm" on:click={share}>Поделиться</Button>

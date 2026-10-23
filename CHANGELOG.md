@@ -15,6 +15,15 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Changed
 
+- The deck on a phone looks like a deck: the card fills the stack and lifts off
+  the page, the next card shows as a strip under it, and two round buttons under
+  the deck save and mark read, the same as the gesture. A card flies off the
+  screen instead of snapping back to the centre first. Pulling a card down no
+  longer refreshes the feed: the card scrolls, and the button over the deck
+  refreshes it.
+- The next card of the deck rises with the finger, and a post with pictures
+  shows its first picture as the face of the card. The line "Вернуть" after a
+  gesture lies over the deck instead of pushing it down on every gesture.
 - The "all channels" dropdown is gone: the folder with the channels and the
   collections does the same, and two controls with one action say nothing. The
   filter that is on is named by a chip with a cross, and the cross takes it

@@ -157,6 +157,12 @@ body {
 
 .post.swiping {
   transition: opacity 0.18s;
+}
+
+/* Жест и полёт за край — один transform. Полёт идёт с переходом: карточка
+   уезжает, а не прыгает обратно к центру. */
+.post.swiping,
+.post.flying {
   transform: translateX(var(--swipe, 0px)) rotate(var(--tilt, 0deg));
 }
 
@@ -166,11 +172,11 @@ body {
   top: var(--ui-space-base);
   z-index: 2;
   padding: var(--ui-space-tight) var(--ui-space-snug);
-  border: 2px solid currentColor;
+  border: 3px solid currentColor;
   border-radius: var(--ui-radius);
   background: var(--ui-bg);
   color: var(--ui-accent-text);
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -185,6 +191,7 @@ body {
 .stamp-left {
   left: var(--ui-space-base);
   transform: rotate(-7deg);
+  color: var(--ui-success-text);
 }
 
 .post.read {
