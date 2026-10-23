@@ -13,7 +13,7 @@
    *   history, and the hash follows the screen.
    */
   import { onMount, tick } from 'svelte';
-  import { NavItem, Button, IconButton, SearchField, Toaster } from '@monos/ui';
+  import { NavItem, Button, Chip, IconButton, SearchField, Toaster } from '@monos/ui';
 
   import AuthScreen from './components/AuthScreen.svelte';
   import FeedView from './components/FeedView.svelte';
@@ -89,6 +89,14 @@
   $: collectionFilter = collectionFilterId
     ? $collectionsList.find((c) => String(c.id) === String(collectionFilterId)) || null
     : null;
+  // Имя действующего фильтра ленты: коллекция или канал.
+  $: filterName = collectionFilter ? collectionFilter.name : feedTab;
+
+  // Фильтр снимается целиком: и коллекция, и канал.
+  function clearFilter() {
+    feedTab = '';
+    collectionFilterId = null;
+  }
 
   // --- экраны и адреса ---
 
@@ -470,14 +478,16 @@
             </div>
 
             <!-- Фильтры ленты: на широком экране они под поиском, справа от
-                 него; на телефоне — над лентой, там шапка для них тесна. -->
+                 него; на телефоне — над лентой, там шапка для них тесна.
+                 Выбор канала и коллекции делается через папку: отдельного
+                 списка «Все каналы» не нужно, действие у них одно. -->
             {#if feedMode === 'feed' && view === 'feed'}
               <div class="filters">
-                <button type="button" class="pick" on:click={() => (channelsOpen = true)}>
-                  <Icon name="chevron" size={16} />
-                  <span>{collectionFilter ? collectionFilter.name : feedTab || 'Все каналы'}</span>
-                  <Icon name="chevron" size={16} />
-                </button>
+                {#if filterName}
+                  <Chip tone="accent" removable removeLabel="Снять фильтр" on:remove={clearFilter}>
+                    {filterName}
+                  </Chip>
+                {/if}
                 <Button
                   variant="text"
                   size="sm"
@@ -529,7 +539,6 @@
             collection={collectionFilter}
             on:ready={onReady}
             on:clearCollection={() => (collectionFilterId = null)}
-            on:openChannels={() => (channelsOpen = true)}
             on:tab={(event) => {
               // Клик по имени канала в посте — это фильтр, второй клик снимает
               // его. Коллекция при этом снимается: два фильтра сразу не живут.
@@ -708,24 +717,6 @@
     gap: var(--ui-space-base);
   }
 
-  .pick {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--ui-space-tight);
-    min-height: 32px;
-    padding: 0 var(--ui-space-snug);
-    background: none;
-    border: 0;
-    border-radius: var(--ui-radius);
-    color: var(--ui-ink);
-    font: inherit;
-    font-size: 13px;
-    cursor: pointer;
-  }
-
-  .pick:hover {
-    background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
-  }
 
   .brand {
     display: inline-flex;

@@ -15,6 +15,10 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Changed
 
+- The "all channels" dropdown is gone: the folder with the channels and the
+  collections does the same, and two controls with one action say nothing. The
+  filter that is on is named by a chip with a cross, and the cross takes it
+  off.
 - The search stands in the top right corner of the window, and the filters of
   the feed — the channel picker and "hide the read ones" — stand under it with
   the same edge. On a phone the filters stand above the feed: the header has

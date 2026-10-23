@@ -278,6 +278,12 @@ turn. On a phone the header has no room for the filters, and they stand above
 the feed instead. The same filters in both places, one state: the filters
 live in the shell, and the feed only draws the posts.
 
+**There is no "all channels" dropdown.** The folder in the sidebar and in the
+header opens the list of the channels and the collections, and that is the
+only way to choose one. A second control with the same action is a control
+that says nothing. When a filter is on, it is named by a chip with a cross:
+the reader sees what is on and can take it off.
+
 The signs are not decoration and not one sign for everything:
 
 - the feed is **lines of posts**;

@@ -54,9 +54,11 @@ The interface is in Russian; the labels quoted here are translated.
   does the same as the arrow, and every screen remembers the place where the
   reader stopped scrolling.
 - **Search and filters.** The search stands in the top right corner, and under
-  it the filters of the feed: the channel picker and "hide the read ones".
-  On a phone the filters stand above the feed, and the choice to hide the
-  read ones is remembered on the device.
+  it the filters of the feed: the chosen channel or collection and "hide the
+  read ones". On a phone the filters stand above the feed, and the choice to
+  hide the read ones is remembered on the device. The channel and the
+  collection are chosen in one place — the folder with the channels and the
+  collections.
 - **Avatars.** The photo of a channel is taken from the public page on t.me
   (`og:image`) and kept for seven days. A channel with no photo shows the first
   letter of its name.

@@ -171,6 +171,9 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
   picker and "hide the read ones" stand in the header under the search on a
   wide screen and above the feed on a phone. One state, two places: the state
   is in `App.svelte`, the feed only draws the posts and reports the clicks.
+- **One action — one control.** The "all channels" dropdown did the same as
+  the folder with the channels and the collections, and said nothing; it is
+  gone. The filter that is on is named by a chip with a cross.
 - **The width alone does not tell a phone from a desktop.** A phone in the
   lying position is wider than 900 px, and there the sidebar would stand at
   the side, where the finger does not reach. The layout of the phone is
