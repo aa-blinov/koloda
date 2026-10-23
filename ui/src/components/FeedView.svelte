@@ -647,6 +647,50 @@
     transition: none;
   }
 
+  /* Телефон в лежачем положении: высоты мало, и кнопки под колодой съели бы
+     карточку (была 108 px). Кнопки уходят в правую колонку, карточка получает
+     всю высоту под шапкой колоды. */
+  @media (max-height: 500px) {
+    .deck {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .deck-top {
+      grid-column: 1 / -1;
+    }
+
+    .deck-stack {
+      grid-column: 1;
+      grid-row: 2;
+      width: auto;
+      max-width: none;
+      margin: 0;
+    }
+
+    .deck-actions {
+      grid-column: 2;
+      grid-row: 2;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--ui-space-base);
+      padding-left: var(--ui-space-base);
+    }
+  }
+
+  /* Кто просит меньше движения, тот не видит подъёма и полёта: карточка
+     меняется сразу. Полёт остаётся, только без перехода. */
+  @media (prefers-reduced-motion: reduce) {
+    .deck-card,
+    .deck-card :global(.post),
+    .deck-card.behind :global(.post > *),
+    .deck-ring {
+      transition: none;
+    }
+  }
+
   /* Следующая карточка в покое — пустая рамка: её текст проступал бы в полоске
      под верхней. Текст проявляется по мере протяжки. */
   .deck-card.behind :global(.post > *) {
@@ -710,6 +754,13 @@
     background: var(--ui-surface);
     box-shadow: var(--ui-shadow-lift);
     content-visibility: visible;
+  }
+
+  /* Текстовый пост в ленте ограничен по ширине (34em), в колоде карточка
+     занимает всю стопку: иначе на широком экране телефона следующая карточка
+     выглядывала бы справа. */
+  .deck-card :global(article.post) {
+    max-width: none;
   }
 
   .deck-card :global(.txt) {

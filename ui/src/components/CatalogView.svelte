@@ -204,7 +204,7 @@
   {/if}
 
   {#if categories.length || categoriesFailed}
-    <div class="filters" id="cats" role="group" aria-label="Категории">
+    <div class="filters" class:wrap={allCategories} id="cats" role="group" aria-label="Категории">
       <button
         type="button"
         class="chip"
@@ -348,6 +348,13 @@
     scrollbar-width: thin;
   }
 
+  /* «Все категории» разворачивает ряд: чипы переносятся, и все видны без
+     прокрутки вбок. Без этого кнопка меняла только надпись. */
+  .filters.wrap {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
   .chip {
     flex: 0 0 auto;
     min-height: 36px;
@@ -366,6 +373,13 @@
     background: var(--ui-surface-2);
     color: var(--ui-ink);
     border-color: var(--ui-ink-soft);
+  }
+
+  /* Палец: чип не ниже 44 px. На мыши остаётся компактным. */
+  @media (pointer: coarse) {
+    .chip {
+      min-height: 44px;
+    }
   }
 
   .sort-row {

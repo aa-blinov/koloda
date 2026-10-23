@@ -88,6 +88,29 @@ body {
   }
 }
 
+/* Палец шире текста: цель касания не меньше 44 px, а поле ввода — с шрифтом
+   16 px, иначе iOS увеличивает страницу при фокусе. Только там, где есть палец.
+   :root в селекторах — чтобы перебить классы кита, которые задают размер сами. */
+@media (pointer: coarse) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  :root button,
+  :root [role='tab'],
+  :root .ch-link {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  :root input,
+  :root textarea,
+  :root select {
+    font-size: 16px;
+  }
+}
+
 [hidden] {
   display: none !important;
 }
@@ -116,7 +139,10 @@ body {
 }
 
 /* ---------- Колонка ---------- */
+/* width: 100% — иначе колонка с авто-отступами берёт ширину по содержимому:
+   ряд чипов каталога растягивал её до 748 px на экране в 390 px. */
 .column {
+  width: 100%;
   max-width: 748px;
   margin: 0 auto;
   padding: 0 var(--ui-space-roomy) var(--ui-space-section);
@@ -254,8 +280,10 @@ body {
   white-space: nowrap;
 }
 
-.meta .who:hover {
-  color: var(--ui-accent-text);
+@media (hover: hover) {
+  .meta .who:hover {
+    color: var(--ui-accent-text);
+  }
 }
 
 .meta-end {
@@ -331,8 +359,10 @@ body {
   text-decoration-thickness: 1px;
 }
 
-.txt a:hover {
-  text-decoration-thickness: 2px;
+@media (hover: hover) {
+  .txt a:hover {
+    text-decoration-thickness: 2px;
+  }
 }
 
 .txt b,
@@ -541,8 +571,10 @@ body {
   text-decoration: none;
 }
 
-.orig a:hover {
-  color: var(--ui-accent-text);
+@media (hover: hover) {
+  .orig a:hover {
+    color: var(--ui-accent-text);
+  }
 }
 
 .quote {
@@ -580,8 +612,10 @@ body {
   transition: border-color 0.16s;
 }
 
-.doc:hover {
-  border-color: var(--ui-accent);
+@media (hover: hover) {
+  .doc:hover {
+    border-color: var(--ui-accent);
+  }
 }
 
 .doc .nm {
@@ -610,8 +644,10 @@ body {
   transition: border-color 0.16s;
 }
 
-.preview:hover {
-  border-color: var(--ui-accent);
+@media (hover: hover) {
+  .preview:hover {
+    border-color: var(--ui-accent);
+  }
 }
 
 .preview img {
@@ -728,7 +764,7 @@ body {
 
 .channel-count small {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ui-ink-faint);
 }
 
@@ -751,8 +787,10 @@ body {
   gap: var(--ui-space-field);
 }
 
-.channel-action:hover {
-  background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+@media (hover: hover) {
+  .channel-action:hover {
+    background: color-mix(in srgb, var(--ui-ink) 8%, transparent);
+  }
 }
 
 .channel-action.is-on {

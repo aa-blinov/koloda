@@ -97,8 +97,9 @@ Confirmed by the code:
   and the other pictures are hidden behind a counter. A post
   that was on the screen has been seen, so a saved post is read as well and
   does not come back to the deck. The next page arrives when the deck runs
-  low. On a wide screen the same feed stays a column: there is a mouse, and
-  the column is read by scrolling.
+  low. Turned sideways, the phone keeps the deck: its buttons stand in a column
+  on the right, and the card keeps the height. On a wide screen the same feed
+  stays a column: there is a mouse, and the column is read by scrolling.
 - The vertical scroll of the feed is only on the wide screen. The card scrolls
   inside itself when the post is longer than the card.
 - An unread post says so: a dot and the word next to the name of the channel,

@@ -433,8 +433,10 @@
     text-transform: uppercase;
   }
 
-  .export:hover {
-    color: var(--ui-accent-text);
+  @media (hover: hover) {
+    .export:hover {
+      color: var(--ui-accent-text);
+    }
   }
 
   .tg-actions {
