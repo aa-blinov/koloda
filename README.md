@@ -96,7 +96,8 @@ The interface is in Russian; the labels quoted here are translated.
   time, with no vertical scroll of the column. A card is dragged sideways: to
   the right it is marked read, to the left it is saved. The card follows the
   finger and says what will happen, the action can be taken back, and the next
-  post comes forward. On a wide screen the same feed stays a column: there is
+  post comes forward. Two round buttons under the deck do the same without a
+  gesture. On a wide screen the same feed stays a column: there is
   a mouse, and a column is read by scrolling.
 
 ## Screenshots

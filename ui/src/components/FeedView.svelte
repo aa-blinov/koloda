@@ -151,15 +151,30 @@
 
   // --- колода: по одной карточке, без вертикальной прокрутки ---
 
-  // Куда улетает карточка, когда её оттолкнули.
-  let flyX = 0;
+  // Насколько верхнюю карточку сдвинули от 0 до 1: следующая поднимается за ней.
+  // dragging — палец ещё держит карточку, и поднимать её надо без задержки.
+  let lift = 0;
+  let dragging = false;
+  function onLift(event) {
+    lift = event.detail;
+    dragging = lift > 0 && lift < 1;
+  }
 
+  // Карточку уже увезла её собственная анимация: здесь её только убираем.
   function deckSwipe(event) {
-    const { direction } = event.detail;
-    flyX = direction === 'right' ? window.innerWidth : -window.innerWidth;
-    posts = posts.slice(1);
+    const key = postKey(event.detail.post);
+    posts = posts.filter((post) => postKey(post) !== key);
+    // Новая верхняя карточка начинает с нуля: та, что поднялась, уже стала верхней.
+    lift = 0;
     // Колода скоро кончится: заранее берём следующую страницу.
     if (posts.length <= 3 && hasMore && !loading) load(true);
+  }
+
+  // Кнопки под колодой: команда уходит верхней карточке, как будто её сдвинули.
+  let stack;
+  function deckButton(direction) {
+    const card = stack && stack.querySelector('.deck-card:not(.behind) .post');
+    if (card) card.dispatchEvent(new CustomEvent('deckaction', { detail: direction }));
   }
 
   $: currentDay = posts.length ? dayLabel(posts[0].ts) : '';
@@ -313,8 +328,9 @@
 
   function onTouchStart(event) {
     // Жест только в самом верху ленты и одним пальцем, и не внутри окна:
-    // в просмотрщике и в диалогах тянуть нечего.
-    if (window.scrollY > 0) return;
+    // в просмотрщике и в диалогах тянуть нечего. В колоде обновляет кнопка:
+    // вертикальная протяжка там — прокрутка карточки, а не обновление.
+    if (deck || window.scrollY > 0) return;
     if (event.touches.length !== 1) return;
     if (event.target && event.target.closest && event.target.closest('[role="dialog"]')) return;
     lastTouch = event.touches[0].clientY;
@@ -398,15 +414,15 @@
           </Chip>
         {/if}
         <span id="readToggle" class="read-toggle">
-          <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
+          <Button variant="quiet" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
             {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
           </Button>
         </span>
-        <Button variant="text" size="sm" on:click={() => load(false)}>Обновить</Button>
+        <Button variant="quiet" size="sm" on:click={() => load(false)}>Обновить</Button>
       </div>
     </div>
 
-    <div class="deck-stack">
+    <div class="deck-stack" class:dragging bind:this={stack}>
       {#if loading && !posts.length}
         <div class="skeletons">
           <Skeleton class="h-32" />
@@ -426,9 +442,11 @@
         </EmptyState>
       {:else}
         {#each posts.slice(0, 2) as post, i (postKey(post))}
-          <div class="deck-card" class:behind={i === 1} out:fly={{ x: flyX, duration: 190 }}>
+          <div class="deck-card" class:behind={i === 1} style="--lift: {lift}">
             <PostCard
               {post}
+              front={i === 0}
+              on:lift={onLift}
               read={$reads.has(postKey(post))}
               title={$titles[post.channel]}
               avatar={$avatars.get(post.channel) || ''}
@@ -444,7 +462,17 @@
       {/if}
     </div>
 
-    <p class="deck-hint">Тяни карточку вправо, чтобы отметить прочитанным, влево, чтобы сохранить.</p>
+    <!-- Кнопки делают то же, что жест: левая сохраняет, правая отмечает прочитанным. -->
+    <div class="deck-actions">
+      <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('left')}>
+        <span class="deck-ring deck-save"><Icon name="bookmark" size={24} /></span>
+        <span class="deck-label">Сохранить</span>
+      </button>
+      <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('right')}>
+        <span class="deck-ring deck-read"><Icon name="check" size={26} /></span>
+        <span class="deck-label">Прочитано</span>
+      </button>
+    </div>
   </div>
 {:else}
 <div
@@ -597,32 +625,162 @@
     margin: 0 auto;
   }
 
+  /* Карточка заполняет стопку. Следующая лежит под ней уже и на отступ ниже:
+     полоска внизу показывает, что колода не кончилась. */
   .deck-card {
     position: absolute;
-    inset: 0 0 20px 0;
+    inset: 0 0 var(--ui-space-base);
+    z-index: 1;
+    transition: inset var(--ui-duration-base) cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  /* Следующая карточка поднимается вместе с протяжкой: при --lift 0 она на
+     отступ уже верхней, при 1 — во весь размер. */
+  .deck-card.behind {
+    inset: calc(var(--ui-space-base) * (1 - var(--lift))) calc(var(--ui-space-base) * (1 - var(--lift))) 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Пока палец тянет карточку, следующая идёт за ним без задержки. */
+  .deck-stack.dragging .deck-card {
+    transition: none;
+  }
+
+  /* Следующая карточка в покое — пустая рамка: её текст проступал бы в полоске
+     под верхней. Текст проявляется по мере протяжки. */
+  .deck-card.behind :global(.post > *) {
+    opacity: var(--lift);
+    transition: opacity var(--ui-duration-base);
+  }
+
+  .deck-stack.dragging .deck-card.behind :global(.post > *) {
+    transition: none;
+  }
+
+  /* Фото — лицо карточки: первый кадр занимает всё, что осталось между текстом
+     и действиями. Остальные кадры скрыты, счётчик в углу говорит, что они есть. */
+  .deck-card :global(.galw) {
+    display: flex;
+    flex: 1 0 auto;
+    min-height: 240px;
+    margin: var(--ui-space-base) 0 0;
+  }
+
+  .deck-card :global(.gal) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .deck-card :global(.galw .gal > *:not(:first-child)) {
+    display: none;
+  }
+
+  .deck-card :global(.galw .gal > *) {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+  }
+
+  .deck-card :global(.galw .gal-frame > img) {
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+    object-fit: cover;
+    margin: 0;
+  }
+
+  /* Сама карточка — это пост: поверхность, скругление и тень. Прокручивается
+     внутри себя, и прокрутка не уходит в страницу. Скругление — четыре радиуса
+     кита, чтобы оно оставалось на его шкале. */
+  .deck-card :global(.post) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 0;
+    padding: var(--ui-space-comfortable);
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    border: 0;
+    border-radius: calc(var(--ui-radius) * 4);
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow-lift);
+    content-visibility: visible;
   }
 
-  /* Следующая карточка лежит под текущей и чуть меньше: видно, что колода
-     не кончилась. */
-  .deck-card.behind {
-    inset: 0;
-    transform: scale(0.95) translateY(12px);
-    opacity: 0.55;
-    pointer-events: none;
-    z-index: 0;
+  .deck-card :global(.txt) {
+    font-size: 16px;
+    line-height: 1.6;
   }
 
-  .deck-card:not(.behind) {
-    z-index: 1;
+  /* Действия поста уходят вниз карточки: там палец их и ищет. «Сохранить» в
+     колоде есть кнопкой под ней, здесь она лишняя. */
+  .deck-card :global(.post-actions) {
+    margin-top: auto;
+    padding-top: var(--ui-space-base);
   }
 
-  .deck-hint {
-    color: var(--ui-ink-faint);
+  .deck-card :global(.act-save) {
+    display: none;
+  }
+
+  /* Аватар канала в карточке круглый: как фото в приложениях для знакомств. */
+  .deck-card :global(.chan-dot) {
+    border-radius: 999px;
+  }
+
+  .deck-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--ui-space-section);
+  }
+
+  .deck-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--ui-space-hair);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ui-ink-soft);
+    font: inherit;
     font-size: 12px;
-    text-align: center;
+    cursor: pointer;
+  }
+
+  .deck-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* Круг кнопки — полтора контрола кита. */
+  .deck-ring {
+    display: grid;
+    place-items: center;
+    width: calc(var(--ui-control-xl) * 1.5);
+    height: calc(var(--ui-control-xl) * 1.5);
+    border-radius: 999px;
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-line);
+    box-shadow: var(--ui-shadow-rest);
+    transition: transform var(--ui-duration-fast);
+  }
+
+  .deck-btn:active .deck-ring {
+    transform: scale(0.92);
+  }
+
+  .deck-save {
+    color: var(--ui-accent-text);
+  }
+
+  .deck-read {
+    color: var(--ui-success-text);
   }
 
   .feed-title {

@@ -780,6 +780,19 @@
 
   .deck-shell .topbar {
     flex: 0 0 auto;
+    position: relative;
+  }
+
+  /* Строка «Вернуть» висит поверх колоды: в потоке она сдвигала бы карточку
+     вниз на каждом жесте. */
+  .deck-shell .undo-bar {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 4;
+    background: var(--ui-bg);
+    border-bottom: 1px solid var(--ui-line);
   }
 
   .deck-shell .screens,
