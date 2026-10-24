@@ -106,11 +106,19 @@ export function applySettings(next) {
   root.dataset.mode = mode;
   root.dataset.font = current.font;
   root.dataset.modePref = current.mode;
-  // Цвет полосы браузера и заголовка установленного приложения — из токена палитры:
-  // хекс в исходниках сломал бы смену палитры.
-  const themeColor = document.getElementById('themeColor');
-  if (themeColor) themeColor.setAttribute('content', getComputedStyle(root).getPropertyValue('--ui-bg').trim());
+  syncThemeColor();
 }
+
+// Цвет полосы браузера и заголовка установленного приложения — из токена палитры:
+// хекс в исходниках сломал бы смену палитры. Читаем после загрузки стилей, иначе
+// токена ещё нет, и так и на экране входа, до настроек профиля.
+export function syncThemeColor() {
+  const themeColor = document.getElementById('themeColor');
+  if (!themeColor) return;
+  themeColor.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--ui-bg').trim());
+}
+
+if (typeof window !== 'undefined') window.addEventListener('load', syncThemeColor);
 
 if (darkQuery) {
   darkQuery.addEventListener('change', () => {
