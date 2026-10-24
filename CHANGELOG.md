@@ -13,6 +13,21 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.1 — 2026-10-24
+
+### Fixed
+
+- A channel the reader unsubscribed from does not come back when an old tab or
+  another device merges its browser state: the browser's channels move into an
+  empty profile only.
+- Registration with an address that is already held answers as a sent letter
+  would, and writes nothing, so the answer no longer shows who holds it. A
+  taken name still answers as taken.
+- The licence in the documentation matches the LICENSE file (MIT).
+
+The tag v0.3.0 stays as it was published; its house-style check failed on the
+licence wording, which this release fixes.
+
 ## 0.3.0 — 2026-10-24
 
 ### Changed
