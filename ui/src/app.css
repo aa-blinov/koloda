@@ -108,6 +108,15 @@ body {
     min-height: 48px;
   }
 
+  /* Ссылка в тексте поста: область нажатия выше строки, а вёрстка не сдвигается
+     (отступ и отрицательный margin гасят друг друга). */
+  :root .txt a,
+  :root .orig a {
+    display: inline-block;
+    padding: var(--ui-space-comfortable) 0;
+    margin: calc(var(--ui-space-comfortable) * -1) 0;
+  }
+
   :root input:not([type='checkbox']):not([type='radio']),
   :root textarea,
   :root select {
