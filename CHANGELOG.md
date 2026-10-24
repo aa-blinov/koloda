@@ -13,6 +13,20 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.0 — 2026-10-24
+
+### Changed
+
+- The interface is built on the Monos UI kit 1.5.1 (from 1.0.3). The components
+  the product uses kept their props; the kit's new sizes now apply to the search
+  field in the header, which is 36 px high instead of 40.
+- The faces come from the kit: JetBrains Mono by default, Inter for the sans
+  face and Source Serif 4 for the serif face, instead of Georgia and the system
+  sans. The product's own font files, their route and their test are removed.
+- The safe-area insets come from the kit's tokens, and the page sets the kit's
+  device profile: iPhone or Android on a finger, desktop with a mouse.
+- The check of the interface fails when a font is loaded from another address.
+
 ## 0.2.0 — 2026-10-24
 
 ### Changed
