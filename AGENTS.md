@@ -83,6 +83,12 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
 - **`accounts.email` is unique for the values that are not empty.** Write a
   missing address as `None` and not as an empty string, or the second profile
   without an address gets a 409.
+- **The content policy is in two places, and they must match.** `CSP` in
+  `app.py` goes out as the header, and `ui/index.html` repeats it in a
+  `<meta http-equiv>` without `frame-ancestors`. The production proxy replaces
+  the header, so the meta is what keeps `script-src` alive there.
+  `test_the_page_repeats_the_policy_for_a_proxy_that_replaces_the_header` fails
+  when the two drift apart; change both together.
 - **The values that come from the browser are checked against a white list on
   the server.** The theme, the font, the channel name, the search: they go into
   the markup as they are. The server answers 400 to an unknown theme or font.
