@@ -12,6 +12,7 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { dayLabel, postKey } from '../lib/format.js';
+  import { insertByTime } from '../lib/order.js';
   import {
     subs,
     reads,
@@ -229,7 +230,8 @@
     showUndo(text, () => {
       if (readChanged) markUnread(key);
       if (saveChanged) setServerSaved(post, was.saved);
-      posts = insertAt(posts, 0, post);
+      // На место по времени, а не наверх: за время отмены лента могла обновиться.
+      posts = insertByTime(posts, post);
     });
   }
 

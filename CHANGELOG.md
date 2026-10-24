@@ -23,6 +23,8 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- Undoing a read or a save in the deck put the post on top of the feed, above
+  the newer posts that had arrived meanwhile. It goes back to its place in time.
 - The emoji of the reactions under a post were missing: Telegram draws the
   standard reactions as pictures, and the emoji is in the name of the picture.
   Reactions with a custom emoji still show only their count, because the public

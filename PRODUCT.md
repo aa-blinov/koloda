@@ -86,12 +86,13 @@ Confirmed by the code:
   the post, the key `u`, or on a phone the swipe to the right in the deck. Scrolling
   never marks a post, and neither does a refresh or the next page. The mark is taken
   back by the same button or the key `u`; after a swipe the undo line brings the
-  card back to the top of the deck.
+  card back to its place in time, not to the top: the feed may have changed
+  meanwhile, and an older post must not jump above the newer ones.
 - On a phone the feed is a **deck**: one post at a time, no vertical scroll of
   the column. The card is dragged sideways, as in the apps for meetings: to the
   right it is marked read, to the left it is saved. The card follows the
   finger, says what will happen, and the action can be taken back: the card
-  comes back to the top of the deck, and both the mark and the save are undone.
+  comes back to its place in time in the deck, and both the mark and the save are undone.
   Two round buttons under the deck do the same without a gesture: the left saves,
   the right marks read. On the saved screen the left one takes the post out of
   the saved list, and the left swipe does the same. Pulling the card down scrolls it and does not refresh the
