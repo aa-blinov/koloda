@@ -13,6 +13,16 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.4 — 2026-10-24
+
+### Fixed
+
+- «Отписаться» in the list of channels did nothing: no handler listened to it.
+  It unsubscribes now, with the same undo as the channel page. The list closes
+  so that the undo line stays in reach.
+- A collection editor that was open when its collection got deleted elsewhere
+  refreshes the list on save, so the stale row goes away.
+
 ## 0.3.3 — 2026-10-24
 
 ### Fixed

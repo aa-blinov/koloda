@@ -665,6 +665,14 @@
   <ChannelsDialog
     open={channelsOpen}
     on:close={() => (channelsOpen = false)}
+    on:unsubscribe={(event) => {
+      // Отписка из списка: как на странице канала, с отменой на несколько секунд.
+      // Диалог закрываем: панель «Вернуть» стоит в шапке под ним и без этого не нажимается.
+      const channel = event.detail;
+      channelsOpen = false;
+      setSubscription(channel, false);
+      showUndo('Канал «' + channel + '» убран из ленты.', () => setSubscription(channel, true));
+    }}
     on:openChannel={(event) => {
       channelsOpen = false;
       openChannel(event.detail);

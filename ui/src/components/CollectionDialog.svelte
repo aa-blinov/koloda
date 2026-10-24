@@ -12,7 +12,7 @@
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
-  import { subs, titles, collections } from '../lib/stores.js';
+  import { subs, titles, collections, refreshCollections } from '../lib/stores.js';
 
   export let open = false;
   export let collection = null;
@@ -84,6 +84,8 @@
       dispatch('close');
     } catch (err) {
       problem = err && err.message ? err.message : 'Не удалось сохранить коллекцию.';
+      // Коллекцию уже удалили в другом месте: список обновляем, и её строка уходит.
+      if (err && err.status === 404) refreshCollections();
     } finally {
       busy = false;
     }

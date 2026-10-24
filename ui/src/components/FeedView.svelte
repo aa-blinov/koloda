@@ -466,7 +466,7 @@
           </Chip>
         {/if}
         {#if feedMode === 'feed'}
-          <span id="readToggle" class="read-toggle">
+          <span id="readToggleDeck" class="read-toggle">
             <Button variant="quiet" size="sm" on:click={toggleReadAll}>
               {$showRead ? 'Скрыть прочитанные' : 'Показать прочитанные'}
             </Button>

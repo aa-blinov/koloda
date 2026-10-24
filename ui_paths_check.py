@@ -127,8 +127,14 @@ def wait_posts(pg, timeout=60000):
     pg.wait_for_timeout(1500)
 
 
+def shown(pg, label):
+    """Кнопка с этой подписью, которая видна на текущем устройстве. На телефоне у навигации aria-label,
+    на ПК текст; оба варианта есть в разметке, и один из них всегда скрыт нулевым размером."""
+    return pg.locator("button[aria-label='%s'], button:has-text('%s')" % (label, label)).locator("visible=true").first
+
+
 def open_list(pg):
-    pg.click("button[aria-label='Каналы и коллекции']")
+    shown(pg, "Каналы и коллекции").click()
     pg.wait_for_selector("[role=dialog]")
     # список приходит запросом: без ожидания проверка смотрит на пустое окно
     pg.wait_for_selector("#chanList .chan, #chanList .coll-name", timeout=20000)
@@ -155,6 +161,25 @@ def feed_channels(pg):
         "[...document.querySelectorAll('#postList .post')].map(e => e.dataset.post)")})
 
 
+def filter_label(pg):
+    """Имя фильтра ленты: текст чипа с крестиком «Снять фильтр». Без чипа лента показывает все каналы.
+    Выпадающего списка «Все каналы» в шапке больше нет, поэтому #tabsToggleLabel не существует."""
+    cross = pg.locator("button[aria-label='Снять фильтр']").locator("visible=true")
+    if cross.count() == 0:
+        return "Все каналы"
+    return cross.first.locator("xpath=..").locator(".truncate").first.text_content().strip()
+
+
+def toggle_label(pg):
+    # text_content, а не inner_text: капс из CSS inner_text вернул бы как есть
+    # на ПК кнопка в шапке (App.svelte), на телефоне над лентой (FeedView); обе пишут «...прочитанные»
+    return shown_toggle(pg).text_content().strip()
+
+
+def shown_toggle(pg):
+    return pg.locator("button:has-text('прочитанные')").locator("visible=true").first
+
+
 def post_rows(pg):
     return pg.evaluate("[...document.querySelectorAll('#postList .post')]"
                        ".map(e => ({post: e.dataset.post, read: e.classList.contains('read')}))")
@@ -179,7 +204,7 @@ def insert_newer_post(channel):
 
 
 def open_profile(pg):
-    pg.locator("button[aria-label='Профиль']").first.click()
+    shown(pg, "Профиль").click()
     pg.wait_for_selector("h1:has-text('Профиль')")
 
 
@@ -259,7 +284,7 @@ def c1(c):
     # открыть коллекцию: лента показывает только её каналы
     c.pg.locator("#chanList .coll-name", has_text="Новости").first.click()
     c.pg.wait_for_timeout(3500)
-    assert c.pg.inner_text("#tabsToggleLabel") == "Новости", c.pg.inner_text("#tabsToggleLabel")
+    assert filter_label(c.pg) == "Новости", filter_label(c.pg)
     channels = feed_channels(c.pg)
     assert channels and set(channels) <= COLL_CHANNELS, "лента коллекции: %s" % channels
     assert collections_of(c.user)[0]["channels"] == sorted(COLL_CHANNELS), "на сервере другой состав"
@@ -270,7 +295,7 @@ def c2(c):
     make_collection(c.user, "Новости", ["rybolos_channel", "evilfreelancer"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
-    assert c.pg.inner_text("#tabsToggleLabel") == "Новости"
+    assert filter_label(c.pg) == "Новости"
     channels = feed_channels(c.pg)
     assert channels and set(channels) <= COLL_CHANNELS, channels
 
@@ -280,9 +305,10 @@ def c3(c):
     make_collection(c.user, "Новости", ["rybolos_channel"])
     login(c.pg, c.user)
     pick_collection(c.pg, "Новости")
-    c.pg.locator("#feed button", has_text="Все каналы").first.click()
+    # вернуться ко всем каналам: крестик на чипе фильтра, отдельного списка «Все каналы» нет
+    c.pg.locator("button[aria-label='Снять фильтр']").locator("visible=true").first.click()
     c.pg.wait_for_timeout(3500)
-    assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы"
+    assert filter_label(c.pg) == "Все каналы"
     assert len(set(feed_channels(c.pg))) >= 2, "в общей ленте меньше двух каналов"
 
 
@@ -336,7 +362,7 @@ def c7(c):
     c.pg.click("#collDelete button")
     wait_closed(c.pg, "collOvl")
     c.pg.wait_for_timeout(2500)
-    assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы"
+    assert filter_label(c.pg) == "Все каналы"
     assert collections_of(c.user) == [], "коллекция осталась на сервере"
 
 
@@ -372,15 +398,13 @@ def c11(c):
     make_collection(c.user, "Удалённая", ["rybolos_channel"])
     login(c.pg, c.user)
     open_list(c.pg)
-    c.pg.wait_for_timeout(2000)
-    found = [c for c in collections_of(c.user) if c["name"] == "Удалённая"]
-    assert found, "коллекции нет в списке"
-    collection_id = found[0]["id"]
-    api("/api/collections/delete", {"id": collection_id}, c.user["cookie"])
-    open_list(c.pg)
     wait_collection(c.pg, "Удалённая")
     c.pg.click("button[aria-label='Изменить коллекцию Удалённая']")
     c.pg.wait_for_selector("#collOvl [role=dialog]")
+    # редактор открыт, а коллекцию удаляют в другой вкладке: сохранение в устаревшем редакторе
+    found = [c for c in collections_of(c.user) if c["name"] == "Удалённая"]
+    assert found, "коллекции нет в списке"
+    api("/api/collections/delete", {"id": found[0]["id"]}, c.user["cookie"])
     c.pg.click("#collSave button")
     c.pg.wait_for_timeout(2500)
     assert "нет" in c.pg.inner_text("#collMsg"), c.pg.inner_text("#collMsg")
@@ -536,18 +560,19 @@ def f3(c):
     login(c.pg, c.user)
     if len(post_rows(c.pg)) < 3:
         raise Skip("постов меньше трёх")
-    assert c.pg.get_attribute("#readToggle button", "aria-pressed") == "true", "по умолчанию прочитанное должно быть спрятано"
+    # кнопка говорит действием: «Показать прочитанные» значит, что они спрятаны сейчас
+    assert toggle_label(c.pg) == "Показать прочитанные", "по умолчанию прочитанное должно быть спрятано"
     for _ in range(3):
         c.pg.evaluate("window.scrollBy(0, 900)")
         c.pg.wait_for_timeout(700)
     c.pg.wait_for_timeout(4000)
-    c.pg.click("#readToggle")
+    shown_toggle(c.pg).click()
     c.pg.wait_for_timeout(3000)
-    assert c.pg.get_attribute("#readToggle button", "aria-pressed") == "false", "кнопка не отжалась"
+    assert toggle_label(c.pg) == "Скрыть прочитанные", "кнопка не показала прочитанные"
     assert any(r["read"] for r in post_rows(c.pg)), "прочитанных постов не видно"
-    c.pg.click("#readToggle")
+    shown_toggle(c.pg).click()
     c.pg.wait_for_timeout(2500)
-    assert c.pg.get_attribute("#readToggle button", "aria-pressed") == "true", "кнопка не нажалась обратно"
+    assert toggle_label(c.pg) == "Показать прочитанные", "кнопка не нажалась обратно"
     assert not any(r["read"] for r in post_rows(c.pg)), "прочитанные не спрятались"
 
 
@@ -598,10 +623,11 @@ def f12(c):
     login(c.pg, c.user)
     open_list(c.pg)
     c.pg.locator("#chanList .unsub-btn").first.click()
-    c.pg.wait_for_timeout(1500)
+    # панель живёт UNDO_MS = 4 с: ждём её сразу после клика, иначе она уходит до проверки
+    c.pg.wait_for_selector("#undoBar", state="visible", timeout=3000)
+    c.pg.wait_for_timeout(800)
     removed = [ch for ch in CHANNELS if ch not in subscriptions_of(c.user)]
     assert len(removed) == 1, "канал не ушёл из подписок: %s" % removed
-    assert c.pg.locator("#undoBar").is_visible(), "панели отмены нет"
     c.pg.locator("#undoBar button").first.click()
     c.pg.wait_for_timeout(2000)
     assert sorted(subscriptions_of(c.user)) == sorted(CHANNELS), "отмена не вернула канал"
@@ -665,8 +691,9 @@ def v1(c):
     c.pg.get_by_role("button", name="Светлая").first.click()
     c.pg.wait_for_timeout(1800)
     assert c.pg.evaluate("document.documentElement.dataset.mode") == "light", "тема не применилась"
+    # адрес экрана в хеше: после перезагрузки открывается профиль, а не лента
     c.pg.reload()
-    c.pg.wait_for_selector("#postList", timeout=60000)
+    c.pg.wait_for_selector("h1:has-text('Профиль')", timeout=60000)
     assert c.pg.evaluate("document.documentElement.dataset.modePref") == "light", "после перезагрузки тема слетела"
 
 
@@ -788,8 +815,7 @@ def e3(c):
     pick_collection(c.pg, "Новости")
     c.pg.reload()
     c.pg.wait_for_selector("#postList, #deck", timeout=30000)
-    assert c.pg.inner_text("#tabsToggleLabel") == "Все каналы", "фильтр пережил перезагрузку"
-    open_list(c.pg)
+    assert filter_label(c.pg) == "Все каналы", "фильтр пережил перезагрузку"
     open_list(c.pg)
     wait_collection(c.pg, "Новости")
     assert c.pg.locator("#chanList .coll-name", has_text="Новости").count() == 1, "коллекции пропали"
@@ -899,7 +925,9 @@ def run(device_filter, only):
                     continue
                 phone = run_device == "phone"
                 viewport = {"width": 420, "height": 900} if phone else {"width": 1280, "height": 860}
-                ctx = browser.new_context(viewport=viewport, is_mobile=phone, has_touch=phone)
+                # bypass_csp: wait_for_function со строкой вычисляет её через eval, а CSP приложения eval не даёт.
+                # Политику проверяет отдельно csp_check.py, здесь она мешала бы самим проверкам.
+                ctx = browser.new_context(viewport=viewport, is_mobile=phone, has_touch=phone, bypass_csp=True)
                 pg = ctx.new_page()
                 pg.set_default_timeout(20000)
                 pg.on("dialog", lambda d: d.accept())
