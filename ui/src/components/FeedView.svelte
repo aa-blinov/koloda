@@ -91,7 +91,8 @@
     loading = true;
     // One letter matches almost everything: the feed gave back 57 posts out of
     // 60 and the reader lost their place. Below two letters we search nothing.
-    const effectiveQuery = query.trim().length >= 2 ? query.trim() : '';
+    const typed = query.trim();
+    const effectiveQuery = typed.length >= 2 ? typed : '';
     try {
       let answer;
       if (feedMode === 'saved') {
@@ -121,12 +122,16 @@
       }
       if (id !== requestId) return;
       posts = append ? posts.concat(answer.posts || []) : answer.posts || [];
+      syncSaved(answer.posts || [], !append);
       hasMore = Boolean(answer.has_more);
       errors = answer.errors || [];
       if (answer.titles) titles.set(answer.titles);
+      // Один знак ничего не ищет: лента показана без отбора, и об этом сказано.
       searchHint = effectiveQuery
         ? `По запросу «${effectiveQuery}»: ${answer.posts ? answer.posts.length : 0} постов`
-        : '';
+        : typed.length === 1
+          ? 'Введи хотя бы два символа, чтобы искать.'
+          : '';
       loadAvatars(posts.map((p) => p.channel));
       await tick();
       // В колоде отметка ставится жестом, а не прокруткой: прокрутки там нет.
@@ -144,6 +149,29 @@
 
   let savedCursor = null;
 
+  // Флажок «сохранено» приходит с каждым постом. Без него после перезагрузки
+  // сохранённые посты показывали «Сохранить», и снять сохранение было нельзя.
+  function syncSaved(list, replace) {
+    const keys = list.filter((post) => post.saved).map((post) => postKey(post));
+    savedPosts = new Set(replace ? keys : [...savedPosts, ...keys]);
+  }
+
+  // Сохранение на сервере и отметка на экране меняются одним путём.
+  function setServerSaved(post, on) {
+    api.setSaved(post.channel, post.msg_id, on).catch(() => {});
+    const key = postKey(post);
+    if (on) savedPosts.add(key);
+    else savedPosts.delete(key);
+    savedPosts = new Set(savedPosts);
+  }
+
+  function insertAt(list, index, post) {
+    const key = postKey(post);
+    const rest = list.filter((item) => postKey(item) !== key);
+    const at = index < 0 ? 0 : Math.min(index, rest.length);
+    return [...rest.slice(0, at), post, ...rest.slice(at)];
+  }
+
   function more() {
     if (loading || !hasMore) return;
     load(true);
@@ -160,14 +188,36 @@
     dragging = lift > 0 && lift < 1;
   }
 
-  // Карточку уже увезла её собственная анимация: здесь её только убираем.
+  // Карточку уже увезла её собственная анимация: здесь её убирают и меняют
+  // отметки. «Вернуть» отменяет отметки и ставит карточку первой в колоде.
   function deckSwipe(event) {
-    const key = postKey(event.detail.post);
-    posts = posts.filter((post) => postKey(post) !== key);
+    const { direction, post, was } = event.detail;
+    const key = postKey(post);
+    posts = posts.filter((item) => postKey(item) !== key);
     // Новая верхняя карточка начинает с нуля: та, что поднялась, уже стала верхней.
     lift = 0;
     // Колода скоро кончится: заранее берём следующую страницу.
     if (posts.length <= 3 && hasMore && !loading) load(true);
+
+    // Жест влево в ленте сохраняет, в сохранённом убирает из сохранённого.
+    // Любой жест отмечает пост прочитанным: он уже был на экране.
+    const wantSaved = direction === 'left' ? !inSaved : was.saved;
+    const readChanged = !was.read;
+    const saveChanged = wantSaved !== was.saved;
+    if (!readChanged && !saveChanged) return;
+    if (readChanged) markRead(key);
+    if (saveChanged) setServerSaved(post, wantSaved);
+    const text =
+      direction === 'right'
+        ? 'Публикация отмечена прочитанной.'
+        : wantSaved
+          ? 'Публикация сохранена.'
+          : 'Публикация убрана из сохранённого.';
+    showUndo(text, () => {
+      if (readChanged) markUnread(key);
+      if (saveChanged) setServerSaved(post, was.saved);
+      posts = insertAt(posts, 0, post);
+    });
   }
 
   // Кнопки под колодой: команда уходит верхней карточке, как будто её сдвинули.
@@ -178,13 +228,25 @@
   }
 
   $: currentDay = posts.length ? dayLabel(posts[0].ts) : '';
+  // В сохранённом жест влево убирает пост из сохранённого, в ленте — сохраняет.
+  $: inSaved = feedMode === 'saved';
+  $: leftLabel = inSaved ? 'Убрать из сохранённого' : 'Сохранить';
   // Пустая колода: то ли всё прочитано, то ли искать нечего.
-  $: deckEmptyTitle = query ? 'Ничего не нашлось' : subs.length ? 'Ты всё прочитал' : 'Пока пусто';
+  // В сохранённом пусто не оттого, что нет каналов: там сохраняют кнопкой.
+  $: deckEmptyTitle = query
+    ? 'Ничего не нашлось'
+    : feedMode === 'saved'
+      ? 'Сохранённых публикаций нет'
+      : subs.length
+        ? 'Ты всё прочитал'
+        : 'Пока пусто';
   $: deckEmptyText = query
     ? 'Измени запрос или выбери канал.'
-    : subs.length
-      ? 'Новых публикаций нет. Загляни позже или проверь сейчас.'
-      : 'Добавь канал в каталоге — и публикации появятся здесь.';
+    : feedMode === 'saved'
+      ? 'Публикацию сохраняет кнопка «Сохранить» у поста.'
+      : subs.length
+        ? 'Новых публикаций нет. Загляни позже или проверь сейчас.'
+        : 'Добавь канал в каталоге — и публикации появятся здесь.';
 
   // The next page arrives when the reader comes close to the end of the column.
   let loadMoreSeen = false;
@@ -250,8 +312,8 @@
   function markFocused() {
     if (focusIndex < 0 || !posts[focusIndex]) return;
     const key = postKey(posts[focusIndex]);
-    if ($reads.has(key)) markRead(key); // the mark is taken back
-    else markUnread(key);
+    if ($reads.has(key)) markUnread(key); // u снимает отметку
+    else markRead(key);
   }
 
   // Ключ поста для селектора: сюда приходит сам пост, а не строка.
@@ -259,32 +321,22 @@
     return postKey(post).replace(/"/g, '\\"');
   }
 
+  // Кнопка «Сохранено» у поста. В сохранённом снятие убирает пост из списка,
+  // а «Вернуть» ставит его на прежнее место.
   function toggleSave(event) {
     const { post, saved } = event.detail;
-    api.setSaved(post.channel, post.msg_id, !saved).catch(() => {});
-    if (saved) {
-      savedPosts.delete(postKey(post));
-      showUndo('Публикация убрана из сохранённого.', () => {
-        api.setSaved(post.channel, post.msg_id, true).catch(() => {});
-        savedPosts.add(postKey(post));
-      });
-    } else {
-      savedPosts.add(postKey(post));
+    if (!saved) {
+      setServerSaved(post, true);
+      return;
     }
-    savedPosts = new Set(savedPosts);
-  }
-
-  // Сохранение жестом влево: то же действие, что и кнопка, только без
-  // нажатия. Кнопка переключает, жест — сохраняет.
-  function savePost(event) {
-    const { post } = event.detail;
-    api.setSaved(post.channel, post.msg_id, true).catch(() => {});
-    savedPosts.add(postKey(post));
-    savedPosts = new Set(savedPosts);
-    showUndo('Публикация сохранена.', () => {
-      api.setSaved(post.channel, post.msg_id, false).catch(() => {});
-      savedPosts.delete(postKey(post));
-      savedPosts = new Set(savedPosts);
+    const key = postKey(post);
+    const index = posts.findIndex((item) => postKey(item) === key);
+    const inSavedList = feedMode === 'saved';
+    setServerSaved(post, false);
+    if (inSavedList) posts = posts.filter((item) => postKey(item) !== key);
+    showUndo('Публикация убрана из сохранённого.', () => {
+      setServerSaved(post, true);
+      if (inSavedList) posts = insertAt(posts, index, post);
     });
   }
 
@@ -413,20 +465,25 @@
             {filterName}
           </Chip>
         {/if}
-        <span id="readToggle" class="read-toggle">
-          <Button variant="quiet" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
-            {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
-          </Button>
-        </span>
+        {#if feedMode === 'feed'}
+          <span id="readToggle" class="read-toggle">
+            <Button variant="quiet" size="sm" on:click={toggleReadAll}>
+              {$showRead ? 'Скрыть прочитанные' : 'Показать прочитанные'}
+            </Button>
+          </span>
+        {/if}
         <Button variant="quiet" size="sm" on:click={() => load(false)}>Обновить</Button>
       </div>
+      {#if searchHint}
+        <p class="deck-hint" role="status">{searchHint}</p>
+      {/if}
     </div>
 
     <div class="deck-stack" class:dragging bind:this={stack}>
       {#if loading && !posts.length}
         <div class="skeletons">
-          <Skeleton class="h-32" />
-          <Skeleton class="h-32" />
+          <Skeleton height="8rem" />
+          <Skeleton height="8rem" />
         </div>
       {:else if failed}
         <EmptyState title="Не удалось загрузить ленту" description="Проверь соединение и попробуй ещё раз.">
@@ -437,7 +494,9 @@
       {:else if !posts.length}
         <EmptyState title={deckEmptyTitle} description={deckEmptyText}>
           <svelte:fragment slot="actions">
-            <Button on:click={() => load(false)}>Проверить новые</Button>
+            {#if feedMode !== 'saved'}
+              <Button on:click={() => load(false)}>Проверить новые</Button>
+            {/if}
           </svelte:fragment>
         </EmptyState>
       {:else}
@@ -446,6 +505,7 @@
             <PostCard
               {post}
               front={i === 0}
+              {leftLabel}
               on:lift={onLift}
               read={$reads.has(postKey(post))}
               title={$titles[post.channel]}
@@ -454,7 +514,6 @@
               on:openChannel={(event) => pickChannel(event.detail)}
               on:lightbox={(event) => dispatch('lightbox', event.detail)}
               on:toggleSave={toggleSave}
-              on:save={savePost}
               on:swipe={deckSwipe}
             />
           </div>
@@ -465,8 +524,8 @@
     <!-- Кнопки делают то же, что жест: левая сохраняет, правая отмечает прочитанным. -->
     <div class="deck-actions">
       <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('left')}>
-        <span class="deck-ring deck-save"><Icon name="bookmark" size={24} /></span>
-        <span class="deck-label">Сохранить</span>
+        <span class="deck-ring deck-save"><Icon name={inSaved ? 'close' : 'bookmark'} size={24} /></span>
+        <span class="deck-label">{leftLabel}</span>
       </button>
       <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('right')}>
         <span class="deck-ring deck-read"><Icon name="check" size={26} /></span>
@@ -502,8 +561,8 @@
         </Chip>
       {/if}
       <span id="readToggle" class="read-toggle">
-        <Button variant="text" size="sm" on:click={toggleReadAll} aria-pressed={!$showRead}>
-          {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
+        <Button variant="text" size="sm" on:click={toggleReadAll}>
+          {$showRead ? 'Скрыть прочитанные' : 'Показать прочитанные'}
         </Button>
       </span>
     </div>
@@ -522,9 +581,9 @@
   <div id="postList">
   {#if loading && !posts.length}
     <div class="skeletons">
-      <Skeleton class="h-32" />
-      <Skeleton class="h-32" />
-      <Skeleton class="h-32" />
+      <Skeleton height="8rem" />
+      <Skeleton height="8rem" />
+      <Skeleton height="8rem" />
     </div>
   {:else if failed}
     <EmptyState title="Не удалось загрузить ленту" description="Проверь соединение и попробуй ещё раз.">
@@ -534,19 +593,25 @@
     </EmptyState>
   {:else if !posts.length}
     <EmptyState
-      title={query ? 'Ничего не нашлось' : collection ? 'В коллекции пока нет каналов' : 'Пока пусто'}
+      title={query
+        ? 'Ничего не нашлось'
+        : feedMode === 'saved'
+          ? 'Сохранённых публикаций нет'
+          : collection
+            ? 'В коллекции пока нет каналов'
+            : 'Пока пусто'}
       description={query
         ? 'Измени запрос или выбери канал.'
-        : collection
-          ? 'Добавь каналы в коллекцию — из списка каналов или со страницы канала.'
-          : 'Добавь канал в каталоге — и публикации появятся здесь.'}
+        : feedMode === 'saved'
+          ? 'Публикацию сохраняет кнопка «Сохранить» у поста.'
+          : collection
+            ? 'Добавь каналы в коллекцию — из списка каналов или со страницы канала.'
+            : 'Добавь канал в каталоге — и публикации появятся здесь.'}
     >
       <svelte:fragment slot="actions">
         {#if query}
-          <Button on:click={() => {
-            query = '';
-            load(false);
-          }}>Сбросить поиск</Button>
+          <!-- Поле поиска в шапке общее с лентой: сбрасываем его там, а не только здесь. -->
+          <Button on:click={() => dispatch('clearSearch')}>Сбросить поиск</Button>
         {/if}
       </svelte:fragment>
     </EmptyState>
@@ -563,7 +628,6 @@
           on:openChannel={(event) => pickChannel(event.detail)}
           on:lightbox={(event) => dispatch('lightbox', event.detail)}
           on:toggleSave={toggleSave}
-          on:save={savePost}
         />
       {/each}
     {/each}
@@ -788,6 +852,20 @@
     display: flex;
     justify-content: center;
     gap: var(--ui-space-section);
+  }
+
+  /* Подпись кнопки может стать длинной («Убрать из сохранённого»): переносится. */
+  .deck-label {
+    max-width: 8em;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  .deck-hint {
+    flex: 1 0 100%;
+    margin: 0;
+    color: var(--ui-ink-soft);
+    font-size: 12.5px;
   }
 
   .deck-btn {

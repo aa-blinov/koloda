@@ -14,7 +14,6 @@
   const dispatch = createEventDispatcher();
 
   let index = 0;
-  let open = false;
   let swipe = null;
 
   $: frames = (items && items.items) || [];
@@ -22,7 +21,10 @@
   // Открыли другой пост — просмотрщик встаёт на тот кадр, с которого начали.
   $: if (items) index = Math.min(Math.max(items.index || 0, 0), Math.max(total - 1, 0));
   $: frame = frames[index];
-  $: open = Boolean(items && total);
+  // Открыт ли просмотр, решает родитель (items). Модалка получает это значение
+  // только на вход: двусторонняя привязка (bind:open) заставляла родителя снова
+  // открыть просмотр в ту же проверку, что и закрыл Escape, и крестик потом не работал.
+  $: shown = Boolean(items && total);
 
   function step(delta) {
     if (total < 2) return;
@@ -34,7 +36,7 @@
   }
 
   function onKeydown(event) {
-    if (!open) return;
+    if (!shown) return;
     // По видео стрелки ведут сам плеер: листать и перематывать сразу нельзя.
     if (event.target && event.target.closest && event.target.closest('video')) return;
     if (event.key === 'ArrowLeft') {
@@ -65,7 +67,7 @@
 <svelte:window on:keydown={onKeydown} />
 
 <Modal
-  bind:open
+  open={shown}
   title="Просмотр кадра"
   showClose={false}
   closeOnBackdrop={false}
@@ -73,6 +75,10 @@
   on:close={close}
 >
   <div class="stage" on:touchstart|passive={onTouchStart} on:touchend|passive={onTouchEnd}>
+    <!-- Пустое место вокруг кадра закрывает просмотр. Кнопка стоит под кадром и
+         кнопками, поэтому клик по ним до неё не доходит. -->
+    <button type="button" class="backdrop" tabindex="-1" aria-hidden="true" on:click={close}></button>
+
     {#if frame}
       {#if frame.type === 'video'}
         <!-- Дорожки с субтитрами нет: ролик приходит из Telegram, а там их не бывает. -->
@@ -90,31 +96,31 @@
       {/if}
     {/if}
 
-    <span class="chip prev">
-      <IconButton
-        label="Предыдущий кадр"
-        variant="ghost"
-        size="lg"
-        disabled={total < 2}
-        class="!text-ink hover:!bg-transparent"
-        on:click={() => step(-1)}
-      >
-        <Icon name="back" />
-      </IconButton>
-    </span>
+    {#if total > 1}
+      <span class="chip prev">
+        <IconButton
+          label="Предыдущий кадр"
+          variant="ghost"
+          size="lg"
+          class="!text-ink hover:!bg-transparent"
+          on:click={() => step(-1)}
+        >
+          <Icon name="back" />
+        </IconButton>
+      </span>
 
-    <span class="chip next">
-      <IconButton
-        label="Следующий кадр"
-        variant="ghost"
-        size="lg"
-        disabled={total < 2}
-        class="!text-ink hover:!bg-transparent"
-        on:click={() => step(1)}
-      >
-        <Icon name="forward" />
-      </IconButton>
-    </span>
+      <span class="chip next">
+        <IconButton
+          label="Следующий кадр"
+          variant="ghost"
+          size="lg"
+          class="!text-ink hover:!bg-transparent"
+          on:click={() => step(1)}
+        >
+          <Icon name="forward" />
+        </IconButton>
+      </span>
+    {/if}
 
     <span class="chip close">
       <IconButton
@@ -136,6 +142,9 @@
   /* Панель модалки кита — карточка с рамкой и полями, а просмотрщику нужна вся
      площадь экрана. Стили кита перебиваем: его разметка у нас внутри. */
   :global(.lb-panel) {
+    /* Обёртка кита даёт отступ p-4: без этого панель ужималась на 32 px и
+       сдвигалась, а кадр выходил за её край. */
+    flex: 0 0 auto;
     width: 100vw !important;
     height: 100vh !important;
     max-width: none !important;
@@ -166,7 +175,20 @@
     place-items: center;
   }
 
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+  }
+
   .frame {
+    position: relative;
+    z-index: 1;
     max-width: 94vw;
     max-height: 86vh;
     object-fit: contain;
@@ -178,6 +200,7 @@
      иначе светлая картинка проглатывает иконку. */
   .chip {
     position: absolute;
+    z-index: 2;
     display: inline-flex;
     border-radius: var(--ui-radius);
     background: color-mix(in srgb, var(--ui-bg) 62%, transparent);
@@ -209,6 +232,7 @@
 
   .count {
     position: absolute;
+    z-index: 2;
     left: 50%;
     bottom: 16px;
     transform: translateX(-50%);

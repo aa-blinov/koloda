@@ -37,8 +37,9 @@
     setShowRead,
     showRead,
     showUndo,
+    clearUndo,
     collections as collectionsList,
-    drainStateOps,
+    flushPending,
     loadAccountState,
     pullState,
   } from './lib/stores.js';
@@ -250,6 +251,15 @@
 
   // --- профиль ---
 
+  // Ссылка из письма: /verify и /reset. Её открывают и вошедшие, поэтому экран
+  // ссылки показываем при любой сессии. Когда экран закрыт, путь сбрасываем.
+  let letterLink = /^\/(verify|reset)$/.test(location.pathname);
+  function finishLetter() {
+    letterLink = false;
+    history.replaceState(null, '', '/#/feed');
+    boot();
+  }
+
   async function boot() {
     booting = true;
     bootError = '';
@@ -284,12 +294,20 @@
     window.addEventListener('wheel', stopRestore, { passive: true });
     window.addEventListener('touchmove', stopRestore, { passive: true });
     window.addEventListener('keydown', stopRestore);
-    const timer = setInterval(() => pullState(), 15000);
+    // Очередь отметок и подписок уходит сама: по таймеру и когда вернулась сеть,
+    // без кнопки «Повторить».
+    const timer = setInterval(() => {
+      pullState();
+      flushPending();
+    }, 15000);
     const onFocus = () => pullState();
     window.addEventListener('focus', onFocus);
     const onVisibility = () => pullState();
     document.addEventListener('visibilitychange', onVisibility);
+    const onOnline = () => flushPending();
+    window.addEventListener('online', onOnline);
     return () => {
+      window.removeEventListener('online', onOnline);
       window.removeEventListener('popstate', onLocation);
       window.removeEventListener('hashchange', onLocation);
       window.removeEventListener('wheel', stopRestore);
@@ -354,6 +372,22 @@
     window.dispatchEvent(new CustomEvent('koloda:search', { detail: search }));
   }
 
+  // Очистка поля — из крестика, из Esc и из кнопки «Сбросить поиск» в ленте:
+  // поле и лента всегда показывают один запрос.
+  function clearSearch() {
+    search = '';
+    queries[section] = '';
+    window.dispatchEvent(new CustomEvent('koloda:search', { detail: '' }));
+  }
+
+  // Esc в пустом поле: на телефоне закрывает поиск, везде снимает фокус.
+  // Непустое поле Esc очищает раньше, чем доходит сюда (см. SearchField).
+  function onSearchKey(event) {
+    if (event.key !== 'Escape') return;
+    if (event.target) event.target.blur();
+    if ($phone && searchOpen) toggleSearch();
+  }
+
   // Лупа на телефоне: открывает поле, а в открытом поле — крестик, который
   // его закрывает и убирает запрос.
   function toggleSearch() {
@@ -374,7 +408,7 @@
 
   function onUndo() {
     const action = $undo && $undo.action;
-    showUndo(null);
+    clearUndo();
     if (action) action();
   }
 </script>
@@ -385,8 +419,8 @@
   <main class="boot">
     <p class="text-ink-soft text-sm">Загружаю ленту…</p>
   </main>
-{:else if !$session}
-  <AuthScreen {bootError} on:done={() => boot()} />
+{:else if !$session || letterLink}
+  <AuthScreen {bootError} signedIn={Boolean($session)} on:done={finishLetter} />
 {:else}
   <!-- Боковая панель: на широком экране палец не нужен, места много, и все
        назначения видны сразу и названы. На телефоне её заменяет нижняя
@@ -419,7 +453,9 @@
     </nav>
   </aside>
 
-  <div class="shell" class:deck-shell={$phone}>
+  <!-- Колода — только на ленте: там страница не прокручивается. Остальные экраны
+       прокручиваются целиком, и под панелью разделов им нужен запас. -->
+  <div class="shell" class:deck-shell={$phone && view === 'feed'} class:with-tabs={$phone && view !== 'feed' && !isSub}>
     <header class="topbar">
       <div class="bar" class:searching={searchOpen}>
         <!-- Имя сервиса: на телефоне боковой панели нет, и шапка с одним
@@ -449,6 +485,8 @@
                 placeholder={view === 'catalog' ? 'Поиск по каналу' : 'Поиск по постам'}
                 clearLabel="Очистить"
                 on:input={onSearchInput}
+                on:clear={clearSearch}
+                on:keydown={(event) => onSearchKey(event.detail)}
               />
             </div>
             <span class="search-toggle">
@@ -494,13 +532,8 @@
                     {filterName}
                   </Chip>
                 {/if}
-                <Button
-                  variant="text"
-                  size="sm"
-                  on:click={() => setShowRead(!$showRead)}
-                  aria-pressed={!$showRead}
-                >
-                  {$showRead ? 'Показать прочитанные' : 'Скрыть прочитанные'}
+                <Button variant="text" size="sm" on:click={() => setShowRead(!$showRead)}>
+                  {$showRead ? 'Скрыть прочитанные' : 'Показать прочитанные'}
                 </Button>
               </div>
             {/if}
@@ -512,7 +545,7 @@
         <p class="sync-status" role="status">
           {$syncStatus.message}
           {#if $syncStatus.retry}
-            <button type="button" class="underline" on:click={() => drainStateOps()}>Повторить</button>
+            <button type="button" class="underline" on:click={() => flushPending()}>Повторить</button>
           {/if}
         </p>
       {/if}
@@ -545,6 +578,7 @@
             initialQuery={search}
             collection={collectionFilter}
             on:ready={onReady}
+            on:clearSearch={clearSearch}
             on:clearCollection={() => (collectionFilterId = null)}
             on:tab={(event) => {
               // Клик по имени канала в посте — это фильтр, второй клик снимает
@@ -767,6 +801,13 @@
     display: flex;
   }
 
+  /* Поле поиска гасит обводку кита (outline-none), и кольца фокуса не было.
+     Кольцо то же, что у остальных контролов. */
+  .search :global(input:focus-visible) {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+  }
+
   .search-toggle {
     display: none;
   }
@@ -783,6 +824,11 @@
     height: calc(100vh - var(--koloda-tabs) - var(--ui-safe-bottom));
     height: calc(100dvh - var(--koloda-tabs) - var(--ui-safe-bottom));
     overflow: hidden;
+  }
+
+  /* Запас под панель разделов: только там, где она видна. */
+  .shell.with-tabs {
+    padding-bottom: calc(var(--koloda-tabs) + var(--ui-safe-bottom));
   }
 
   .deck-shell .topbar {
@@ -877,7 +923,9 @@
     padding: 6px 4px calc(6px + var(--ui-safe-bottom));
     background: none;
     border: 0;
-    color: var(--ui-ink-muted);
+    /* Подпись панели — текст, поэтому роль текстовая: ink-muted на фоне
+       не проходит 4.5:1 для 12 px. */
+    color: var(--ui-ink-soft);
     font: inherit;
     font-size: 12px;
     cursor: pointer;

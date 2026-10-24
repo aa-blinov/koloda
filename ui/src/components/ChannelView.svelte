@@ -24,6 +24,10 @@
   } from '../lib/stores.js';
 
   export let channelName = '';
+  // Имя канала проверяется до запроса: такого имени в Telegram нет, сервер
+  // отвечал бы 400, а экран предлагал бы подписаться. Правило то же, что на сервере.
+  const CHANNEL_NAME = /^[A-Za-z0-9_]{3,32}$/;
+  $: validName = CHANNEL_NAME.test(channelName);
   // Ключ экрана: по нему оболочка понимает, что посты готовы и место
   // прокрутки можно вернуть.
   export let screenKey = '';
@@ -51,7 +55,7 @@
   $: mark = $avatars.get(channelName) || '';
 
   async function load(append = false) {
-    if (loading) return;
+    if (loading || !validName) return;
     loading = true;
     failed = false;
     const id = ++requestId;
@@ -67,7 +71,8 @@
       posts = append ? posts.concat(answer.posts || []) : answer.posts || [];
       hasMore = Boolean(answer.has_more);
       cursor = answer.next || null;
-      if (answer.titles && answer.titles[channelName]) heading = answer.titles[channelName];
+      // Название приходит с первой страницей: по прямой ссылке его нет ни в каталоге, ни в ленте.
+      if (answer.title && answer.title !== channelName) heading = answer.title;
       loadAvatars([channelName]);
       await tick();
       markPassed();
@@ -91,10 +96,14 @@
     }
   }
 
+  // Отмена возвращает прежнее состояние: после подписки — отписка, и наоборот,
+  // как в каталоге.
   function toggle() {
     const on = !subscribed;
     setSubscription(channelName, on);
-    if (!on) {
+    if (on) {
+      showUndo('Канал «' + channelName + '» добавлен в ленту.', () => setSubscription(channelName, false));
+    } else {
       showUndo('Канал «' + channelName + '» убран из ленты.', () => setSubscription(channelName, true));
     }
   }
@@ -105,7 +114,8 @@
   }
 
   onMount(() => {
-    load(false);
+    if (validName) load(false);
+    else dispatch('ready', { key: screenKey });
     const onScroll = () => markPassed();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -113,69 +123,75 @@
 </script>
 
 <div class="column ch-page" id="viewChannel">
-  <h1 id="chTitle">{heading || channelName}</h1>
-  <p class="ch-meta" id="chMeta">@{channelName}</p>
-
-  <div class="ch-actions">
-    <span id="chAction">
-      <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
-    </span>
-    <span id="chColl" class="ch-coll">
-      {#if subscribed}
-        <Button variant="text" size="sm" on:click={() => dispatch('channelCollections', channelName)}>
-          {mine.length ? 'В коллекциях: ' + mine.length : 'В коллекцию'}
-        </Button>
-        <span id="chCollState">
-          {mine.length ? 'В коллекциях: ' + mine.map((c) => c.name).join(', ') : 'Пока ни в одной коллекции'}
-        </span>
-      {:else}
-        <!-- Кнопки нет, пока канал не подписан: сказать об этом лучше, чем
-             показать пустое место. -->
-        <span id="chCollState" class="hint">
-          Подпишись на канал — и его можно будет положить в коллекцию.
-        </span>
-      {/if}
-    </span>
-    <a class="ch-link" id="chTg" href={'https://t.me/' + channelName} target="_blank" rel="noopener">
-      <Icon name="external" size={14} />
-      Открыть в Telegram
-    </a>
-  </div>
-
-  {#if loading && !posts.length}
-    <div class="skeletons">
-      <Skeleton class="h-32" />
-      <Skeleton class="h-32" />
-    </div>
-  {:else if failed}
-    <EmptyState title="Не удалось загрузить публикации" description="Попробуй позже.">
-      <svelte:fragment slot="actions">
-        <Button on:click={() => load(false)}>Попробовать снова</Button>
-      </svelte:fragment>
-    </EmptyState>
-  {:else if !posts.length}
-    <EmptyState title="Публикаций нет" description="Этот канал пока ничего не опубликовал." />
+  {#if !validName}
+    <EmptyState title="Такого канала не бывает" description="Имя канала — от 3 до 32 латинских букв, цифр и подчёркиваний. Проверь ссылку или выбери канал в каталоге." />
   {:else}
-    {#each posts as post (postKey(post))}
-      <PostCard
-        {post}
-        read={$reads.has(postKey(post))}
-        title={$titles[post.channel] || heading}
-        avatar={$avatars.get(post.channel) || ''}
-        saved={saved.has(postKey(post))}
-        on:lightbox={(event) => dispatch('lightbox', event.detail)}
-        on:toggleSave={toggleSave}
-      />
-    {/each}
+    <!-- По прямой ссылке название приходит с первой страницей канала: до тех пор
+         берём его из кэша, а логин остаётся только там, где названия нет нигде. -->
+    <h1 id="chTitle">{heading || $titles[channelName] || channelName}</h1>
+    <p class="ch-meta" id="chMeta">@{channelName}</p>
 
-    {#if hasMore}
-      <Button class="load-more" variant="text" on:click={() => load(true)} loading={loading}>
-        {loading ? 'Загружаю…' : 'Загрузить ещё'}
-      </Button>
+    <div class="ch-actions">
+      <span id="chAction">
+        <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
+      </span>
+      <span id="chColl" class="ch-coll">
+        {#if subscribed}
+          <Button variant="text" size="sm" on:click={() => dispatch('channelCollections', channelName)}>
+            {mine.length ? 'В коллекциях: ' + mine.length : 'В коллекцию'}
+          </Button>
+          <span id="chCollState">
+            {mine.length ? 'В коллекциях: ' + mine.map((c) => c.name).join(', ') : 'Пока ни в одной коллекции'}
+          </span>
+        {:else}
+          <!-- Кнопки нет, пока канал не подписан: сказать об этом лучше, чем
+               показать пустое место. -->
+          <span id="chCollState" class="hint">
+            Подпишись на канал — и его можно будет положить в коллекцию.
+          </span>
+        {/if}
+      </span>
+      <a class="ch-link" id="chTg" href={'https://t.me/' + channelName} target="_blank" rel="noopener">
+        <Icon name="external" size={14} />
+        Открыть в Telegram
+      </a>
+    </div>
+
+    {#if loading && !posts.length}
+      <div class="skeletons">
+        <Skeleton class="h-32" />
+        <Skeleton class="h-32" />
+      </div>
+    {:else if failed}
+      <EmptyState title="Не удалось загрузить публикации" description="Попробуй позже.">
+        <svelte:fragment slot="actions">
+          <Button on:click={() => load(false)}>Попробовать снова</Button>
+        </svelte:fragment>
+      </EmptyState>
+    {:else if !posts.length}
+      <EmptyState title="Публикаций нет" description="Этот канал пока ничего не опубликовал." />
     {:else}
-      <p class="ch-end">
-        Более старые посты есть в <a href={'https://t.me/' + channelName} target="_blank" rel="noopener">Telegram</a>.
-      </p>
+      {#each posts as post (postKey(post))}
+        <PostCard
+          {post}
+          read={$reads.has(postKey(post))}
+          title={$titles[post.channel] || heading}
+          avatar={$avatars.get(post.channel) || ''}
+          saved={saved.has(postKey(post))}
+          on:lightbox={(event) => dispatch('lightbox', event.detail)}
+          on:toggleSave={toggleSave}
+        />
+      {/each}
+
+      {#if hasMore}
+        <Button class="load-more" variant="text" on:click={() => load(true)} loading={loading}>
+          {loading ? 'Загружаю…' : 'Загрузить ещё'}
+        </Button>
+      {:else}
+        <p class="ch-end">
+          Более старые посты есть в <a href={'https://t.me/' + channelName} target="_blank" rel="noopener">Telegram</a>.
+        </p>
+      {/if}
     {/if}
   {/if}
 </div>

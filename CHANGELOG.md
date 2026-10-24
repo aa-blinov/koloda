@@ -27,6 +27,47 @@ All notable changes to koloda. Versions are ordered newest first.
   device profile: iPhone or Android on a finger, desktop with a mouse.
 - The check of the interface fails when a font is loaded from another address.
 
+### Fixed
+
+- Registration reaches the end: the letter says what to do, the link confirms the
+  address, and the sign-in screen tells an unconfirmed profile what to do and
+  offers to send the letter again.
+- Password reset opens the form for a new password. The link works once and for
+  30 minutes; a used or expired link says so and offers a new one.
+- A confirmation link does not sign anybody in.
+- A registration that has not been confirmed for 24 hours gives its name and its
+  address to a new registration. A fresh or confirmed one still holds them.
+- The letter limit of 60 seconds per address covers registration, and the answer
+  no longer claims that a letter was sent when none was.
+- The login lock follows the real client behind the reverse proxy (`TRUSTED_PROXY`);
+  a forged forwarding header does not move it.
+- A request body over 4 MB is not read, and a body that never arrives does not
+  hold a thread for ever. The server queues 128 connections.
+- The anonymous feed answers 401: the feed and the catalogue need a profile.
+- Two collections with one name are not created in parallel; a channel name with
+  a trailing newline is refused; a superscript digit in a parameter is a bad
+  request, not a broken connection.
+- Channel titles show their HTML entities decoded, and the page of a channel takes
+  its title from the preview.
+- A Content-Security-Policy is sent with the answers.
+- A Telegram login belongs to the profile that started it.
+- Search reads `%` and `_` as plain text.
+- Read marks are capped at 20 000 per profile.
+- The labels of the bottom bar reach 4.5:1 contrast on every palette.
+- The saved screen says that nothing is saved, and does not offer the feed's button.
+- The catalogue's sorting fits the screen on a phone.
+- A long channel name ends with an ellipsis in a post.
+- The photo in the viewer is centred and Escape closes it the first time.
+- All five profile tabs are visible on a phone.
+- The reaction counters are readable on every palette.
+- The undo line goes away after four seconds, and the buttons under it are free.
+- The search field clears with its cross, Escape and the reset button alike.
+- A search of one letter says what to type instead of doing nothing.
+- The undo of a swipe brings the card back to the top of the deck.
+- A post can be removed from the saved list on a phone, and the list updates at once.
+- The sync queue is sent again when the network returns, without a button.
+- A link from a letter opens its screen for a signed-in reader too.
+
 ## 0.2.0 — 2026-10-24
 
 ### Changed
