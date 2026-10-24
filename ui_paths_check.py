@@ -192,7 +192,8 @@ def insert_newer_post(channel):
     import app
     db = app.connect()
     try:
-        msg_id = db.execute("SELECT MAX(msg_id) FROM posts WHERE channel=?", (channel,)).fetchone()[0] + 1
+        # у канала без постов в стенде MAX даёт NULL: без COALESCE следующий номер не считается
+        msg_id = db.execute("SELECT COALESCE(MAX(msg_id), 0) FROM posts WHERE channel=?", (channel,)).fetchone()[0] + 1
         row = dict.fromkeys(app.POST_FIELDS)
         row.update(channel=channel, msg_id=msg_id, url="https://t.me/%s/%d" % (channel, msg_id),
                    text="пост для проверки отметки", media="[]", ts=int(time.time()))
@@ -832,6 +833,34 @@ def x3(c):
         .map(e => [e.id || e.textContent.trim().slice(0, 12), e.offsetHeight])""")
     small = [s for s in sizes if s[1] < 48]
     assert not small, "меньше 48 px: %s" % small
+
+
+@check("F22", "Отмена свайпа в колоде возвращает пост на его место по времени, а не наверх", device="phone")
+def f22(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_selector("#deck .post", timeout=60000)
+    c.pg.wait_for_timeout(1500)
+    # пост создаём до жеста: запись в базу стенда медленная, а строка «Вернуть» живёт 4 с
+    newer = insert_newer_post(CHANNELS[0])
+    cdp = c.ctx.new_cdp_session(c.pg)
+    # жест начинаем со строки автора: видео и кнопки управления в карточке жест не отдают
+    x0, y0 = c.pg.evaluate("""() => { const r = document.querySelector('#deck .post .meta').getBoundingClientRect();
+        return [r.left + r.width / 2, r.top + r.height / 2]; }""")
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y0}]})
+    for step in range(1, 26):
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x0 + step * 12, "y": y0}]})
+        c.pg.wait_for_timeout(16)
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    # строка «Вернуть» живёт 4 с: ждём её сразу после жеста, дальше каждая пауза идёт из этого окна
+    c.pg.wait_for_selector("#undoBar", state="visible", timeout=3000)
+    # пока висит строка «Вернуть», лента обновляется и приносит пост новее этой карточки
+    c.pg.evaluate("window.dispatchEvent(new Event('koloda:refresh'))")
+    c.pg.wait_for_function("key => (document.querySelector('#deck .post') || {}).dataset?.post === key",
+                           arg=newer, timeout=2500)
+    c.pg.locator("#undoBar button").first.click(timeout=1500)
+    c.pg.wait_for_timeout(600)
+    top = c.pg.evaluate("(document.querySelector('#deck .post') || {}).dataset?.post")
+    assert top == newer, "отмена подняла старый пост наверх: сверху %s, ждали %s" % (top, newer)
 
 
 @check("X4", "Шапка ПК: одна строка, поиск в правом верхнем углу, «Прочитанные» на одной оси с ним")
