@@ -13,6 +13,23 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.5 — 2026-10-24
+
+### Added
+
+- A full-screen mode for the deck on a phone: a button in the deck's top row
+  hides the header and the tab bar, and the card takes the whole screen. The
+  mode is remembered on the device.
+
+### Fixed
+
+- The card lagged on a phone while it was dragged: the next card no longer
+  relayouts the page on every touch move.
+- The photos of the channels did not appear for many channels: the server reads
+  twelve channels per request, and the page now asks for the rest.
+- A channel that the server had not read yet when the feed opened left its posts
+  out until a reload: the feed is asked again while such a channel is loading.
+
 ## 0.3.4 — 2026-10-24
 
 ### Fixed

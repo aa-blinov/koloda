@@ -36,6 +36,7 @@
     setSubscription,
     setShowRead,
     showRead,
+    immersive,
     showUndo,
     clearUndo,
     collections as collectionsList,
@@ -455,7 +456,12 @@
 
   <!-- Колода — только на ленте: там страница не прокручивается. Остальные экраны
        прокручиваются целиком, и под панелью разделов им нужен запас. -->
-  <div class="shell" class:deck-shell={$phone && view === 'feed'} class:with-tabs={$phone && view !== 'feed' && !isSub}>
+  <div
+    class="shell"
+    class:deck-shell={$phone && view === 'feed'}
+    class:immersive={$phone && view === 'feed' && $immersive}
+    class:with-tabs={$phone && view !== 'feed' && !isSub}
+  >
     <header class="topbar">
       <div class="bar" class:searching={searchOpen}>
         <!-- Имя сервиса: на телефоне боковой панели нет, и шапка с одним
@@ -648,7 +654,7 @@
 
   <!-- Нижняя панель: на телефоне главные экраны должны быть под пальцем,
        и на подэкранах её сменяет стрелка «назад» в шапке. -->
-  <nav class="tabs" class:hidden={isSub} aria-label="Разделы">
+  <nav class="tabs" class:hidden={isSub} class:immersive={$phone && view === 'feed' && $immersive} aria-label="Разделы">
     {#each MAIN as item (item.value)}
       <button
         type="button"
@@ -832,6 +838,18 @@
     height: calc(100vh - var(--koloda-tabs) - var(--ui-safe-bottom));
     height: calc(100dvh - var(--koloda-tabs) - var(--ui-safe-bottom));
     overflow: hidden;
+  }
+
+  /* Полный экран колоды: шапка с поиском и панель разделов уходят, карточка занимает экран.
+     Шапка остаётся тонкой: в ней панель «Вернуть» (висит поверх колоды), и отмена жеста
+     должна быть под рукой. Строка колоды с переключателем тоже остаётся, чтобы выйти. */
+  .shell.immersive {
+    --koloda-tabs: 0px;
+  }
+
+  .shell.immersive .bar,
+  .tabs.immersive {
+    display: none;
   }
 
   /* Запас под панель разделов: только там, где она видна. */
