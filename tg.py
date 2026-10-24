@@ -51,6 +51,13 @@ class MediaUnavailable(Exception):
     """Файла нет, он слишком большой или его тип не отдаём."""
 
 
+class ForeignLogin(Exception):
+    """Вход начат другим профилем: его токен не опрашиваем и не отменяем."""
+
+
+MISSING_MESSAGE = "Telethon не установлен в образе"
+
+
 def installed():
     try:
         import telethon  # noqa: F401
@@ -169,7 +176,7 @@ async def _start(profile):
 def start_link(profile):
     """Начинает вход и отдаёт ссылку, которую надо открыть в Telegram."""
     if not installed():
-        raise TelegramMissing("Telethon не установлен в образе")
+        raise TelegramMissing(MISSING_MESSAGE)
 
     # Замок на профиль: и вход, и чтение приватных каналов ходят в один и тот же
     # файл сессии, а Telethon не терпит двух клиентов на одном файле.
@@ -235,9 +242,17 @@ async def _watch(entry):
         pass
 
 
-def poll_link(token):
-    """Проверяет, подтвердил ли человек вход, и отдаёт ссылку, которая ещё открывается."""
+def _own_entry(token, profile):
+    """Ожидающий вход, если он начат этим профилем. Чужой токен не опрашиваем и не отменяем."""
     entry = _pending.get(token)
+    if entry and entry.get("profile") != profile:
+        raise ForeignLogin()
+    return entry
+
+
+def poll_link(token, profile):
+    """Проверяет, подтвердил ли человек вход, и отдаёт ссылку, которая ещё открывается."""
+    entry = _own_entry(token, profile)
     if not entry:
         return {"state": "unknown"}
     if entry.get("account"):
@@ -269,7 +284,8 @@ def _drop_pending(token):
         pass
 
 
-def cancel_link(token):
+def cancel_link(token, profile):
+    _own_entry(token, profile)
     _drop_pending(token)
     return {"ok": True}
 

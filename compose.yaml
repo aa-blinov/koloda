@@ -10,6 +10,7 @@ services:
     environment:
       LOG: "${LENTELE_LOG:-0}"   # 1 — включить логи запросов
       COOKIE_SECURE: "${COOKIE_SECURE:-0}"  # 1 — сайт работает за HTTPS
+      TRUSTED_PROXY: "${TRUSTED_PROXY:-}"  # адрес прокси (Caddy): только с ним X-Forwarded-For учитывается при входе
     # Без этого зависший процесс выглядит работающим: docker не знает, что
     # сервер перестал отвечать, и перезапускает его только при падении процесса.
     healthcheck:
