@@ -464,10 +464,11 @@ Checked on a phone emulation at 390 by 844 and 360 by 640, and in landscape at
 844 by 390. The rules are kept by `check_ui.py` where a string can show them,
 and by hand in a browser where it cannot.
 
-- A tap target is at least 44 px in both directions on a finger device
-  (`pointer: coarse`). The small text buttons, the catalog chips and the link
-  "Open in Telegram" are raised to 44 px there, and only there: a mouse keeps
-  the compact size.
+- A tap target is at least 48 px in both directions on a finger device
+  (`pointer: coarse`). Material asks for 48 dp, Apple for 44 pt, and 48 px meets
+  both. The small text buttons, the catalog chips, the channel name in a post and
+  the link "Open in Telegram" are raised to 48 px there, and only there: a mouse
+  keeps the compact size.
 - A field is 16 px on a finger device. iOS enlarges the page when a field with
   less text is focused.
 - A hover style lives inside `@media (hover: hover)`. After a tap on a phone the
@@ -482,6 +483,15 @@ and by hand in a browser where it cannot.
   This is not checked on a real iPhone: the emulation returns zero for the insets.
 - Who asks for less motion does not see the rise of the next card or the
   transitions of the deck; the card changes at once.
+- iOS Safari enlarges the text when the phone turns sideways: `text-size-adjust:
+  100%` on the root keeps the size the page was drawn at.
+- Chrome on Android 135 and later draws the page under the gesture bar. The bottom
+  bar keeps its labels above it: the inset is padding inside the bar, not a gap
+  under it.
+- The colour of the browser bar (`theme-color`) is read from the background token
+  when the settings are applied. A hex in the sources would break the palettes.
+  Chrome on Android uses the colour fully only for an installed app, so this is
+  a detail that is not checked on a device here.
 
 ## Do's and Don'ts
 
@@ -492,7 +502,7 @@ and by hand in a browser where it cannot.
 - **Do** run `python3 check_ui.py` after a change to `index.html`, and
   `python3 -m unittest -v` when a token changes, because the contrast test
   reads the tokens out of the file.
-- **Do** keep the touch targets at 44 px on a phone, and the bottom bar at
+- **Do** keep the touch targets at 48 px on a phone, and the bottom bar at
   64 px.
 - **Do** draw an icon as inline SVG in one stroke, and take its colour from
   `currentColor`.

@@ -25,7 +25,7 @@ All notable changes to koloda. Versions are ordered newest first.
   shows its first picture as the face of the card. The line "Вернуть" after a
   gesture lies over the deck instead of pushing it down on every gesture.
 - The phone is checked against the usual rules of touch interfaces. Tap targets
-  are at least 44 px, the fields are 16 px so iOS does not zoom the page, the
+  are at least 48 px, the fields are 16 px so iOS does not zoom the page, the
   hover does not stick after a tap, the labels of the bottom bar are 12 px, and
   the deck keeps its height turned sideways. The channel rows of the dialog show
   the whole name, and the page keeps clear of the notch and the home bar.
