@@ -3095,6 +3095,44 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class StaticIdsTest(unittest.TestCase):
+    def test_static_ids_are_unique_across_the_interface(self):
+        # два элемента с одним id: селектор берёт первый, и проверка кликает не туда (так было с #readToggle)
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui", "src")
+        seen = {}
+        for folder, _, files in os.walk(root):
+            for name in files:
+                if not name.endswith(".svelte"):
+                    continue
+                path = os.path.join(folder, name)
+                with open(path, encoding="utf-8") as source:
+                    for found in re.findall(r'\bid="([^"{}]+)"', source.read()):
+                        seen.setdefault(found, []).append(os.path.relpath(path, root))
+        # id, которые стоят в разных ветках одного {#if}: на экране виден только один из них
+        branch_only = {"authEmail", "chCollState"}
+        duplicates = {found: where for found, where in seen.items() if len(where) > 1 and found not in branch_only}
+        self.assertEqual(duplicates, {})
+
+
+class DispatchListenersTest(unittest.TestCase):
+    def test_every_dispatched_event_has_a_listener(self):
+        # событие без слушателя: кнопка шлёт его и ничего не делает (так было с «Отписаться» в списке каналов)
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui", "src")
+        dispatched, listened = {}, set()
+        for folder, _, files in os.walk(root):
+            for name in files:
+                if not name.endswith(".svelte"):
+                    continue
+                path = os.path.join(folder, name)
+                with open(path, encoding="utf-8") as source:
+                    text = source.read()
+                for event in re.findall(r"dispatch\('([A-Za-z]+)'", text):
+                    dispatched.setdefault(event, set()).add(os.path.relpath(path, root))
+                listened.update(re.findall(r"\bon:([A-Za-z]+)", text))
+        missing = {event: sorted(where) for event, where in dispatched.items() if event not in listened}
+        self.assertEqual(missing, {})
+
+
 class ReviewFixesTest(unittest.TestCase):
     """Проверки правок после ревью: каждая ловит свой дефект.
 
