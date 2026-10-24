@@ -246,7 +246,8 @@ and 0 forks, and it was created on 2026-10-15.
   `?` shows the list of the keys, `Esc` closes a dialog. The list is in the
   profile.
 - **The touch targets are large enough.** On a phone the buttons and the
-  segments are at least 44 px, and the bottom bar is exactly 64 px.
+  segments are at least 48 px on a finger device (44 px on a mouse screen),
+  and the bottom bar is exactly 64 px.
 - **The contrast of the text is at least 4.5:1** on every surface in every
   palette, and `ThemeContrastTest` checks it by reading the tokens out of the
   kit. A colour of one's own breaks the theme, and `check_ui.py` fails on it.

@@ -797,14 +797,14 @@ def e3(c):
 
 # ---------- X: доступность и размеры ----------
 
-@check("X3", "Нажимаемые зоны не ниже 44 px на телефоне", device="phone")
+@check("X3", "Нажимаемые зоны не ниже 48 px на телефоне", device="phone")
 def x3(c):
     login(c.pg, c.user)
     sizes = c.pg.evaluate("""() => [...document.querySelectorAll('header button, #readToggle button, .feed-bar button, #deck button')]
         .filter(e => e.offsetParent !== null).map(e => [e.id || e.textContent.trim().slice(0, 12),
         Math.round(e.getBoundingClientRect().height)])""")
-    small = [s for s in sizes if s[1] < 44]
-    assert not small, "меньше 44 px: %s" % small
+    small = [s for s in sizes if s[1] < 48]
+    assert not small, "меньше 48 px: %s" % small
 
 
 def swipe(cdp, x0, y0, x1, y1, steps=4):

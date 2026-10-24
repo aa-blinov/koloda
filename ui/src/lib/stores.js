@@ -106,6 +106,10 @@ export function applySettings(next) {
   root.dataset.mode = mode;
   root.dataset.font = current.font;
   root.dataset.modePref = current.mode;
+  // Цвет полосы браузера и заголовка установленного приложения — из токена палитры:
+  // хекс в исходниках сломал бы смену палитры.
+  const themeColor = document.getElementById('themeColor');
+  if (themeColor) themeColor.setAttribute('content', getComputedStyle(root).getPropertyValue('--ui-bg').trim());
 }
 
 if (darkQuery) {

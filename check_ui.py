@@ -203,8 +203,8 @@ def media_block(css, query):
 
 app_css = read(os.path.join(SRC, "app.css"))
 coarse = media_block(app_css, "@media (pointer: coarse)")
-if "min-height: 44px" not in coarse:
-    fail("ЦЕЛЬ КАСАНИЯ: в app.css нет правила min-height: 44px для пальца")
+if "min-height: 48px" not in coarse:
+    fail("ЦЕЛЬ КАСАНИЯ: в app.css нет правила min-height: 48px для пальца")
 if "font-size: 16px" not in coarse:
     fail("ПОЛЕ: в app.css нет шрифта 16 px для полей на пальце (iOS увеличит страницу)")
 

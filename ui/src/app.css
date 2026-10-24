@@ -63,6 +63,9 @@
 html {
   scrollbar-color: var(--ui-line) transparent;
   overscroll-behavior-y: contain;
+  /* iOS Safari в альбомной ориентации сам увеличивает текст: отключаем. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Фон, кольцо фокуса и выделение — из базы кита. Своё здесь только то, чего
@@ -88,8 +91,8 @@ body {
   }
 }
 
-/* Палец шире текста: цель касания не меньше 44 px, а поле ввода — с шрифтом
-   16 px, иначе iOS увеличивает страницу при фокусе. Только там, где есть палец.
+/* Палец шире текста: цель касания не меньше 48 px (Material; Apple велит 44 pt),
+   а поле ввода — с шрифтом 16 px, иначе iOS увеличивает страницу при фокусе. Только там, где есть палец.
    :root в селекторах — чтобы перебить классы кита, которые задают размер сами. */
 @media (pointer: coarse) {
   body {
@@ -99,16 +102,19 @@ body {
 
   :root button,
   :root [role='tab'],
-  :root .ch-link {
-    min-width: 44px;
-    min-height: 44px;
+  :root .ch-link,
+  :root .meta .who {
+    min-width: 48px;
+    min-height: 48px;
   }
 
-  :root input,
+  :root input:not([type='checkbox']):not([type='radio']),
   :root textarea,
   :root select {
     font-size: 16px;
+    min-height: 48px;
   }
+
 }
 
 [hidden] {

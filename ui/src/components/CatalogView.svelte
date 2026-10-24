@@ -375,10 +375,10 @@
     border-color: var(--ui-ink-soft);
   }
 
-  /* Палец: чип не ниже 44 px. На мыши остаётся компактным. */
+  /* Палец: чип не ниже 48 px. На мыши остаётся компактным. */
   @media (pointer: coarse) {
     .chip {
-      min-height: 44px;
+      min-height: 48px;
     }
   }
 
