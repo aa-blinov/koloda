@@ -82,11 +82,11 @@ Confirmed by the code:
   publication time.
 - The catalog of TGMania: search, categories, three sorts, 40 channels on a
   page.
-- A post counts as read once the reader has scrolled it above the top of the
-  screen, and the mark can be taken back. A post that a refresh puts above the
-  screen is not marked: it stays unread until the reader scrolls past it. Loading
-  the next page marks nothing. In the deck of a phone the card is marked read
-  by the swipe, not by the scroll.
+- A post is read only by the reader's own action: the button "Mark as read" under
+  the post, the key `u`, or on a phone the swipe to the right in the deck. Scrolling
+  never marks a post, and neither does a refresh or the next page. The mark is taken
+  back by the same button or the key `u`; after a swipe the undo line brings the
+  card back to the top of the deck.
 - On a phone the feed is a **deck**: one post at a time, no vertical scroll of
   the column. The card is dragged sideways, as in the apps for meetings: to the
   right it is marked read, to the left it is saved. The card follows the

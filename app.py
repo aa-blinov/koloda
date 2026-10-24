@@ -375,23 +375,45 @@ def _text(chunk, cls):
     return unescape(re.sub(r"<[^>]+>", "", m.group(1))).strip() or None
 
 
+EMOJI_IMAGE = re.compile(r"/emoji/\d+/([0-9A-Fa-f]+)\.png")
+
+
+def emoji_from_image(style):
+    """Обычный эмодзи приходит картинкой t.me; её имя — код символа в UTF-8 (E29DA4 — ❤)."""
+    m = EMOJI_IMAGE.search(style)
+    if not m:
+        return ""
+    try:
+        return bytes.fromhex(m.group(1)).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return ""
+
+
 def parse_reactions(chunk):
-    """Реакции: обычные эмодзи и кастомные. У кастомных в разметке нет символа,
-    только emoji-id — выдумывать смайлик нельзя, поэтому отдаём пустую метку."""
+    """Реакции: обычные эмодзи (картинкой, символ в имени файла), звёзды и кастомные.
+    У кастомных в разметке только emoji-id, символа нет — выдумывать смайлик нельзя,
+    поэтому отдаём пустую метку."""
     box = re.search(r'class="tgme_widget_message_reactions[^"]*"[^>]*>(.*?)</div>', chunk, re.S)
     if not box:
         return None
     out = []
     for r in re.finditer(r'<span class="tgme_reaction[^"]*">(.*?)</span>', box.group(1), re.S):
         inner = r.group(1)
-        e = re.search(r"<b>(.*?)</b>", inner, re.S)
-        # Счётчик — то, что после иконки эмодзи, иначе в него попадёт сам символ.
-        tail = re.sub(r"<i\b.*?</i>", "", inner, flags=re.S)
+        paid = "stars" in inner
+        style = re.search(r'<i class="emoji"[^>]*style="([^"]*)"', inner)
+        text = re.search(r"<b>(.*?)</b>", inner, re.S)
+        if style:
+            emoji = emoji_from_image(style.group(1))
+        elif text:
+            emoji = unescape(text.group(1))
+        else:
+            emoji = "⭐" if paid else ""
+        # Счётчик — то, что после иконки и символа, иначе в него попадёт сам символ.
+        tail = re.sub(r"<i\b.*?</i>|<b>.*?</b>", "", inner, flags=re.S)
         count = re.sub(r"<[^>]+>", "", tail).strip()
         if not count:
             continue
-        out.append({"emoji": unescape(e.group(1)) if e else "", "count": count,
-                    "paid": "stars" in inner})
+        out.append({"emoji": emoji, "count": count, "paid": paid})
     return out or None
 
 

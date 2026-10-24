@@ -13,6 +13,21 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.8 — 2026-10-24
+
+### Changed
+
+- A post is read only by the reader's own action: the button "Mark as read",
+  the key `u`, or the swipe to the right in the deck. Scrolling no longer marks a
+  post read, neither in the feed nor on the channel page.
+
+### Fixed
+
+- The emoji of the reactions under a post were missing: Telegram draws the
+  standard reactions as pictures, and the emoji is in the name of the picture.
+  Reactions with a custom emoji still show only their count, because the public
+  page does not carry their picture.
+
 ## 0.3.7 — 2026-10-24
 
 ### Changed

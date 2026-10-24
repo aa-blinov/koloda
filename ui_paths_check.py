@@ -543,16 +543,24 @@ def c23(c):
 
 # ---------- F: лента ----------
 
-@check("F2", "Прокрутка мимо поста отмечает его прочитанным на сервере")
+@check("F2", "Прокрутка не отмечает прочитанным; кнопка «Отметить прочитанным» отмечает свой пост")
 def f2(c):
     login(c.pg, c.user)
-    if len(post_rows(c.pg)) < 3:
+    rows = post_rows(c.pg)
+    if len(rows) < 3:
         raise Skip("постов меньше трёх")
     for _ in range(3):
         c.pg.evaluate("window.scrollBy(0, 900)")
         c.pg.wait_for_timeout(700)
     c.pg.wait_for_timeout(4000)
-    assert api("/api/state", None, c.user["cookie"])[2].get("reads"), "отметок на сервере нет"
+    assert not api("/api/state", None, c.user["cookie"])[2].get("reads"), "прокрутка отметила посты прочитанными"
+    c.pg.evaluate("window.scrollTo(0, 0)")
+    c.pg.wait_for_timeout(500)
+    first = post_rows(c.pg)[0]["post"]
+    c.pg.locator(".post[data-post='%s'] button:has-text('Отметить прочитанным')" % first).first.click()
+    c.pg.wait_for_timeout(2500)
+    reads = api("/api/state", None, c.user["cookie"])[2].get("reads") or []
+    assert first in reads, "кнопка не отметила свой пост: %s" % reads[:3]
 
 
 @check("F3", "«Скрыть прочитанные» показывает прочитанное и прячет обратно")
@@ -576,7 +584,7 @@ def f3(c):
     assert not any(r["read"] for r in post_rows(c.pg)), "прочитанные не спрятались"
 
 
-@check("F4", "Обновление не отмечает прочитанным посты, которые встали выше экрана")
+@check("F4", "Обновление ленты и прокрутка не отмечают посты прочитанными")
 def f4(c):
     login(c.pg, c.user)
     if len(post_rows(c.pg)) < 3:
@@ -584,23 +592,12 @@ def f4(c):
     for _ in range(3):
         c.pg.evaluate("window.scrollBy(0, 900)")
         c.pg.wait_for_timeout(700)
-    c.pg.wait_for_timeout(4000)
-    marked = {r["post"] for r in post_rows(c.pg) if r["read"]}
-    assert marked, "прокруткой ничего не отметилось, проверка пуста"
-    new_post = insert_newer_post(CHANNELS[0])
+    insert_newer_post(CHANNELS[0])
     # жест «потянуть» вызывает refreshCurrent; на ПК жеста нет, проверяем саму функцию
     c.pg.evaluate("window.dispatchEvent(new Event('koloda:refresh'))")
-    c.pg.wait_for_function("key => (document.querySelector('#postList .post') || {}).dataset?.post === key",
-                           arg=new_post, timeout=20000)
-    c.pg.wait_for_timeout(2000)
-    stolen = [r["post"] for r in post_rows(c.pg) if r["read"] and r["post"] not in marked]
-    assert not stolen, "обновление отметило прочитанными непросмотренные: %s" % stolen[:3]
-    # контроль: после обновления прокрутка по-прежнему отмечает посты
-    c.pg.evaluate("window.scrollBy(0, 1500)")
-    c.pg.wait_for_timeout(1500)
-    passed = [r["post"] for r in post_rows(c.pg) if r["read"] and r["post"] not in marked]
-    assert passed, "после обновления прокрутка ничего не отметила"
-
+    c.pg.wait_for_timeout(4000)
+    reads = api("/api/state", None, c.user["cookie"])[2].get("reads") or []
+    assert not reads, "обновление или прокрутка отметили посты прочитанными: %s" % reads[:3]
 
 @check("F8", "Прокрутка к концу ленты подгружает следующую страницу без повторов")
 def f8(c):

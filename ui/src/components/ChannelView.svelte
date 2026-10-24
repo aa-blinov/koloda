@@ -47,7 +47,6 @@
   let failed = false;
   let requestId = 0;
   let saved = new Set();
-  let lastBottom = new WeakMap();
   // Коллекции, в которых лежит канал: их видно и можно поправить отсюда.
   $: mine = $collections.filter((c) => (c.channels || []).includes(channelName));
 
@@ -75,24 +74,12 @@
       if (answer.title && answer.title !== channelName) heading = answer.title;
       loadAvatars([channelName]);
       await tick();
-      markPassed();
       dispatch('ready', { key: screenKey });
     } catch (err) {
       if (id !== requestId) return;
       failed = true;
     } finally {
       if (id === requestId) loading = false;
-    }
-  }
-
-  function markPassed() {
-    for (const node of document.querySelectorAll('.post[data-post]')) {
-      const bottom = node.getBoundingClientRect().bottom;
-      if (lastBottom.get(node) > 0 && bottom <= 0) {
-        const key = node.dataset.post;
-        if (!$reads.has(key)) markRead(key);
-      }
-      lastBottom.set(node, bottom);
     }
   }
 
@@ -116,9 +103,6 @@
   onMount(() => {
     if (validName) load(false);
     else dispatch('ready', { key: screenKey });
-    const onScroll = () => markPassed();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
   });
 </script>
 

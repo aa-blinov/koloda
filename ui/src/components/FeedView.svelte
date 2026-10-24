@@ -149,8 +149,6 @@
           : '';
       loadAvatars(posts.map((p) => p.channel));
       await tick();
-      // В колоде отметка ставится жестом, а не прокруткой: прокрутки там нет.
-      if (!deck) markPassed();
       dispatch('ready', { key: screenKey });
     } catch (err) {
       // Отменённый запрос — это не ошибка: его заменил следующий.
@@ -273,22 +271,10 @@
       more();
       setTimeout(() => (loadMoreSeen = false), 400);
     }
-    markPassed();
   }
 
-  // A post is read when it goes over the top of the screen. A post that a
-  // refresh put above the screen was never measured and stays unread.
-  let lastBottom = new WeakMap();
-  function markPassed() {
-    for (const node of document.querySelectorAll('.post[data-post]')) {
-      const bottom = node.getBoundingClientRect().bottom;
-      if (lastBottom.get(node) > 0 && bottom <= 0) {
-        const key = node.dataset.post;
-        if (!$reads.has(key)) markRead(key);
-      }
-      lastBottom.set(node, bottom);
-    }
-  }
+  // Прокрутка только листает. Прочитанным пост становится по кнопке «Отметить прочитанным»,
+  // по жесту вправо в колоде или по клавише u: отметка по прокрутке убрана.
 
   // Обновление ленты по событию: так же обновляет жест «потянуть вниз».
   function onRefresh() {
