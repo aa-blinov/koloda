@@ -311,8 +311,7 @@ needs posts which the stand does not have is SKIP, not PASS.
 
 ## License
 
-The repository carries no licence file, so the terms of the service itself are
-not set. `qrcodegen.py` is under the MIT licence of Project Nayuki, and the
-faces come from the Monos kit, and the kit keeps their licences beside them
-(SIL Open Font License 1.1 for JetBrains Mono, Inter and Source Serif 4). The
-owner has to add a licence file before the service is handed to anybody else.
+The service is under the MIT licence ([`LICENSE`](LICENSE)). `qrcodegen.py` is
+under the MIT licence of Project Nayuki, and the faces come from the Monos kit,
+which keeps their licences beside them (SIL Open Font License 1.1 for JetBrains
+Mono, Inter and Source Serif 4).

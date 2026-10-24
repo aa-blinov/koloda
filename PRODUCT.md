@@ -184,7 +184,6 @@ Confirmed by the code:
 
 Deliberately not true, and worth knowing before a change:
 
-- The project carries no licence file.
 - There is no automatic update.
 - Nothing arrives in the browser by itself: the new posts wait for the reader.
   On a phone the deck has a button over it, on a desktop the feed refreshes
@@ -195,8 +194,8 @@ Deliberately not true, and worth knowing before a change:
 
 The questions that nobody has answered yet:
 
-- The licence of the service itself. There is no `LICENSE` file in the
-  repository.
+- The licence of the service itself is MIT (`LICENSE`, Alexander Blinov).
+  Whether the kit and the fonts keep their own terms is in their own folders.
 - Whether the registration stays open for anybody, or is closed once the
   friends of the owner have signed up. The README says that it is open, and
   does not say for how long.
