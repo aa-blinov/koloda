@@ -13,7 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.2.0 — 2026-10-24
+
 ### Changed
+
+- A link in the text of a post is easier to tap on a phone: its area is taller
+  than its line, and the layout does not move.
+- The colour of the browser bar on a phone follows the palette, and it is set
+  as soon as the page loads, so the sign-in screen gets it too.
 
 - The deck on a phone looks like a deck: the card fills the stack and lifts off
   the page, the next card shows as a strip under it, and two round buttons under
