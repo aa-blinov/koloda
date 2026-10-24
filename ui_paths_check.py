@@ -837,6 +837,26 @@ def x3(c):
     assert not small, "меньше 48 px: %s" % small
 
 
+@check("X4", "Шапка ПК: одна строка, поиск в правом верхнем углу, «Прочитанные» на одной оси с ним")
+def x4(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_timeout(1500)
+    geometry = c.pg.evaluate("""() => {
+        const field = document.querySelector('.search input');
+        const bar = document.querySelector('.topbar .bar');
+        const toggle = [...document.querySelectorAll('.filters button')].find(b => /прочитанные/i.test(b.textContent));
+        if (!field || !bar || !toggle) return null;
+        const f = field.getBoundingClientRect(), t = toggle.getBoundingClientRect();
+        return {barH: bar.getBoundingClientRect().height, gapRight: innerWidth - f.right,
+                axis: Math.abs((t.top + t.height / 2) - (f.top + f.height / 2)), toggleRight: t.right, fieldLeft: f.left};
+    }""")
+    assert geometry, "поле поиска или переключатель не найдены в шапке"
+    assert geometry["barH"] <= 60, "шапка в две строки: %s px" % round(geometry["barH"])
+    assert geometry["gapRight"] <= 24, "поиск не в правом углу: отступ справа %s px" % round(geometry["gapRight"])
+    assert geometry["axis"] <= 2, "переключатель не на одной оси с поиском: %s px" % round(geometry["axis"], 1)
+    assert geometry["toggleRight"] <= geometry["fieldLeft"], "переключатель налезает на поле поиска"
+
+
 def swipe(cdp, x0, y0, x1, y1, steps=4):
     cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y0}]})
     for i in range(1, steps + 1):

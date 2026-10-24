@@ -13,6 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.7 — 2026-10-24
+
+### Changed
+
+- On a wide screen the top bar is one row: the search stands in the top right
+  corner, and "hide the read ones" stands on the same row to its left. The bar
+  is about half as tall as before, so the feed scrolls under less of it.
+
 ## 0.3.6 — 2026-10-24
 
 ### Changed

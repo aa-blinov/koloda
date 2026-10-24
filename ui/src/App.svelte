@@ -1096,27 +1096,32 @@
       border-top: 1px solid var(--ui-line);
     }
 
-    /* Поиск стоит в правом верхнем углу окна, а фильтры ленты — под ним, с
-       тем же правым краем: глаз идёт от поля к постам без поворота. В колонке
-       flex-basis становится высотой, поэтому ширину задаём прямо. */
+    /* Шапка широкого экрана — одна строка: поиск в правом верхнем углу окна, переключатель
+       «Прочитанные» слева от него, по одной оси. Вторая строка съедала высоту, которую
+       лента отдаёт прокрутке, и выталкивала переключатель за правый край. */
+    /* Блок, а не flex: корень поля из кита растягивается на всю ширину и не оставляет
+       пустого края справа от поля. */
     .search {
-      display: flex;
+      display: block;
       flex: 0 0 auto;
-      width: 360px;
+      width: 320px;
+      order: 2;
     }
 
     .bar {
       max-width: none;
+      justify-content: flex-end;
     }
 
     .bar-right {
-      flex-direction: column;
-      align-items: flex-end;
-      gap: var(--ui-space-snug);
+      flex-direction: row;
+      align-items: center;
+      gap: var(--ui-space-base);
     }
 
     .filters {
       display: flex;
+      order: 1;
     }
 
     .brand {
