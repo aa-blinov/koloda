@@ -748,9 +748,8 @@ def k10(c):
     assert ordered, "категории не по русскому алфавиту: %s" % labels
     assert len(set(labels)) == len(labels), "категории повторяются: %s" % labels
     c.pg.route("**/api/categories", lambda route: route.fulfill(status=502, body="{}", content_type="application/json"))
+    # адрес экрана в хеше: после перезагрузки открыт каталог, и категории снова не пришли
     c.pg.reload()
-    c.pg.wait_for_selector("#postList, #deck", timeout=30000)
-    c.pg.get_by_role("button", name="Каталог", exact=True).first.click()
     c.pg.wait_for_selector("#catRetry", timeout=20000)
     shown = c.pg.evaluate("[...document.querySelectorAll('#cats button')].map(b => b.textContent)")
     assert shown[0] == "Все", "при ошибке пропала кнопка «Все»: %s" % shown
