@@ -292,13 +292,12 @@ needs posts which the stand does not have is SKIP, not PASS.
 | `docs/user-paths.md` | The user paths, with their IDs and what checks them. |
 | `audit_media.py` | The audit of the media against t.me. A service script: it is not in the image. Only its exit code is covered by the tests, without the network. |
 | `sync.py`, `serve.py` | The old variant with Telethon and RSS. The current service does not call them. |
-| `fonts/` | JetBrains Mono, served from the address of the service itself. |
 | `docs/` | The screenshots of this file. |
 
 ## License
 
 The repository carries no licence file, so the terms of the service itself are
 not set. `qrcodegen.py` is under the MIT licence of Project Nayuki, and the
-bundled fonts are under the SIL Open Font License 1.1
-([`fonts/LICENSE-JetBrainsMono.txt`](fonts/LICENSE-JetBrainsMono.txt)). The
+faces come from the Monos kit, and the kit keeps their licences beside them
+(SIL Open Font License 1.1 for JetBrains Mono, Inter and Source Serif 4). The
 owner has to add a licence file before the service is handed to anybody else.

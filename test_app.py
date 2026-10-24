@@ -1807,52 +1807,6 @@ class SpacingScaleTest(unittest.TestCase):
 
 
 
-class FontFileTest(unittest.TestCase):
-    """Шрифт отдаётся с нашего адреса: сеть ему не нужна, и чужие файлы по этому пути не открываются."""
-
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="telegram-lenta-test-")
-        self.previous_db = app.DB
-        app.DB = self.temp.name + "/feed.db"
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
-
-    def tearDown(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=2)
-        app.DB = self.previous_db
-        self.temp.cleanup()
-
-    def fetch(self, path, headers=None):
-        req = Request(self.base + path, headers=headers or {})
-        try:
-            with urlopen(req, timeout=5) as response:
-                return response.status, response.headers, response.read()
-        except HTTPError as exc:
-            return exc.code, exc.headers, exc.read()
-
-    def test_font_comes_from_our_own_address_as_woff2(self):
-        status, headers, body = self.fetch("/fonts/jetbrains-mono-latin.woff2")
-        self.assertEqual(status, 200)
-        self.assertEqual(headers["Content-Type"], "font/woff2")
-        self.assertEqual(body[:4], b"wOF2")
-
-    def test_font_is_not_gzipped_even_when_the_browser_accepts_it(self):
-        # woff2 уже сжат: второй слой gzip тратит процессор и ничего не даёт
-        status, headers, body = self.fetch("/fonts/jetbrains-mono-latin.woff2", {"Accept-Encoding": "gzip"})
-        self.assertEqual(status, 200)
-        self.assertIsNone(headers.get("Content-Encoding"))
-        self.assertEqual(body[:4], b"wOF2")
-
-    def test_only_listed_font_names_are_served(self):
-        self.assertEqual(self.fetch("/fonts/LICENSE-JetBrainsMono.txt")[0], 404)
-        self.assertEqual(self.fetch("/fonts/../app.py")[0], 404)
-        self.assertEqual(self.fetch("/fonts/%2E%2E%2Fapp.py")[0], 404)
-
-
 class QrSvgTest(unittest.TestCase):
     """QR-код входа: телефон сканирует с экрана компьютера, поэтому каждая тёмная клетка должна быть нарисована."""
 

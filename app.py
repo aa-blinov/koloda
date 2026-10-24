@@ -201,9 +201,6 @@ COLLECTIONS_CAP = 50           # коллекций на профиль
 FEED_PAGE_SIZE = 80
 CHANNEL_PAGE_SIZE = 10   # публикаций канала на экране за одну подзагрузку
 MIN_GZIP = 1024        # меньше килобайта сжатие не окупает служебных байт заголовка
-# Шрифты лежат в fonts/ рядом с приложением и отдаются только по этим именам
-FONT_FILES = {"jetbrains-mono-latin.woff2", "jetbrains-mono-latin-ext.woff2",
-              "jetbrains-mono-cyrillic.woff2", "jetbrains-mono-cyrillic-ext.woff2"}
 # Собранный интерфейс: его делает сборка на node (ui/), сервер раздаёт готовое
 UI_DIR = os.path.join(BASE, "ui", "dist")
 UI_ASSET_TYPES = {".js": "application/javascript; charset=utf-8",
@@ -1732,17 +1729,6 @@ class Handler(BaseHTTPRequestHandler):
                 with open(full, "rb") as asset:
                     return self._send(200, asset.read(), ctype,
                                       [("Cache-Control", "public, max-age=31536000, immutable")])
-            # Шрифт с нашего адреса: сеть для него не нужна. Имена проверяем по списку,
-            # поэтому путь вида ../app.py сюда не попадёт
-            if path.startswith("/fonts/"):
-                name = path[len("/fonts/"):]
-                if name not in FONT_FILES:
-                    return self._send(404, json.dumps({"error": "нет такого файла"}, ensure_ascii=False),
-                                      "application/json; charset=utf-8")
-                with open(os.path.join(BASE, "fonts", name), "rb") as font:
-                    return self._send(200, font.read(), "font/woff2",
-                                      [("Cache-Control", "public, max-age=604800")])
-
             # /api/auth/me отвечает всегда: иначе гость не отличит «сессии нет»
             # от «сервис сломан». Публичное чтение ленты и каталога тоже
             # анонимное — это данные из общедоступных каналов; все личные

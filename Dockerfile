@@ -28,7 +28,6 @@ COPY app.py tg.py qrsvg.py qrcodegen.py ./
 # Собранный интерфейс: сервер только раздаёт эти файлы.
 COPY --from=ui /build/ui/dist ./ui/dist
 # Шрифт JetBrains Mono отдаётся с нашего адреса, поэтому файлы едут в образ вместе с кодом
-COPY fonts ./fonts
 
 ENV PORT=8000
 EXPOSE 8000
