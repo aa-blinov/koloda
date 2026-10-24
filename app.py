@@ -1652,17 +1652,20 @@ def save_state(db, cid, data):
 
 
 def merge_state(db, cid, data):
-    """Однократно соединяет локальное состояние с уже существующим профилем."""
+    """Однократно соединяет локальное состояние с уже существующим профилем.
+    Подписки из слияния берутся только у пустого профиля (ни одной подписки): иначе устаревшая
+    вкладка или другое устройство вернули бы канал, от которого отписались. Отметки сливаются всегда."""
     incoming_subs = [c for c in string_list(data, "subs") if valid_channel(c)]
     reads = list(dict.fromkeys(r for r in string_list(data, "reads") if valid_post_key(r)))
+    # Вставка открывает транзакцию с блокировкой записи, и проверка пустоты идёт уже под ней.
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
-    existing = [r[0] for r in db.execute("SELECT channel FROM user_subs WHERE profile=?", (cid,))]
-    subs = list(dict.fromkeys(existing + incoming_subs))
-    if len(subs) > 200:
-        db.rollback()
-        raise ValueError("После объединения получится больше 200 каналов")
-    db.executemany("INSERT OR IGNORE INTO user_subs VALUES (?,?)", [(cid, c) for c in subs])
+    if not db.execute("SELECT 1 FROM user_subs WHERE profile=? LIMIT 1", (cid,)).fetchone():
+        subs = list(dict.fromkeys(incoming_subs))
+        if len(subs) > 200:
+            db.rollback()
+            raise ValueError("После объединения получится больше 200 каналов")
+        db.executemany("INSERT OR IGNORE INTO user_subs VALUES (?,?)", [(cid, c) for c in subs])
     db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)", [(cid, r) for r in reads])
     # итог, а не входящий список: новые отметки вместе со старыми не должны пройти мимо предела
     total = db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?", (cid,)).fetchone()[0]
@@ -1737,6 +1740,9 @@ class Server(ThreadingHTTPServer):
 
 
 # Ответ на регистрацию один и тот же, ушло письмо или нет: по тексту не видно, отправлено ли оно.
+# Занятое имя отвечает 409 (это публичный логин). Занятая почта (подтверждённая или свежая
+# неподтверждённая учётка) тоже отвечает этим ответом, но без записи и без письма; старую
+# неподтверждённую учётку (старше UNVERIFIED_TTL) регистрация отдаёт заново.
 REGISTER_ANSWER = {"verification_required": True,
                    "message": "Если адрес можно использовать, письмо придёт. Перейди по ссылке из него."}
 # Тело запроса больше этого не читаем: иначе один запрос занимает память и поток.
@@ -1924,7 +1930,9 @@ class Handler(BaseHTTPRequestHandler):
                     if any(row[3] for row in busy):
                         return self._send(409, json.dumps({"error": "Это имя уже занято. Выбери другое."}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
-                    return self._send(409, json.dumps({"error": "Эта почта уже привязана к профилю"}, ensure_ascii=False),
+                    # Почту держит подтверждённая или свежая учётка. Ответ тот же 202, что и при письме,
+                    # но ни строки в базе, ни письма: по ответу не видно, что адрес занят.
+                    return self._send(202, json.dumps(REGISTER_ANSWER, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 # Письмо на один адрес не чаще раза в минуту, как и повторная отправка подтверждения.
                 # Ответ тот же 202, что и при отправке: по нему не видно, что письма не будет.
