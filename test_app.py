@@ -2417,6 +2417,28 @@ class AuthFixesTest(unittest.TestCase):
         self.assertIsNone(self.db.execute("SELECT 1 FROM accounts WHERE username='new_name'").fetchone())
         self.assertEqual(self.sent, [])
 
+    def test_a_logged_in_reader_gets_the_same_answer_for_a_taken_mail(self):
+        # смена почты: занятый адрес отвечает тем же, что и свободный; письма и записи нет, счёт тратится одинаково
+        created = int(time.time()) - 30 * 3600
+        self.insert_account("holder_mail", "held-by-other@example.com", created=created, verified=1)
+        self.insert_account("changer_mail", "mine-now@example.com", created=created, verified=1)
+        self.assertEqual(self.request("/api/auth/login", method="POST",
+                                      data={"username": "changer_mail", "password": "old-password-1"})[0], 200)
+        with patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email", side_effect=self.on_mail), \
+                patch.dict(app.MAIL_REQUESTS, clear=True), patch.dict(app.CLIENT_MAILS, clear=True):
+            taken = self.request("/api/auth/email", method="POST",
+                                 data={"password": "old-password-1", "email": "held-by-other@example.com"})
+            free = self.request("/api/auth/email", method="POST",
+                                data={"password": "old-password-1", "email": "free-for-change@example.com"})
+            self.assertEqual(taken, (202, free[1]))
+            self.assertEqual(free[0], 202)
+            self.assertEqual([email for email, _ in self.sent], ["free-for-change@example.com"])
+            # тот же счёт: второе письмо на занятый адрес в ту же минуту отвечает 429, как и на свободный
+            self.assertEqual(self.request("/api/auth/email", method="POST",
+                                          data={"password": "old-password-1", "email": "held-by-other@example.com"})[0], 429)
+        email = self.db.execute("SELECT email FROM accounts WHERE username='changer_mail'").fetchone()[0]
+        self.assertEqual(email, "mine-now@example.com")
+
     def test_a_busy_mail_gets_the_answer_of_a_sent_letter_and_writes_nothing(self):
         # почту держит подтверждённая или свежая неподтверждённая учётка: ни строки, ни письма
         old = int(time.time()) - 30 * 3600

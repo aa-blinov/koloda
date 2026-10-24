@@ -156,6 +156,8 @@ Confirmed by the code:
   that a new registration may take them over. A confirmed profile is never given
   away. A taken name answers as taken; a taken address answers as a sent letter
   would, and nothing is written, so the answer does not say who holds the address.
+  A signed-in reader who changes the address gets the same answer for a taken
+  address as for a free one, and the same limit applies to both.
 - The browser moves its channels into the profile once, and only into an empty
   profile: channels the reader has since unsubscribed from do not come back from
   an old tab. The read marks move in every time, up to the 20 000 limit.
