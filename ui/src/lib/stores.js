@@ -11,7 +11,7 @@ const LS = {
   read: 'koloda.reads',
   pending: 'koloda.pending',
   view: 'koloda.view',
-  hideRead: 'koloda.hideRead',
+  showRead: 'koloda.showRead',
   migrated: 'koloda.migrated',
 };
 
@@ -30,14 +30,15 @@ export const syncStatus = writable(null);
 export const undo = writable(null);
 export const stateReady = writable(false);
 
-// Прятать ли прочитанные. Выбор помнится на устройстве: выключатель, который
-// каждый раз встаёт в исходное положение, никому не нужен.
-export const showRead = writable(readLocal(LS.hideRead, false));
+// Показывать ли прочитанные посты. По умолчанию они скрыты. Выбор помнится на
+// устройстве: переключатель, который каждый раз встаёт в исходное положение,
+// никому не нужен.
+export const showRead = writable(readLocal(LS.showRead, false));
 
 export function setShowRead(value) {
   const next = Boolean(value);
   showRead.set(next);
-  writeLocal(LS.hideRead, next);
+  writeLocal(LS.showRead, next);
 }
 
 export const isSubscribed = derived(subs, ($subs) => new Set($subs));
@@ -174,9 +175,15 @@ export function drainStateOps() {
         syncStatus.set(null);
         return;
       }
-      syncStatus.set({ message: 'Не удалось сохранить изменения. Проверь соединение и повтори попытку.', retry: true });
+      syncStatus.set({ message: 'Не удалось сохранить изменения. Проверь соединение: попробую снова сам, или нажми «Повторить».', retry: true });
     });
   return stateQueue;
+}
+
+// Очередь уходит сама: по таймеру, при возврате сети и по кнопке «Повторить».
+// Пустая очередь ничего не делает.
+export function flushPending() {
+  return pendingOps().length ? drainStateOps() : Promise.resolve();
 }
 
 export function setSubscription(channel, subscribed) {
@@ -198,8 +205,17 @@ export async function loadAccountState({ migrate = false, legacy = null } = {}) 
   // The queue is not touched: what was gathered offline has to go out after the
   // reload, not vanish with the page.
   if (migrate && localStorage.getItem(LS.migrated) !== '1') {
-    const answer = await api.mergeState(legacy || { subs: [], reads: [] });
-    applyState(answer);
+    try {
+      const answer = await api.mergeState(legacy || { subs: [], reads: [] });
+      applyState(answer);
+    } catch (err) {
+      // 409: у браузера больше отметок, чем разрешено на профиль. Слияние не
+      // сделаем никогда, поэтому не держим экран ошибкой при каждом входе: читаем
+      // состояние сервера как есть. Остальные ошибки пробрасываем.
+      if (!err || err.status !== 409) throw err;
+      const answer = await api.state();
+      applyState(answer);
+    }
     localStorage.setItem(LS.migrated, '1');
   } else {
     const answer = await api.state();
@@ -244,11 +260,19 @@ export async function pullState() {
   return false;
 }
 
+// Строка «Вернуть» — подсказка: через 4 с она уходит сама, иначе закрывает
+// фильтры в шапке ленты. Новая строка перезапускает отсчёт.
+const UNDO_MS = 4000;
+let undoTimer = 0;
+
 export function showUndo(text, action) {
+  clearTimeout(undoTimer);
   undo.set({ text, action });
+  undoTimer = setTimeout(() => undo.set(null), UNDO_MS);
 }
 
 export function clearUndo() {
+  clearTimeout(undoTimer);
   undo.set(null);
 }
 

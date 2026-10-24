@@ -232,9 +232,30 @@
               : 'Добавь почту, чтобы восстановить пароль, если забудешь его.'}
           </p>
 
+          {#if $session && $session.email}
+            <!-- Адрес пишем текстом: пустое поле с примером в плейсхолдере
+                 выглядело заполненным. -->
+            <p class="email-now">
+              <span class="email-now-label">Почта</span>
+              {$session.email}
+            </p>
+          {/if}
+
           <form class="email-form" on:submit|preventDefault={saveEmail}>
-            <TextField type="email" label="Почта" bind:value={email} placeholder="you@example.com" />
-            <TextField type="password" label="Пароль профиля" bind:value={password} autocomplete="current-password" />
+            <TextField
+              type="email"
+              label={$session && $session.email ? 'Новая почта' : 'Почта'}
+              bind:value={email}
+              placeholder="например, you@example.com"
+              class="form-field"
+            />
+            <TextField
+              type="password"
+              label="Пароль профиля"
+              bind:value={password}
+              autocomplete="current-password"
+              class="form-field"
+            />
             <Button type="submit" loading={busy}>Сохранить почту</Button>
           </form>
 
@@ -406,6 +427,30 @@
     max-width: 60ch;
   }
 
+  .email-now {
+    margin: 0 0 var(--ui-space-base);
+    color: var(--ui-ink);
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .email-now-label {
+    display: block;
+    margin-bottom: var(--ui-space-hair);
+    color: var(--ui-ink-soft);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Вкладки кита держат строку в одну линию и прокручивают её: на 320–390 px
+     «Справка» оставалась за краем без признака. Переносим, все пять видны. */
+  .profile :global([role='tablist']) {
+    flex-wrap: wrap;
+    overflow: visible;
+    row-gap: var(--ui-space-snug);
+  }
+
   .email-form {
     display: flex;
     flex-direction: column;
@@ -414,8 +459,9 @@
     margin-bottom: var(--ui-space-base);
   }
 
-  .email-form :global(.field),
-  .email-form :global(label) {
+  /* Класс идёт через проп TextField: корневой div кита без класса, и прежнее
+     правило на .field ни в один элемент не попадало. */
+  .email-form :global(.form-field) {
     width: 100%;
     max-width: 420px;
   }
@@ -431,6 +477,14 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  /* Палец: ссылка не ниже 48 px. Здесь, а не в app.css: высота задана
+     в этом блоке, и общее правило его не перебивает. */
+  @media (pointer: coarse) {
+    .export {
+      min-height: 48px;
+    }
   }
 
   @media (hover: hover) {

@@ -58,7 +58,8 @@ the list; on a phone it is a deck of cards and is refreshed by the button over
 it. Nothing arrives on its own. The reader moves through the posts with the
 keyboard: `j` and `k` for the next and the previous post, `n` for the first
 unread, `u` to take a read mark back, `/` for the search, `?` for the list of
-the keys, `Esc` to close a dialog.
+the keys, `Esc` to close a dialog and to clear the search field; in an empty
+field `Esc` leaves the search.
 
 On a phone the same service answers on the address of the machine and the
 layout changes: a bottom bar with the three sections, a column of one, and an
@@ -89,9 +90,11 @@ Confirmed by the code:
 - On a phone the feed is a **deck**: one post at a time, no vertical scroll of
   the column. The card is dragged sideways, as in the apps for meetings: to the
   right it is marked read, to the left it is saved. The card follows the
-  finger, says what will happen, and the action can be taken back. Two round
-  buttons under the deck do the same without a gesture: the left saves, the
-  right marks read. Pulling the card down scrolls it and does not refresh the
+  finger, says what will happen, and the action can be taken back: the card
+  comes back to the top of the deck, and both the mark and the save are undone.
+  Two round buttons under the deck do the same without a gesture: the left saves,
+  the right marks read. On the saved screen the left one takes the post out of
+  the saved list, and the left swipe does the same. Pulling the card down scrolls it and does not refresh the
   feed; the button over the deck does that. The next post rises with the
   finger. A post with pictures shows its first picture as the face of the card,
   and the other pictures are hidden behind a counter. A post
@@ -107,6 +110,8 @@ Confirmed by the code:
 - The next page of the feed loads when the reader scrolls near its end; the
   button stays as the way to load it when that does not happen.
 - The search runs over the posts of the feed and over the names in the catalog.
+  One letter is not a search: the feed shows the hint to type two, and lists
+  the posts without a filter.
 - The interface has three main sections: the feed, the catalog and the saved
   posts. They are one tap away, and the navigation is not the same on the two
   screens: on a wide screen the sections stand in a sidebar on the left, with
@@ -143,6 +148,20 @@ Confirmed by the code:
 - A profile needs an address. The confirmation of the address and the reset of
   the password go by letter; the tokens live 24 hours and 30 minutes. Without an
   address the registration is refused.
+- The link that confirms the address signs nobody in: the reader signs in with
+  the password afterwards. A reset of the password ends every session of the
+  profile, so the reader signs in again with the new password. The same links
+  open for a reader who is signed in, and leave them at the feed.
+- An unconfirmed registration holds its name and its address for 24 hours; after
+  that a new registration may take them over. A confirmed profile is never given
+  away.
+- Letters: one per address a minute, and at most ten an hour from one client
+  address. The answer never says whether an address has a profile. The client
+  address behind the reverse proxy is the one named by `TRUSTED_PROXY`; without
+  it every request shares one address, so the limits are shared too.
+- The feed and the catalogue answer 401 without a profile.
+- A profile keeps at most 20 000 read marks; past that a new mark is refused with
+  a message, and taking marks back still works.
 - The private channels arrive through a login by QR, up to 40 messages per
   channel, refreshed every 15 minutes at the most.
 - The media of a private channel comes over MTProto: up to 15 MB, of the types

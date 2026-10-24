@@ -3,7 +3,7 @@
    * The catalog of the public channels: the search, the categories, the sort
    * and the list itself. The list comes from the open catalog of TGMania.
    */
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import { Button, EmptyState, Notice, SegmentedControl, Skeleton, TextField } from '@monos/ui';
 
@@ -11,7 +11,7 @@
   import { api } from '../lib/api.js';
   import { searchValue } from '../lib/search.js';
   import { catRu, kfmt } from '../lib/format.js';
-  import { subs, avatars, setSubscription, showUndo, loadAvatars } from '../lib/stores.js';
+  import { subs, avatars, titles, setSubscription, showUndo, loadAvatars } from '../lib/stores.js';
 
   const dispatch = createEventDispatcher();
 
@@ -68,6 +68,12 @@
       const found = answer.channels || [];
       for (const channel of found) names.set(channel.username, channel);
       names = new Map(names);
+      // Названия каталога служат кэшем: страница канала, открытая по ссылке в
+      // этой же сессии, покажет название, а не логин.
+      titles.update((known) => ({
+        ...known,
+        ...Object.fromEntries(found.filter((c) => c.name).map((c) => [c.username, c.name])),
+      }));
       // The list is built from everything that was loaded: a sort that changes
       // the order of one page only would leave the rest as it was.
       const merged = new Map(channels.map((c) => [c.username, c]));
@@ -110,6 +116,20 @@
     channels = [...channels].sort(compare[value] || compare.subs);
   }
 
+  // Ряд категорий прокручивается вбок: край, за которым ещё чипы, помечаем
+  // затуханием, иначе обрезанные чипы выглядят как конец списка.
+  let filtersEl;
+  let canMore = false;
+  function checkMore() {
+    if (!filtersEl) return;
+    canMore = filtersEl.scrollLeft + filtersEl.clientWidth < filtersEl.scrollWidth - 2;
+  }
+  $: {
+    sortedCategories;
+    allCategories;
+    tick().then(checkMore);
+  }
+
   $: if (queryKey !== undefined) {
     // A new query or a new category: the list is built from scratch.
   }
@@ -147,7 +167,12 @@
   function toggle(channel) {
     const on = !$subs.includes(channel.username);
     setSubscription(channel.username, on);
+    // Отмена возвращает прежнее состояние: после подписки — отписка, и наоборот.
     if (on) {
+      showUndo('Канал «' + channel.username + '» добавлен в ленту.', () => {
+        setSubscription(channel.username, false);
+      });
+    } else {
       showUndo('Канал «' + channel.username + '» убран из ленты.', () => {
         setSubscription(channel.username, true);
       });
@@ -165,6 +190,8 @@
   });
 </script>
 
+<svelte:window on:resize={checkMore} />
+
 <div class="column catalog">
   <h1>Каталог каналов</h1>
   <p class="catalog-lead">
@@ -177,8 +204,9 @@
       id="channelInput"
       label="Канал по ссылке"
       bind:value={link}
-      placeholder="@username или t.me/username"
+      placeholder="@канал или t.me/канал"
       autocomplete="off"
+      class="channel-field"
     />
     <span id="channelAdd">
       <Button type="submit">Добавить по ссылке</Button>
@@ -204,30 +232,41 @@
   {/if}
 
   {#if categories.length || categoriesFailed}
-    <div class="filters" class:wrap={allCategories} id="cats" role="group" aria-label="Категории">
-      <button
-        type="button"
-        class="chip"
-        aria-pressed={category === 'all'}
-        on:click={() => pickCategory('all')}>Все</button>
-      {#each sortedCategories as item (item.slug)}
+    <div class="cats-row">
+      <div
+        class="filters"
+        class:wrap={allCategories}
+        class:more={canMore}
+        id="cats"
+        role="group"
+        aria-label="Категории"
+        bind:this={filtersEl}
+        on:scroll={checkMore}
+      >
         <button
           type="button"
           class="chip"
-          aria-pressed={category === item.slug}
-          on:click={() => pickCategory(item.slug)}
-        >
-          {catRu(item.name)}
-        </button>
-      {/each}
-    </div>
-    {#if categories.length > 12}
-      <div class="cats-more">
-        <button type="button" class="chip" aria-pressed={allCategories} on:click={() => (allCategories = !allCategories)}>
-          {allCategories ? 'Свернуть' : 'Все категории'}
-        </button>
+          aria-pressed={category === 'all'}
+          on:click={() => pickCategory('all')}>Все</button>
+        {#each sortedCategories as item (item.slug)}
+          <button
+            type="button"
+            class="chip"
+            aria-pressed={category === item.slug}
+            on:click={() => pickCategory(item.slug)}
+          >
+            {catRu(item.name)}
+          </button>
+        {/each}
       </div>
-    {/if}
+      {#if categories.length > 12}
+        <div class="cats-more">
+          <button type="button" class="chip" aria-pressed={allCategories} on:click={() => (allCategories = !allCategories)}>
+            {allCategories ? 'Свернуть' : 'Все категории'}
+          </button>
+        </div>
+      {/if}
+    </div>
   {/if}
 
   <div class="sort-row">
@@ -236,9 +275,9 @@
 
   {#if loading && !channels.length}
     <div class="skeletons">
-      <Skeleton class="h-16" />
-      <Skeleton class="h-16" />
-      <Skeleton class="h-16" />
+      <Skeleton height="5rem" />
+      <Skeleton height="5rem" />
+      <Skeleton height="5rem" />
     </div>
   {:else if failed}
     <EmptyState title="Каталог недоступен" description="Проверь соединение и попробуй ещё раз.">
@@ -333,10 +372,17 @@
     flex-wrap: wrap;
   }
 
-  .channel-form :global(.field),
-  .channel-form :global(label) {
-    flex: 1;
-    min-width: 220px;
+  /* Поле ссылки тянется по строке. Класс идёт через проп TextField: корневой
+     div кита без класса, и правило на .field не попадало ни в один элемент. */
+  .channel-form :global(.channel-field) {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  /* Категории и «Все категории» стоят в одной строке. На ПК ряд прокручивается
+     вбок, а кнопка остаётся на месте справа. На телефоне кнопка под рядом. */
+  .cats-row {
+    display: block;
   }
 
   .filters {
@@ -346,6 +392,30 @@
     padding-bottom: var(--ui-space-snug);
     margin-bottom: var(--ui-space-base);
     scrollbar-width: thin;
+  }
+
+  /* Край ряда, за которым есть чипы, затухает: признак прокрутки. */
+  .filters.more {
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
+    mask-image: linear-gradient(to right, black calc(100% - 40px), transparent);
+  }
+
+  @media (min-width: 901px) and (pointer: fine) {
+    .cats-row {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--ui-space-base);
+    }
+
+    .cats-row .filters {
+      flex: 1 1 auto;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+
+    .cats-row .cats-more {
+      flex: 0 0 auto;
+    }
   }
 
   /* «Все категории» разворачивает ряд: чипы переносятся, и все видны без
@@ -370,7 +440,7 @@
   }
 
   .chip[aria-pressed='true'] {
-    background: var(--ui-surface-2);
+    background: var(--ui-surface);
     color: var(--ui-ink);
     border-color: var(--ui-ink-soft);
   }
@@ -384,6 +454,32 @@
 
   .sort-row {
     margin-bottom: var(--ui-space-base);
+  }
+
+  /* Телефон: ряд сортировки занимает колонку, а подписи ужимаются внутри
+     сегментов. Кит держит их в одну строку шириной по содержимому: сегменты
+     занимали 380 px и выталкивали всю страницу вбок на 320–390 px. */
+  @media (max-width: 900px), (pointer: coarse) {
+    .sort-row :global([role='group']) {
+      display: flex;
+      width: 100%;
+      height: auto;
+    }
+
+    .sort-row :global([role='group'] > button) {
+      flex: 1 1 0;
+      min-width: 0;
+      padding-left: var(--ui-space-tight);
+      padding-right: var(--ui-space-tight);
+      letter-spacing: 0.04em;
+      white-space: normal;
+      line-height: 1.25;
+    }
+
+    /* Сегменты теснее, без границ они сливаются в одну фразу. */
+    .sort-row :global([role='group'] > button + button) {
+      border-left: 1px solid var(--ui-line);
+    }
   }
 
   .skeletons {

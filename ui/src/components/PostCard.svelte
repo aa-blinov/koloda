@@ -9,7 +9,7 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { when, nfmt, viewsText, postKey, postLink } from '../lib/format.js';
-  import { markRead, markUnread, showUndo } from '../lib/stores.js';
+  import { markRead, markUnread } from '../lib/stores.js';
 
   export let post;
   export let read = false;
@@ -18,6 +18,8 @@
   export let saved = false;
   // Верхняя карточка колоды: только она принимает жест и команды кнопок.
   export let front = false;
+  // Подпись штампа при жесте влево: в ленте «Сохранить», в сохранённом — убрать.
+  export let leftLabel = 'Сохранить';
 
   const dispatch = createEventDispatcher();
 
@@ -150,33 +152,22 @@
   // Жест и кнопки под колодой идут одним путём: карточка уезжает за край, и
   // только потом колода её убирает. Повторное нажатие во время полёта ничего
   // не делает. Следующая карточка поднимается до полного размера.
+  // Отметки и сохранение меняет колода, а не карточка: она же знает, как
+  // вернуть пост в начало, если читатель нажмёт «Вернуть». Сюда уходит состояние
+  // до жеста — оно нужно для отмены.
   function commit(direction) {
     if (flying) return;
     flying = true;
     swiping = false;
     dispatch('lift', 1);
     swipeX = direction === 'right' ? FLY : -FLY;
-    if (direction === 'right') swipeRead();
-    else swipeSave();
-    setTimeout(() => dispatch('swipe', { direction, post }), FLY_MS);
+    const was = { read, saved };
+    setTimeout(() => dispatch('swipe', { direction, post, was }), FLY_MS);
   }
 
   // Кнопки под колодой шлют команду сюда: её принимает только верхняя карточка.
   function onDeckAction(event) {
     if (front) commit(event.detail);
-  }
-
-  function swipeRead() {
-    if (read) return;
-    markRead(postKey(post));
-    showUndo('Публикация отмечена прочитанной.', () => markUnread(postKey(post)));
-  }
-
-  function swipeSave() {
-    // Пост, который стоял на экране, уже прочитан. Если оставить его
-    // непрочитанным, он вернётся в колоду сразу же.
-    if (!read) markRead(postKey(post));
-    if (!saved) dispatch('save', { post });
   }
 
   $: tilt = Math.max(-14, Math.min(14, swipeX / 18));
@@ -209,7 +200,7 @@
   {#if swiping && swipeX > 8}
     <span class="stamp stamp-left" style:opacity={Math.min(1, swipeX / 100)}>Прочитано</span>
   {:else if swiping && swipeX < -8}
-    <span class="stamp stamp-right" style:opacity={Math.min(1, -swipeX / 100)}>Сохранить</span>
+    <span class="stamp stamp-right" style:opacity={Math.min(1, -swipeX / 100)}>{leftLabel}</span>
   {/if}
   <div class="meta">
     <!-- Непрочитанность стоит рядом с кнопкой, а не внутри неё: иначе
@@ -227,7 +218,9 @@
           {letter}
         {/if}
       </span>
-      {channelLabel()}
+      <!-- Название — отдельным элементом: многоточие действует на текст внутри
+           блока, а не на анонимный флекс-элемент кнопки. -->
+      <span class="who-name">{channelLabel()}</span>
     </button>
 
     <span class="meta-end">

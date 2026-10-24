@@ -33,11 +33,6 @@ body {
 
 /* На телефоне снизу стоит панель разделов: под неё нужен запас. Тот же
    запрос, что и в раскладке: телефон в лежачем положении шире 900 px. */
-@media (max-width: 900px), (pointer: coarse) {
-  body {
-    padding-bottom: calc(var(--koloda-tabs) + var(--ui-safe-bottom));
-  }
-}
 
 /* Палец шире текста: цель касания не меньше 48 px (Material; Apple велит 44 pt),
    а поле ввода — с шрифтом 16 px, иначе iOS увеличивает страницу при фокусе. Только там, где есть палец.
@@ -51,7 +46,8 @@ body {
   :root button,
   :root [role='tab'],
   :root .ch-link,
-  :root .meta .who {
+  :root .meta .who,
+  :root .ch-end a {
     min-width: 48px;
     min-height: 48px;
   }
@@ -187,10 +183,6 @@ body {
   background: var(--ui-bg);
 }
 
-.post:not(:has(.gal, .doc, .preview, .photo)) {
-  max-width: calc(34em + 42px);
-}
-
 .day-sep {
   display: flex;
   align-items: center;
@@ -239,6 +231,14 @@ body {
   font-size: 12.5px;
   cursor: pointer;
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Название канала обрезается с многоточием: текст должен быть блоком. */
+.meta .who-name {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -514,7 +514,9 @@ body {
   font-size: 12.5px;
   padding: var(--ui-space-tight) var(--ui-space-snug);
   border-radius: var(--ui-radius);
-  background: var(--ui-surface-2);
+  /* Подпись реакции — ink-soft: на --ui-surface-2 она не проходит 4.5:1 в
+     solarized и catppuccin, на --ui-surface проходит во всех палитрах. */
+  background: var(--ui-surface);
   border: 1px solid var(--ui-line);
   color: var(--ui-ink-soft);
   font-variant-numeric: tabular-nums;
@@ -758,6 +760,22 @@ body {
 
 .channel-action.is-on {
   color: var(--ui-success-text);
+}
+
+/* Телефон: название занимает всю строку, счётчик и действие идут под ним.
+   В одну строку с ними название ужималось до восьми символов. */
+@media (max-width: 900px), (pointer: coarse) {
+  .channel-entry {
+    flex-wrap: wrap;
+  }
+
+  .channel-open {
+    flex: 1 1 100%;
+  }
+
+  .channel-action {
+    margin-left: auto;
+  }
 }
 
 /* ---------- Экран канала ---------- */
