@@ -154,7 +154,11 @@ Confirmed by the code:
   open for a reader who is signed in, and leave them at the feed.
 - An unconfirmed registration holds its name and its address for 24 hours; after
   that a new registration may take them over. A confirmed profile is never given
-  away.
+  away. A taken name answers as taken; a taken address answers as a sent letter
+  would, and nothing is written, so the answer does not say who holds the address.
+- The browser moves its channels into the profile once, and only into an empty
+  profile: channels the reader has since unsubscribed from do not come back from
+  an old tab. The read marks move in every time, up to the 20 000 limit.
 - Letters: one per address a minute, and at most ten an hour from one client
   address. The answer never says whether an address has a profile. The client
   address behind the reverse proxy is the one named by `TRUSTED_PROXY`; without
