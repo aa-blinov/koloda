@@ -140,10 +140,12 @@ Confirmed by the code:
 - The search belongs to the section: posts in the feed and in the saved, the
   names in the catalog. Each section keeps its own query, and on the channel
   and the profile there is no search at all, because it would not work there.
-- The search stands in the top right corner of the window, and the filters of
-  the feed — the chosen channel or collection and "hide the read ones" — stand
-  under it with the same edge. On a phone the filters stand above the feed,
-  and the choice to hide the read ones is remembered on the device.
+- On a wide screen the top bar is one row: the search stands in the top right
+  corner of the window, and the filters of the feed — the chosen channel or
+  collection and "hide the read ones" — stand on the same row to its left, on one
+  line with it. The row takes the height of the search and nothing more, so the
+  feed keeps the room. On a phone the filters stand above the feed, and the
+  choice to hide the read ones is remembered on the device.
 - The channel and the collection are chosen in one place: the folder with the
   channels and the collections. There is no second list with the same action.
   A filter that is on is named by a label with a cross, and the cross takes
