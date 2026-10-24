@@ -127,6 +127,10 @@ Confirmed by the code:
   the catalog is a grid of channels, the saved is a bookmark, the channels
   and the collections are a folder, the profile is a person. Two neighbours
   never share a sign.
+- On a phone the top bar carries the name of the screen on the left, as a
+  Material 3 app bar does, and the tab bar marks the current tab with a pill
+  behind its sign. The refresh button of the deck is a sign with its name kept
+  for the screen reader.
 - The address follows the screen (`#/feed`, `#/saved`, `#/cat`,
   `#/channel/<name>`, `#/me`), and the back button of the browser does the same
   as the arrow in the header. The arrow never takes the reader off the site:
