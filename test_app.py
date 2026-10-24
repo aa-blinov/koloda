@@ -3077,6 +3077,19 @@ class SecurityHeadersTest(unittest.TestCase):
         for directive in ("default-src 'self'", "script-src 'self'", "frame-ancestors 'none'", "object-src 'none'"):
             self.assertIn(directive, app.CSP)
 
+    def test_the_page_repeats_the_policy_for_a_proxy_that_replaces_the_header(self):
+        # прокси (Caddy) подменял заголовок и резал script-src; та же политика в meta держит страницу без него.
+        # meta не знает frame-ancestors, его оставляем заголовку
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui", "index.html")
+        with open(path, encoding="utf-8") as page:
+            match = re.search(r'http-equiv="Content-Security-Policy"\s+content="([^"]+)"', page.read())
+        self.assertIsNotNone(match)
+
+        def directives(policy):
+            return {part.strip() for part in policy.split(";") if part.strip()}
+
+        self.assertEqual(directives(match.group(1)), directives(app.CSP) - {"frame-ancestors 'none'"})
+
 
 if __name__ == "__main__":
     unittest.main()

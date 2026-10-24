@@ -13,6 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.3 — 2026-10-24
+
+### Fixed
+
+- The page carries the content policy in its own meta tag as well as in the
+  header. A proxy that replaces the header no longer switches off `script-src`
+  and `style-src` in the browser; `frame-ancestors` stays with the header.
+
 ## 0.3.2 — 2026-10-24
 
 ### Fixed

@@ -2,6 +2,9 @@
 <html lang="ru" data-theme="gruvbox" data-mode="dark">
   <head>
     <meta charset="utf-8" />
+    <!-- Та же политика, что заголовок сервера (app.py CSP), без frame-ancestors: meta его не знает.
+         Нужна, потому что прокси может подменить заголовок приложения; тест сверяет обе строки. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; font-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" id="themeColor" />
