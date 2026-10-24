@@ -661,7 +661,11 @@ class FeedAPITest(unittest.TestCase):
             self.subscribe(profile, name)
         self.assertEqual(self.request("/api/state/subscription", "POST",
                                       {"channel": "chan200", "subscribed": True})[0], 409)
-        self.assertEqual(self.request("/api/state/merge", "POST", {"subs": ["chan201"], "reads": []})[0], 409)
+        # у профиля уже есть подписки: слияние их не добавляет, ответ 200 с прежним списком
+        status, state = self.request("/api/state/merge", "POST", {"subs": ["chan201"], "reads": []})
+        self.assertEqual(status, 200)
+        self.assertNotIn("chan201", state["subs"])
+        self.assertEqual(len(state["subs"]), 200)
 
     def test_feed_search_keeps_only_matching_posts(self):
         # F7: поиск по ленте отдаёт только посты с запросом из выбранных каналов
@@ -1056,7 +1060,8 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual({r["channel"] for r in records if r["type"] == "channel"}, {"alpha", "beta"})
         self.assertEqual({r["post"] for r in records if r["type"] == "read"}, {"alpha/1", "beta/2"})
 
-        # файл из выгрузки возвращается тем же слиянием, поэтому лента восстанавливается
+        # файл из выгрузки возвращается тем же слиянием; профиль уже с подписками, поэтому
+        # подписки из файла игнорируются, а отметки сливаются
         status, state = self.request("/api/state/merge", method="POST",
                                      data={"subs": [r["channel"] for r in records if r["type"] == "channel"],
                                            "reads": [r["post"] for r in records if r["type"] == "read"]})
@@ -1073,14 +1078,21 @@ class FeedAPITest(unittest.TestCase):
         status, merged = self.request("/api/state/merge", method="POST", client_id="local-123",
                                       data={"subs": ["alpha"], "reads": []})
         self.assertEqual(status, 200)
+        # профиль уже с подпиской на alpha: подписка «beta» из слияния не берётся, отметка берётся
         status, merged = self.request("/api/state/merge", method="POST", client_id="shared-123",
                                       data={"subs": ["beta"], "reads": []})
         self.assertEqual(status, 200)
+        self.assertEqual(merged["subs"], ["alpha"])
         status, merged = self.request("/api/state/merge", method="POST", client_id="shared-123",
                                       data={"subs": ["alpha"], "reads": ["alpha/1"]})
         self.assertEqual(status, 200)
-        self.assertEqual(set(merged["subs"]), {"alpha", "beta"})
+        self.assertEqual(set(merged["subs"]), {"alpha"})
+        self.assertIn("alpha/1", merged["reads"])
 
+        status, state = self.request("/api/state/subscription", method="POST", client_id="shared-123",
+                                     data={"channel": "beta", "subscribed": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(set(state["subs"]), {"alpha", "beta"})
         status, state = self.request("/api/state/subscription", method="POST", client_id="shared-123",
                                      data={"channel": "alpha", "subscribed": True})
         self.assertEqual(status, 200)
@@ -2390,16 +2402,39 @@ class AuthFixesTest(unittest.TestCase):
         self.insert_account("fresh_name", "fresh@example.com", created=int(time.time()) - 3600)
         status, payload = self.register("fresh_name", "other@example.com")
         self.assertEqual((status, payload["error"]), (409, "Это имя уже занято. Выбери другое."))
+        # почта держится свежей учёткой: ответ тот же 202, что и при письме, новой строки нет
         status, payload = self.register("other_name", "fresh@example.com")
-        self.assertEqual((status, payload["error"]), (409, "Эта почта уже привязана к профилю"))
+        self.assertEqual((status, payload), (202, app.REGISTER_ANSWER))
+        self.assertIsNone(self.db.execute("SELECT 1 FROM accounts WHERE username='other_name'").fetchone())
         self.assertEqual(self.sent, [])
 
     def test_a_confirmed_profile_is_never_given_away(self):
         old = int(time.time()) - 30 * 3600
         self.insert_account("kept_name", "kept@example.com", created=old, verified=1)
         self.assertEqual(self.register("kept_name", "new@example.com")[0], 409)
-        self.assertEqual(self.register("new_name", "kept@example.com")[0], 409)
+        # почта подтверждённой учётки: 202 без записи и без письма, по ответу занятость не видна
+        self.assertEqual(self.register("new_name", "kept@example.com"), (202, app.REGISTER_ANSWER))
+        self.assertIsNone(self.db.execute("SELECT 1 FROM accounts WHERE username='new_name'").fetchone())
         self.assertEqual(self.sent, [])
+
+    def test_a_busy_mail_gets_the_answer_of_a_sent_letter_and_writes_nothing(self):
+        # почту держит подтверждённая или свежая неподтверждённая учётка: ни строки, ни письма
+        old = int(time.time()) - 30 * 3600
+        self.insert_account("kept_name", "kept@example.com", created=old, verified=1)
+        self.insert_account("fresh_name", "fresh@example.com", created=int(time.time()) - 3600)
+        # старая неподтверждённая учётка с именем, которое просим, и занятой почтой: её не переписываем
+        self.insert_account("stale_name", "stale@example.com", created=old)
+        before = (self.db.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
+                  self.db.execute("SELECT COUNT(*) FROM profiles").fetchone()[0])
+        for name, email in (("new_one", "kept@example.com"), ("new_two", "fresh@example.com"),
+                            ("stale_name", "fresh@example.com")):
+            with self.subTest(name=name, email=email):
+                self.assertEqual(self.register(name, email), (202, app.REGISTER_ANSWER))
+        self.assertEqual(self.sent, [])
+        self.assertEqual((self.db.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
+                          self.db.execute("SELECT COUNT(*) FROM profiles").fetchone()[0]), before)
+        self.assertEqual(self.db.execute("SELECT email, created FROM accounts WHERE username='stale_name'").fetchone(),
+                         ("stale@example.com", old))
 
     def test_a_stale_profile_found_by_mail_takes_the_new_name(self):
         old = int(time.time()) - 30 * 3600
@@ -2813,6 +2848,45 @@ class InputFixesTest(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?",
                                          (profile,)).fetchone()[0], app.READS_CAP)
         self.assertIn("gamedev_ru", payload["subs"])
+
+    def test_a_merge_fills_an_empty_profile_and_refuses_more_than_200_channels(self):
+        # слияние в пустой профиль (ни одной подписки) берёт каналы из запроса; сверх 200 — 409, как прежде
+        profile = self.login_as("merge_empty")
+        status, payload = self.request("/api/state/merge", method="POST",
+                                       data={"subs": ["alpha", "gamedev_ru"], "reads": []})
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload["subs"]), {"alpha", "gamedev_ru"})
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM user_subs WHERE profile=?",
+                                         (profile,)).fetchone()[0], 2)
+        other = self.login_as("merge_too_many")
+        status, payload = self.request("/api/state/merge", method="POST", data={
+            "subs": ["chan%03d" % i for i in range(201)], "reads": []})
+        self.assertEqual(status, 409)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM user_subs WHERE profile=?",
+                                         (other,)).fetchone()[0], 0)
+
+    def test_a_merge_does_not_bring_back_a_channel_the_reader_unsubscribed_from(self):
+        # профиль с подпиской: устаревшая вкладка с каналом, от которого отписались, его не возвращает
+        profile = self.login_as("merge_unsub")
+        self.request("/api/state/subscription", method="POST", data={"channel": "alpha", "subscribed": True})
+        self.request("/api/state/subscription", method="POST", data={"channel": "beta", "subscribed": True})
+        self.request("/api/state/subscription", method="POST", data={"channel": "beta", "subscribed": False})
+        status, payload = self.request("/api/state/merge", method="POST",
+                                       data={"subs": ["beta", "gamedev_ru"], "reads": []})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["subs"], ["alpha"])
+        self.assertEqual(self.db.execute("SELECT channel FROM user_subs WHERE profile=?",
+                                         (profile,)).fetchall(), [("alpha",)])
+
+    def test_a_merge_into_a_profile_with_channels_still_merges_the_read_marks(self):
+        # подписки из слияния игнорируются, отметки прочтения сливаются как и раньше
+        self.login_as("merge_marks")
+        self.request("/api/state/subscription", method="POST", data={"channel": "alpha", "subscribed": True})
+        status, payload = self.request("/api/state/merge", method="POST",
+                                       data={"subs": ["gamedev_ru"], "reads": ["alpha/1", "alpha/2"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["subs"], ["alpha"])
+        self.assertEqual(set(payload["reads"]), {"alpha/1", "alpha/2"})
 
     def test_read_marks_stop_at_twenty_thousand_per_profile(self):
         # A19: отметок на профиль не больше READS_CAP; сверх — 409, и состояние не меняется

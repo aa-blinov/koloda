@@ -91,7 +91,9 @@ The interface is in Russian; the labels quoted here are translated.
   on a frame opens it whole, and the arrows page through it. Video does not load
   until play is pressed.
 - **Profiles.** You sign in with a name and a password, and every profile has
-  its own feed. The password is reset by a link to a confirmed address.
+  its own feed. The password is reset by a link to a confirmed address. The
+  channels a browser held before the sign-in move to a profile only while the
+  profile has none; the read marks always move, up to the same 20 000.
 - **A deck on a phone.** The feed on a phone is a deck of cards, one post at a
   time, with no vertical scroll of the column. A card is dragged sideways: to
   the right it is marked read, to the left it is saved. The card follows the
@@ -210,11 +212,14 @@ and all of them share the ten. A letter that the mail server refused still
 counts. A refused letter does not change the answer, so nobody can tell from it
 whether the address is in use: the registration answers 202 with the same text as
 a sent letter, the confirmation and the reset answer 200 with the generic text, and
-the change of the address answers 429 with «Письма уже отправлены. Попробуй
-позже.». The client address is the address of the connection, or with
-`TRUSTED_PROXY` set, the rightmost `X-Forwarded-For` address that is not a trusted
-proxy. Behind a proxy without `TRUSTED_PROXY` every client has the proxy's address,
-so the ten an hour are shared by all of them: set `TRUSTED_PROXY` for the site.
+the change of the address answers 429 with «Письма уже отправлены. Попробуй позже.».
+A registration with an address that a confirmed profile, or an unconfirmed one
+younger than 24 hours, holds gets the same 202 and no letter and no new profile; a
+taken name still answers 409, because the name is public. The client address is the
+address of the connection, or with `TRUSTED_PROXY` set, the rightmost
+`X-Forwarded-For` address that is not a trusted proxy. Behind a proxy without
+`TRUSTED_PROXY` every client has the proxy's address, so the ten an hour are shared
+by all of them: set `TRUSTED_PROXY` for the site.
 The counters live in memory and start again after a restart.
 
 `docker-compose.override.yml` can take the `ports` line away and put the
