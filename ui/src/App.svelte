@@ -87,6 +87,9 @@
   let restoring = '';
 
   $: isSub = view === 'channel' || view === 'profile';
+  // Заголовок верхней панели на телефоне: название того, что открыто.
+  const TITLES = { feed: 'Лента', saved: 'Сохранённое', catalog: 'Каталог', channel: 'Канал', profile: 'Профиль' };
+  $: screenTitle = view === 'feed' && feedMode === 'saved' ? TITLES.saved : TITLES[view] || 'Колода';
   $: section = sectionOf({ view, feedMode });
   $: screenKey = keyOf({ view, feedMode, channelName });
   $: collectionFilter = collectionFilterId
@@ -464,11 +467,10 @@
   >
     <header class="topbar">
       <div class="bar" class:searching={searchOpen}>
-        <!-- Имя сервиса: на телефоне боковой панели нет, и шапка с одним
-             значком слева выглядит пустой. -->
+        <!-- Заголовок экрана, как в верхней панели Material 3: название слева, без логотипа.
+             На широком экране бренд стоит в боковой панели, здесь он скрыт. -->
         <span class="brand">
-          <Icon name="send" size={18} />
-          <span>Колода</span>
+          <span>{screenTitle}</span>
         </span>
 
         {#if isSub}
@@ -662,8 +664,10 @@
         aria-current={section === item.value ? 'page' : undefined}
         on:click={() => pickSection(item.value)}
       >
-        <Icon name={item.icon} size={20} />
-        <span>{item.label}</span>
+        <span class="ui-tab-icon">
+          <Icon name={item.icon} size={24} />
+        </span>
+        <span class="ui-tab-label">{item.label}</span>
       </button>
     {/each}
   </nav>
@@ -961,6 +965,13 @@
     color: var(--ui-accent-text);
   }
 
+  /* Пилюля активного раздела рисуется китом (профиль Android); здесь только центровка иконки. */
+  .tab .ui-tab-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .sync-status,
   .undo-bar {
     max-width: 1120px;
@@ -996,6 +1007,13 @@
     /* Поле поиска заняло всю шапку: имя уступает ему место. */
     .bar.searching .brand {
       display: none;
+    }
+
+    /* Заголовок экрана крупнее и без логотипа: так выглядит верхняя панель Material 3. */
+    .brand {
+      font-size: 1.375rem;
+      font-weight: 500;
+      letter-spacing: 0;
     }
 
     .tabs {

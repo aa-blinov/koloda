@@ -6,7 +6,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import { fly } from 'svelte/transition';
-  import { Button, Chip, EmptyState, Notice, Skeleton, Spinner } from '@monos/ui';
+  import { Button, Chip, EmptyState, IconButton, Notice, Skeleton, Spinner } from '@monos/ui';
 
   import PostCard from './PostCard.svelte';
   import Icon from './Icon.svelte';
@@ -487,7 +487,11 @@
             </Button>
           </span>
         {/if}
-        <Button variant="quiet" size="sm" on:click={() => load(false)}>Обновить</Button>
+        <!-- Обновить — значок: подпись остаётся в aria-label и в подсказке. Так строка колоды
+             влезает в одну линию, как панель инструментов в Material 3. -->
+        <IconButton label="Обновить" variant="ghost" size="sm" on:click={() => load(false)}>
+          <Icon name="refresh" size={18} />
+        </IconButton>
         <!-- Полный экран: шапка и разделы уходят, карточка занимает экран. Выход — этой же кнопкой. -->
         <Button variant="quiet" size="sm" on:click={() => setImmersive(!$immersive)} aria-pressed={$immersive}>
           {$immersive ? 'Обычный вид' : 'Полный экран'}

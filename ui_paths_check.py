@@ -654,6 +654,9 @@ def f15(c):
 @check("F20", "В колоде протяжка не обновляет ленту, кнопка «Обновить» обновляет", device="phone")
 def f20(c):
     login(c.pg, c.user)
+    # холодный старт: канал, которого сервер ещё не прочитал, лента спрашивает снова через 4 с (loading);
+    # этот запрос не от протяжки, поэтому ждём, пока он отработает, и только потом слушаем
+    c.pg.wait_for_timeout(6000)
     c.pg.evaluate("window.scrollTo(0, 0)")
     c.pg.wait_for_timeout(300)
     cdp = c.ctx.new_cdp_session(c.pg)
@@ -667,7 +670,7 @@ def f20(c):
     cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
     c.pg.wait_for_timeout(2000)
     assert not seen, "протяжка в колоде обновила ленту: %s" % seen
-    c.pg.click("#deck button:has-text('Обновить')")
+    c.pg.click("#deck button[aria-label='Обновить']")
     c.pg.wait_for_timeout(2000)
     assert seen, "кнопка «Обновить» не запросила ленту"
 
@@ -825,9 +828,11 @@ def e3(c):
 @check("X3", "Нажимаемые зоны не ниже 48 px на телефоне", device="phone")
 def x3(c):
     login(c.pg, c.user)
+    # offsetHeight, а не getBoundingClientRect: следующая карточка колоды уменьшена трансформацией (0.94),
+    # и её кнопки меряются меньше, хотя касания она не принимает (pointer-events: none) — такие пропускаем
     sizes = c.pg.evaluate("""() => [...document.querySelectorAll('header button, #readToggle button, .feed-bar button, #deck button')]
-        .filter(e => e.offsetParent !== null).map(e => [e.id || e.textContent.trim().slice(0, 12),
-        Math.round(e.getBoundingClientRect().height)])""")
+        .filter(e => e.offsetParent !== null && getComputedStyle(e).pointerEvents !== 'none')
+        .map(e => [e.id || e.textContent.trim().slice(0, 12), e.offsetHeight])""")
     small = [s for s in sizes if s[1] < 48]
     assert not small, "меньше 48 px: %s" % small
 

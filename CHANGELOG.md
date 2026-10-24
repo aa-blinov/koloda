@@ -13,6 +13,21 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.6 — 2026-10-24
+
+### Changed
+
+- On a phone the top bar shows the name of the screen on the left, as a Material 3
+  app bar does, and the tab bar marks the current tab with a pill behind its sign
+  (the Android profile of the kit).
+- The refresh button of the deck is an icon with its name kept for the screen
+  reader, so the deck's top row fits on one line.
+
+### Fixed
+
+- The card of the deck lagged while it was dragged: the card being dragged has its
+  own layer for the length of the gesture.
+
 ## 0.3.5 — 2026-10-24
 
 ### Added
