@@ -685,7 +685,7 @@
     gap: var(--ui-space-base);
     align-items: center;
     padding: var(--ui-space-snug) var(--ui-space-comfortable);
-    padding-top: calc(var(--ui-space-snug) + env(safe-area-inset-top));
+    padding-top: calc(var(--ui-space-snug) + var(--ui-safe-top));
   }
 
   .topbar {
@@ -780,8 +780,8 @@
   .deck-shell {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--koloda-tabs) - env(safe-area-inset-bottom));
-    height: calc(100dvh - var(--koloda-tabs) - env(safe-area-inset-bottom));
+    height: calc(100vh - var(--koloda-tabs) - var(--ui-safe-bottom));
+    height: calc(100dvh - var(--koloda-tabs) - var(--ui-safe-bottom));
     overflow: hidden;
   }
 
@@ -874,7 +874,7 @@
     align-items: center;
     justify-content: center;
     gap: 2px;
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    padding: 6px 4px calc(6px + var(--ui-safe-bottom));
     background: none;
     border: 0;
     color: var(--ui-ink-muted);
@@ -931,7 +931,7 @@
       bottom: 0;
       z-index: 30;
       display: flex;
-      height: calc(var(--koloda-tabs) + env(safe-area-inset-bottom));
+      height: calc(var(--koloda-tabs) + var(--ui-safe-bottom));
       background: var(--ui-bg);
       border-top: 1px solid var(--ui-line);
     }
@@ -952,7 +952,7 @@
 
     /* Полноэкранный телефон: шапка не должна уйти под часы и вырез. */
     .topbar {
-      padding-top: env(safe-area-inset-top);
+      padding-top: var(--ui-safe-top);
     }
   }
 

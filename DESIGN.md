@@ -54,7 +54,7 @@ typography:
     fontWeight: 700
     letterSpacing: "0.1em"
   serif:
-    fontFamily: "Georgia, Iowan Old Style, Times New Roman, serif"
+    fontFamily: "Source Serif 4, ui-serif, Georgia, Times New Roman, serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.625
@@ -197,11 +197,11 @@ test and recomputing the numbers quoted in the README.
 
 **Display face:** JetBrains Mono.
 **Body face:** JetBrains Mono.
-**Serif face:** Georgia, for the profile that asks for it.
+**Serif face:** Source Serif 4, for the profile that asks for it (the kit's face).
 
-JetBrains Mono is bundled in `fonts/` as four woff2 files and served from the
-address of the service itself, with a system stack behind it in case the file
-does not load. The profile can switch the interface to a serif face, and the
+The faces come from the Monos kit, which bundles them in the build and serves
+them from the address of the service itself. The stack behind each face is the
+kit's own. The profile can switch the interface to a serif face, and the
 reading face follows it. The server accepts three names for the setting,
 `mono`, `serif` and `sans`; the dialog presents the first two, and the third
 has no rule in the CSS, so it falls back to the default.

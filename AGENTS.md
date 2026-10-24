@@ -59,7 +59,6 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
 | `check_ui.py` | The integrity of the interface without a browser: the imports, the icons, the colours, the spacing, the build. It takes no arguments. |
 | `audit_media.py` | Compares the media in the database with what t.me serves now. A service script: it is not in the image. Only its exit code is covered by the tests, without the network. |
 | `sync.py`, `serve.py` | The old variant with Telethon and RSS. The current service does not call them. |
-| `fonts/` | JetBrains Mono, in four woff2 files, served from the address of the service itself. |
 | `docs/` | The screenshots for the README. |
 
 ## Traps

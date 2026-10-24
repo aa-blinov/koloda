@@ -217,6 +217,21 @@ for path in [os.path.join(SRC, "app.css"), os.path.join(SRC, "App.svelte")] + sv
              % (os.path.relpath(path, BASE), ", ".join(map(str, bad))))
 print("мобильные правила на месте")
 
+# --- шрифты: только кит, и только со своего адреса ---
+
+if os.path.isdir(DIST):
+    built_css = [os.path.join(root, name) for root, _d, names in os.walk(os.path.join(DIST, "assets"))
+                 for name in names if name.endswith(".css")]
+    css_text = "\n".join(read(path) for path in built_css)
+    if re.search(r"url\(\s*['\"]?https?:", css_text):
+        fail("ШРИФТ: в собранном css есть внешний адрес, шрифт должен идти с нашего адреса")
+    if "JetBrains Mono" not in css_text:
+        fail("ШРИФТ: в собранном css нет шрифта кита JetBrains Mono")
+    built_fonts = [n for _r, _d, names in os.walk(os.path.join(DIST, "assets")) for n in names if n.endswith(".woff2")]
+    if not built_fonts:
+        fail("ШРИФТ: в сборке нет woff2 кита")
+    print("шрифты кита со своего адреса: %d файлов" % len(built_fonts))
+
 # --- собранный вывод ---
 
 if os.path.isdir(DIST):

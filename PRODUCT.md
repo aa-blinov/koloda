@@ -157,7 +157,8 @@ Confirmed by the code:
   text of a post and the rows of the catalog.
 - The palette (Gruvbox by default) and the lightness (dark by default, or the
   one of the system) are kept in the profile and survive a reload. The font is
-  JetBrains Mono by default, and can be sans or serif.
+  JetBrains Mono by default; the sans and the serif faces are Inter and Source
+  Serif 4 from the Monos kit.
 - The answers above 1 KB are compressed with gzip; the images, the video and
   the fonts are not.
 - The request log is off by default.
@@ -205,8 +206,8 @@ stroke. No emoji, and no Unicode symbol in place of an icon.
   markup.
 - `docs/` holds ten screenshots of the live interface, in the dark and the
   light theme, on a desktop and on a phone.
-- `qrsvg.py` and `qrcodegen.py` hold the QR code of the login link, and
-  `fonts/LICENSE-JetBrainsMono.txt` the licence of the fonts.
+- `qrsvg.py` and `qrcodegen.py` hold the QR code of the login link. The fonts
+  come from the Monos kit, which keeps their licences.
 
 Absent, and not to be invented: no download counts, no usage numbers, no
 testimonials, and no comparison with other readers. The repository has 0 stars

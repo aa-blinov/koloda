@@ -12,7 +12,7 @@
     "check": "svelte-check --tsconfig ./jsconfig.json --fail-on-warnings"
   },
   "dependencies": {
-    "@monos/ui": "github:aa-blinov/monos-ui#v1.0.3"
+    "@monos/ui": "github:aa-blinov/monos-ui#v1.5.1"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.1",
