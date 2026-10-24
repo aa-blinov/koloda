@@ -11,6 +11,7 @@ import json
 import gzip
 import hashlib
 import http.cookies
+import ipaddress
 import smtplib
 import os
 import queue
@@ -176,11 +177,16 @@ CREATE INDEX IF NOT EXISTS private_posts_ts ON private_posts (profile, ts DESC);
 
 # Имя канала попадает в URL t.me, поэтому проверяем форму: без этого
 # в локальной сети можно было бы заставить сервис ходить по произвольным адресам.
-CHANNEL_RE = re.compile(r"^[A-Za-z0-9_]{3,32}$")
+# fullmatch, а не ^…$: знак $ пропускает перевод строки в конце имени.
+CHANNEL_RE = re.compile(r"[A-Za-z0-9_]{3,32}")
 # Приватный канал адреса в t.me не имеет, поэтому в ленте он зовется ключом
 # private:-100… В URL такие имена не попадают — по ним никто не ходит, — так что
-# строгая проверка обычного имени тут неприменима.
-PRIVATE_RE = re.compile(r"^private:-100\d{6,20}$")
+# строгая проверка обычного имени тут неприменима. Цифры только ASCII: \d пропускает
+# и арабские, а int() их тоже разбирает.
+PRIVATE_RE = re.compile(r"private:-100[0-9]{6,20}")
+# Целое из строки запроса или пути: только ASCII-цифры. str.isdigit() пропускает
+# «²», которую int() не разбирает, и запрос рвал соединение вместо ответа 400.
+DIGITS = re.compile(r"[0-9]+")
 
 # Короткий TTL: t.me отдаёт превью без ограничений, но и обновляется не мгновенно.
 TTL = 300
@@ -449,11 +455,11 @@ def parse_quote(chunk):
 def valid_channel(name):
     # isinstance, а не `name or ""`: из браузера прилетает всё, включая список,
     # на котором match() падал с TypeError и рвал соединение без ответа
-    return isinstance(name, str) and bool(CHANNEL_RE.match(name))
+    return isinstance(name, str) and bool(CHANNEL_RE.fullmatch(name))
 
 
 def private_channel(name):
-    return isinstance(name, str) and bool(PRIVATE_RE.match(name))
+    return isinstance(name, str) and bool(PRIVATE_RE.fullmatch(name))
 
 
 def valid_feed_channel(name):
@@ -461,16 +467,22 @@ def valid_feed_channel(name):
     return valid_channel(name) or private_channel(name)
 
 
+class ChannelError(ValueError):
+    """Свои сообщения о канале («не найден», «t.me попросил подождать»): их можно показать.
+    Любое другое исключение наружу не отдаём: в тексте бывают адрес и детали запроса."""
+
+
 def fetch_channel(channel, before=None):
     """Один канал -> (title, [posts]). before — страница старее этого msg_id.
-    Бросает ValueError, если канала нет, и когда t.me попросил подождать (капча)."""
+    Бросает ChannelError, если канала нет, и когда t.me попросил подождать (капча)."""
     url = f"https://t.me/s/{channel}" + (f"?before={before}" if before else "")
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     html = urllib.request.urlopen(req, timeout=FETCH_TIMEOUT).read().decode("utf-8", "replace")
 
     t = re.search(r'property="og:title" content="([^"]+)"', html) or \
         re.search(r"<title>([^<]+)</title>", html)
-    title = t.group(1).strip() if t else channel
+    # название приходит с мнемониками (Tom &amp; Jerry), в базе и в ответе нужен текст
+    title = unescape(t.group(1)).strip() if t else channel
 
     posts = []
     for m in re.finditer(r'<div class="tgme_widget_message[^"]*"[^>]*data-post="([^"]+)"', html):
@@ -482,7 +494,7 @@ def fetch_channel(channel, before=None):
         # (tonlive -> tlive). Кладём в базу под именем подписки, иначе выборка по
         # нему не найдёт ни одного поста. В ссылке оставляем каноническое имя.
         owner, _, msg_id = m.group(1).partition("/")
-        if not msg_id.isdigit():
+        if not DIGITS.fullmatch(msg_id):
             continue
         txt = re.search(r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', chunk, re.S)
         # Медиа берём из контейнеров: первый background-image в посте — это обычно
@@ -557,9 +569,9 @@ def fetch_channel(channel, before=None):
         # недоступен целиком.
         low = html.lower()
         if "captcha" in low or "too many requests" in low:
-            raise ValueError("t.me попросил подождать, попробуем позже")
+            raise ChannelError("t.me попросил подождать, попробуем позже")
     if not posts and before is None:
-        raise ValueError(f"канал «{channel}» не найден, закрыт или без постов")
+        raise ChannelError(f"канал «{channel}» не найден, закрыт или без постов")
     return title, posts
 
 
@@ -577,6 +589,12 @@ PRIVATE_FIELDS = ("channel", "msg_id", "url", "text", "media", "views", "ts",
                   "reactions", "preview", "doc", "fwd", "quote", "sticker")
 
 
+def like_pattern(q):
+    """Образец для LIKE ... ESCAPE '\\': % и _ в запросе читаются как буквы, а не как шаблон."""
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def search_private_posts(db, q, channels, profile, limit=120, before=None, hide_read=None):
     """То же, что search_posts, но из приватной корзины и только своего профиля.
 
@@ -591,8 +609,8 @@ def search_private_posts(db, q, channels, profile, limit=120, before=None, hide_
         sql += " AND channel IN (%s)" % ",".join("?" * len(channels))
         args += channels
     if q:
-        sql += " AND text LIKE ?"
-        args.append(f"%{q}%")
+        sql += " AND text LIKE ? ESCAPE '\\'"
+        args.append(like_pattern(q))
     if hide_read:
         sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=private_posts.channel || '/' || private_posts.msg_id)")
@@ -911,8 +929,8 @@ def search_posts(db, q, channels, limit=120, before=None, hide_read=None):
         sql += " AND channel IN (%s)" % ",".join("?" * len(channels))
         args += channels
     if q:
-        sql += " AND text LIKE ?"
-        args.append(f"%{q}%")
+        sql += " AND text LIKE ? ESCAPE '\\'"
+        args.append(like_pattern(q))
     if hide_read:
         sql += (" AND NOT EXISTS (SELECT 1 FROM user_reads r"
                 " WHERE r.profile=? AND r.post=posts.channel || '/' || posts.msg_id)")
@@ -952,6 +970,10 @@ def _ensure_workers():
             threading.Thread(target=_cache_writer, daemon=True, name="cache-writer").start()
 
 
+# Текст ошибки уходит в ленту, поэтому сырой str(exc) (адрес urllib, «Errno …») туда не попадает
+CHANNEL_FAILED = "не удалось загрузить канал"
+
+
 def _cache_writer():
     while True:
         channel, title, posts = _writes.get()
@@ -964,15 +986,20 @@ def _cache_writer():
             finally:
                 db.close()
         except Exception as exc:
-            error = str(exc)[:180]
+            print("кэш канала " + channel + ": " + type(exc).__name__, file=sys.stderr, flush=True)
+            error = CHANNEL_FAILED
         _finish(channel, error)
 
 
 def _fetch_job(channel):
     try:
         title, posts = fetch_channel(channel)
-    except Exception as exc:
+    except ChannelError as exc:
         _finish(channel, str(exc)[:180])
+        return
+    except Exception as exc:
+        print("канал " + channel + ": " + type(exc).__name__, file=sys.stderr, flush=True)
+        _finish(channel, CHANNEL_FAILED)
         return
     _writes.put((channel, title, posts))
 
@@ -1224,6 +1251,7 @@ def catalog_categories():
 ACCOUNT_RE = re.compile(r"^[A-Za-zА-Яа-яЁё0-9_-]{3,32}$")
 SESSION_COOKIE = "lenta_session"
 SESSION_TTL = 30 * 24 * 60 * 60
+UNVERIFIED_TTL = 24 * 60 * 60  # неподтверждённую учётку старше этого отдаём под новую регистрацию
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 LOGIN_FAILURES = {}
 EMAIL_RE = re.compile(
@@ -1302,13 +1330,29 @@ def send_password_reset_email(email, token):
                "\n\nСсылка действует 30 минут. Если ты не запрашивал восстановление, просто проигнорируй это письмо.")
 
 
-def mail_request_allowed(key, cooldown=60):
+# Письма: на один адрес — раз в минуту, с одного адреса клиента — не больше MAIL_PER_CLIENT за час.
+# ponytail: счётчики в памяти, как вход: после перезапуска лимит начинается заново.
+MAIL_PER_CLIENT = 10
+MAIL_CLIENT_WINDOW = 60 * 60
+CLIENT_MAILS = {}
+_mail_lock = threading.Lock()
+
+
+def mail_request_allowed(key, client, cooldown=60):
+    """Можно ли послать письмо: на адрес key — раз в cooldown секунд, с клиента — MAIL_PER_CLIENT за час.
+    Оба счётчика пишутся только когда письмо разрешено: отказ ничего не тратит."""
     now = time.time()
-    previous = MAIL_REQUESTS.get(key, 0)
-    if now - previous < cooldown:
-        return False
-    MAIL_REQUESTS[key] = now
-    return True
+    with _mail_lock:
+        if now - MAIL_REQUESTS.get(key, 0) < cooldown:
+            return False
+        stamps = [stamp for stamp in CLIENT_MAILS.get(client, []) if now - stamp < MAIL_CLIENT_WINDOW]
+        if len(stamps) >= MAIL_PER_CLIENT:
+            CLIENT_MAILS[client] = stamps
+            return False
+        stamps.append(now)
+        CLIENT_MAILS[client] = stamps
+        MAIL_REQUESTS[key] = now
+        return True
 
 
 # Позиция списка приходит строкой. Число вне 64-битного диапазона рвёт
@@ -1318,6 +1362,8 @@ SQLITE_MAX_INT = 2 ** 63 - 1
 
 
 def cursor_int(value, minimum=0):
+    if not isinstance(value, str) or not DIGITS.fullmatch(value):
+        raise ValueError("позиция не число")
     number = int(value)
     if not minimum <= number <= SQLITE_MAX_INT:
         raise ValueError("позиция вне диапазона")
@@ -1331,15 +1377,50 @@ def sql_int(value, minimum=1):
     OverflowError, клиент видит оборванное соединение вместо ответа. Граница
     проверяется до запроса, поэтому лишнее число отсекается как плохой запрос.
     """
-    if isinstance(value, bool) or not isinstance(value, (int, str)):
+    if isinstance(value, str) and DIGITS.fullmatch(value):
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("не число")
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        raise ValueError("не число")
-    if not minimum <= number <= SQLITE_MAX_INT:
+    if not minimum <= value <= SQLITE_MAX_INT:
         raise ValueError("число вне диапазона")
-    return number
+    return value
+
+
+# Адреса прокси, которым верим заголовку X-Forwarded-For: IP или CIDR через запятую.
+# Без переменной заголовок не читаем вовсе.
+TRUSTED_PROXIES = [ipaddress.ip_network(part.strip(), strict=False)
+                   for part in os.environ.get("TRUSTED_PROXY", "").split(",") if part.strip()]
+
+
+def trusted_proxy(address):
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return any(ip in network for network in TRUSTED_PROXIES)
+
+
+def client_ip(handler):
+    """Адрес клиента для ограничения входа.
+
+    За прокси все запросы приходят с адреса прокси, и подбор пароля одного профиля
+    закрыл бы вход всем. Поэтому адрес берём из X-Forwarded-For, но только когда
+    соединение пришло от доверенного прокси. Прокси дописывает адрес справа, а левую
+    часть заголовка клиент подделывает, поэтому идём справа налево, пока адреса
+    доверенные, и берём первый недоверенный. Битый адрес по дороге — заголовок не читаем.
+    """
+    peer = handler.client_address[0]
+    if not TRUSTED_PROXIES or not trusted_proxy(peer):
+        return peer
+    leftmost = None
+    for part in reversed(handler.headers.get("X-Forwarded-For", "").split(",")):
+        try:
+            leftmost = ipaddress.ip_address(part.strip())
+        except ValueError:
+            return peer
+        if not any(leftmost in network for network in TRUSTED_PROXIES):
+            return str(leftmost)
+    return str(leftmost) if leftmost is not None else peer
 
 
 def login_key(username, client=""):
@@ -1494,6 +1575,12 @@ def list_collections(db, cid):
     return [{"id": cid_, "name": name, "channels": channels.get(cid_, [])} for cid_, name in rows]
 
 
+# Проверка имени и вставка идут под одним замком: два одновременных сохранения
+# одного названия иначе оба проходили проверку и создавали две коллекции.
+# ponytail: замок на процесс, сервис один. Для нескольких процессов нужен UNIQUE-индекс по (profile, name).
+_collections_lock = threading.Lock()
+
+
 def save_collection(db, cid, data):
     """Создаёт коллекцию или меняет её название и список каналов. Каналы берём только из подписок."""
     name = data.get("name")
@@ -1507,26 +1594,27 @@ def save_collection(db, cid, data):
     if not set(channels) <= subs:
         raise ValueError("канала нет в подписках")
     collection = data.get("id")
-    # одинаковые названия в списке не отличить друг от друга; свою же коллекцию можно не менять
-    taken = {n.casefold() for i, n in db.execute("SELECT id, name FROM collections WHERE profile=?", (cid,))
-             if i != collection}
-    if name.casefold() in taken:
-        raise ValueError("коллекция с таким названием уже есть")
-    if collection is None:
-        count = db.execute("SELECT COUNT(*) FROM collections WHERE profile=?", (cid,)).fetchone()[0]
-        if count >= COLLECTIONS_CAP:
-            raise ValueError("коллекций не больше 50")
-        collection = db.execute("INSERT INTO collections (profile, name, created) VALUES (?,?,?)",
-                                (cid, name, int(time.time()))).lastrowid
-    else:
-        if not isinstance(collection, int) or isinstance(collection, bool):
-            raise KeyError(collection)
-        cur = db.execute("UPDATE collections SET name=? WHERE id=? AND profile=?", (name, collection, cid))
-        if not cur.rowcount:
-            raise KeyError(collection)
-    db.execute("DELETE FROM collection_channels WHERE collection=?", (collection,))
-    db.executemany("INSERT INTO collection_channels VALUES (?,?)", [(collection, c) for c in channels])
-    db.commit()
+    with _collections_lock:
+        # одинаковые названия в списке не отличить друг от друга; свою же коллекцию можно не менять
+        taken = {n.casefold() for i, n in db.execute("SELECT id, name FROM collections WHERE profile=?", (cid,))
+                 if i != collection}
+        if name.casefold() in taken:
+            raise ValueError("коллекция с таким названием уже есть")
+        if collection is None:
+            count = db.execute("SELECT COUNT(*) FROM collections WHERE profile=?", (cid,)).fetchone()[0]
+            if count >= COLLECTIONS_CAP:
+                raise ValueError("коллекций не больше 50")
+            collection = db.execute("INSERT INTO collections (profile, name, created) VALUES (?,?,?)",
+                                    (cid, name, int(time.time()))).lastrowid
+        else:
+            if not isinstance(collection, int) or isinstance(collection, bool):
+                raise KeyError(collection)
+            cur = db.execute("UPDATE collections SET name=? WHERE id=? AND profile=?", (name, collection, cid))
+            if not cur.rowcount:
+                raise KeyError(collection)
+        db.execute("DELETE FROM collection_channels WHERE collection=?", (collection,))
+        db.executemany("INSERT INTO collection_channels VALUES (?,?)", [(collection, c) for c in channels])
+        db.commit()
     return next(c for c in list_collections(db, cid) if c["id"] == collection)
 
 
@@ -1551,7 +1639,7 @@ def save_state(db, cid, data):
     # Приватные каналы тоже подписки: без них полная замена состояния стирала
     # бы подписку на приватный канал, а её больше негде восстановить.
     subs = [c for c in string_list(data, "subs") if valid_feed_channel(c)][:200]
-    reads = [r for r in string_list(data, "reads") if valid_post_key(r)][:20000]
+    reads = [r for r in string_list(data, "reads") if valid_post_key(r)][:READS_CAP]
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
     db.execute("DELETE FROM user_subs WHERE profile=?", (cid,))
@@ -1566,16 +1654,21 @@ def save_state(db, cid, data):
 def merge_state(db, cid, data):
     """Однократно соединяет локальное состояние с уже существующим профилем."""
     incoming_subs = [c for c in string_list(data, "subs") if valid_channel(c)]
-    reads = list(dict.fromkeys(r for r in string_list(data, "reads")
-                               if valid_post_key(r)))[:20000]
+    reads = list(dict.fromkeys(r for r in string_list(data, "reads") if valid_post_key(r)))
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
     existing = [r[0] for r in db.execute("SELECT channel FROM user_subs WHERE profile=?", (cid,))]
     subs = list(dict.fromkeys(existing + incoming_subs))
     if len(subs) > 200:
+        db.rollback()
         raise ValueError("После объединения получится больше 200 каналов")
     db.executemany("INSERT OR IGNORE INTO user_subs VALUES (?,?)", [(cid, c) for c in subs])
     db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)", [(cid, r) for r in reads])
+    # итог, а не входящий список: новые отметки вместе со старыми не должны пройти мимо предела
+    total = db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?", (cid,)).fetchone()[0]
+    if total > READS_CAP:
+        db.rollback()
+        raise ValueError(READS_FULL)
     db.execute("UPDATE profiles SET initialized=1 WHERE code=?", (cid,))
     db.commit()
     return load_state(db, cid)
@@ -1587,7 +1680,7 @@ def valid_post_key(value):
     channel, sep, msg_id = value.partition("/")
     # Приватные посты отмечаются прочитанными по тому же ключу, поэтому валидатор
     # обязан их пропускать: иначе отметка молча не сохранится.
-    return bool(sep and valid_feed_channel(channel) and msg_id.isdigit() and len(msg_id) <= 20)
+    return bool(sep and valid_feed_channel(channel) and DIGITS.fullmatch(msg_id) and len(msg_id) <= 20)
 
 
 def update_subscription(db, cid, channel, subscribed):
@@ -1608,9 +1701,14 @@ def update_subscription(db, cid, channel, subscribed):
     return load_state(db, cid)
 
 
+# Отметок прочтения на профиль больше не копим: тот же предел у полной замены состояния.
+READS_CAP = 20000
+READS_FULL = "Отметок больше 20 000. Сними отметки у старых постов, чтобы отметить новые."
+
+
 def mark_posts_read(db, cid, post_keys, unread=False):
     """Отметки прочтения можно и снять: пост, который человек перечитал,
-    снова попадает в «Непрочитанные»."""
+    снова попадает в «Непрочитанные». Новые отметки сверх READS_CAP не принимаются."""
     valid = list(dict.fromkeys(key for key in post_keys if valid_post_key(key)))[:500]
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
                (cid, int(time.time())))
@@ -1618,11 +1716,37 @@ def mark_posts_read(db, cid, post_keys, unread=False):
         db.executemany("DELETE FROM user_reads WHERE profile=? AND post=?",
                        [(cid, key) for key in valid])
     else:
+        held = {r[0] for r in db.execute(
+            "SELECT post FROM user_reads WHERE profile=? AND post IN (%s)" % ",".join("?" * len(valid)),
+            [cid] + valid)} if valid else set()
+        total = db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?", (cid,)).fetchone()[0]
+        if total + len([key for key in valid if key not in held]) > READS_CAP:
+            db.rollback()
+            raise ValueError(READS_FULL)
         db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)",
                        [(cid, key) for key in valid])
     db.execute("UPDATE profiles SET initialized=1 WHERE code=?", (cid,))
     db.commit()
     return load_state(db, cid)
+
+
+class Server(ThreadingHTTPServer):
+    # Очередь ожидающих соединений: по умолчанию пять, и при залпе запросов
+    # (страница открывает десяток картинок и API сразу) лишние получали отказ.
+    request_queue_size = 128
+
+
+# Ответ на регистрацию один и тот же, ушло письмо или нет: по тексту не видно, отправлено ли оно.
+REGISTER_ANSWER = {"verification_required": True,
+                   "message": "Если адрес можно использовать, письмо придёт. Перейди по ссылке из него."}
+# Тело запроса больше этого не читаем: иначе один запрос занимает память и поток.
+BODY_LIMIT = 4_000_000
+# Политика для всех ответов: интерфейс — свой же код, картинки и видео — с Telegram.
+# font-src data: нужен: шрифт JetBrains Mono из Monos-кита встроен в CSS как data:-адрес (проверено в браузере).
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' https: data: blob:; media-src 'self' https: blob:; font-src 'self' data:; "
+       "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
+       "object-src 'none'")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1631,10 +1755,26 @@ class Handler(BaseHTTPRequestHandler):
     # несколько лишних подключений. HTTP/1.1 держит соединение, а
     # Content-Length в _send уже всегда проставлен.
     protocol_version = "HTTP/1.1"
+    # Сокет без ответа не держит поток вечно: тело, которое не пришло за это время, и
+    # простаивающее соединение закрываются.
+    timeout = 15
+    _body_read = False
 
     def version_string(self):
         # по умолчанию BaseHTTPRequestHandler отдаёт точную версию Python
         return "koloda"
+
+    def parse_request(self):
+        # признак «тело прочитано» относится к одному запросу: на соединении их много
+        self._body_read = False
+        return super().parse_request()
+
+    def send_error(self, code, message=None, explain=None):
+        # Метод, которого обработчик не знает (TRACE и любой другой), stdlib отвечает
+        # HTML-страницей 501. Отвечаем JSON 405, как остальным методам, которые сервис не принимает.
+        if code == 501 and not hasattr(self, "do_" + (self.command or "")):
+            return self._reject()
+        return super().send_error(code, message, explain)
 
     def _send(self, code, body, ctype, headers=None):
         b = body.encode() if isinstance(body, str) else body
@@ -1659,6 +1799,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
         self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", CSP)
+        # Тело, которое маршрут не прочитал и которое не дочитать (чанками или больше
+        # лимита), останется в сокете: соединение закрываем, иначе следующий запрос
+        # читался бы с середины.
+        if self.close_connection or (not self._body_read and self._body_size() is None):
+            self.send_header("Connection", "close")
         for name, value in headers or []:
             self.send_header(name, value)
         self.end_headers()
@@ -1672,6 +1818,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self._route()
 
+    def do_HEAD(self):   # то же, что GET; _send тела для HEAD не пишет
+        self._route()
+
     def do_PUT(self):
         self._route()
 
@@ -1680,16 +1829,12 @@ class Handler(BaseHTTPRequestHandler):
                    "application/json; charset=utf-8")
 
     # остальные методы должны отвечать JSON-кодом, а не HTML-страницей 501
-    do_DELETE = do_PATCH = do_OPTIONS = do_HEAD = _reject
+    do_DELETE = do_PATCH = do_OPTIONS = _reject
 
     def do_POST(self):   # navigator.sendBeacon при уходе со страницы
         self._route()
 
     def _route(self):
-        # Один обработчик обслуживает много запросов на одном соединении, и
-        # признак «тело прочитано» должен относиться к запросу, а не к
-        # соединению: иначе дочитка пропускалась, и тело оставалось в сокете.
-        self._body_read = False
         path = self.path.split("?")[0]
         # Проверка живости для healthcheck в compose. Без профиля и без
         # обращения к t.me: только база, поэтому отвечает быстро и всегда.
@@ -1766,24 +1911,48 @@ class Handler(BaseHTTPRequestHandler):
                 if not SMTP_ENABLED:
                     return self._send(503, json.dumps({"error": "Отправка писем пока недоступна"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if db.execute("SELECT 1 FROM accounts WHERE username=? COLLATE NOCASE",
-                              (username,)).fetchone():
-                    return self._send(409, json.dumps({"error": "Это имя уже занято. Выбери другое."}, ensure_ascii=False),
-                                      "application/json; charset=utf-8")
-                # без почты поле пустое, и второй профиль без почты совпал бы с первым
-                if email and db.execute("SELECT 1 FROM accounts WHERE email=? COLLATE NOCASE", (email,)).fetchone():
+                # Имя и почту держит подтверждённая или свежая учётка. Неподтверждённая старше
+                # суток (ссылка из письма в ней протухла) отдаётся заново.
+                stale_before = int(time.time()) - UNVERIFIED_TTL
+                rows = db.execute(
+                    "SELECT profile, email_verified, created, username=? COLLATE NOCASE,"
+                    " email=? COLLATE NOCASE FROM accounts"
+                    " WHERE username=? COLLATE NOCASE OR email=? COLLATE NOCASE",
+                    (username, email, username, email)).fetchall()
+                busy = [row for row in rows if row[1] or row[2] > stale_before]
+                if busy:
+                    if any(row[3] for row in busy):
+                        return self._send(409, json.dumps({"error": "Это имя уже занято. Выбери другое."}, ensure_ascii=False),
+                                          "application/json; charset=utf-8")
                     return self._send(409, json.dumps({"error": "Эта почта уже привязана к профилю"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                profile = secrets.token_urlsafe(24)
+                # Письмо на один адрес не чаще раза в минуту, как и повторная отправка подтверждения.
+                # Ответ тот же 202, что и при отправке: по нему не видно, что письма не будет.
+                if not mail_request_allowed("verify:" + email, client_ip(self)):
+                    return self._send(202, json.dumps(REGISTER_ANSWER, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                # Старую учётку отдаём заново: строку переписываем, не удаляем. Если почту держит
+                # другая старая строка, с неё почту снимаем, иначе та осталась бы занятой.
+                target = next((row[0] for row in rows if row[3]), rows[0][0] if rows else None)
                 salt = secrets.token_hex(16)
                 digest = password_digest(password, salt)
+                now = int(time.time())
                 try:
-                    db.execute("INSERT INTO profiles (code,created,initialized) VALUES (?,?,1)",
-                               (profile, int(time.time())))
-                    db.execute("INSERT INTO accounts "
-                               "(username,profile,salt,digest,created,email,email_verified) "
-                               "VALUES (?,?,?,?,?,?,0)",
-                               (username, profile, salt, digest, int(time.time()), email))
+                    if target is None:
+                        profile = secrets.token_urlsafe(24)
+                        db.execute("INSERT INTO profiles (code,created,initialized) VALUES (?,?,1)",
+                                   (profile, now))
+                        db.execute("INSERT INTO accounts "
+                                   "(username,profile,salt,digest,created,email,email_verified) "
+                                   "VALUES (?,?,?,?,?,?,0)",
+                                   (username, profile, salt, digest, now, email))
+                    else:
+                        profile = target
+                        for row in rows:
+                            if row[0] != target and row[4]:
+                                db.execute("UPDATE accounts SET email=NULL WHERE profile=?", (row[0],))
+                        db.execute("UPDATE accounts SET username=?,salt=?,digest=?,email=?,created=? "
+                                   "WHERE profile=?", (username, salt, digest, email, now, profile))
                     token = issue_auth_token(db, profile, "email_verify", email)
                     db.commit()
                 except sqlite3.IntegrityError:
@@ -1793,14 +1962,19 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     send_verification_email(email, token)
                 except Exception:
+                    # письма не ушло: лимит на адрес не должен держать повторную попытку
+                    MAIL_REQUESTS.pop("verify:" + email, None)
                     db.execute("DELETE FROM auth_tokens WHERE profile=?", (profile,))
-                    db.execute("DELETE FROM accounts WHERE profile=?", (profile,))
-                    db.execute("DELETE FROM profiles WHERE code=?", (profile,))
+                    if target is None:
+                        db.execute("DELETE FROM accounts WHERE profile=?", (profile,))
+                        db.execute("DELETE FROM profiles WHERE code=?", (profile,))
+                    else:
+                        # письма не ушло: учётка снова старая, и имя с почтой свободны для новой попытки
+                        db.execute("UPDATE accounts SET created=0 WHERE profile=?", (profile,))
                     db.commit()
                     return self._send(503, json.dumps({"error": "Не удалось отправить письмо. Проверь настройки почты и попробуй ещё раз."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                return self._send(202, json.dumps({"verification_required": True,
-                                  "message": "Проверь почту и перейди по ссылке в письме."}, ensure_ascii=False),
+                return self._send(202, json.dumps(REGISTER_ANSWER, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/auth/verify":
@@ -1822,17 +1996,14 @@ class Handler(BaseHTTPRequestHandler):
                 if purpose == "email_verify":
                     db.execute("UPDATE accounts SET email_verified=1 WHERE profile=? AND email=?",
                                (profile, email))
-                    account = db.execute("SELECT username,email FROM accounts WHERE profile=?",
-                                         (profile,)).fetchone()
-                    if not account:
+                    if not db.execute("SELECT 1 FROM accounts WHERE profile=?", (profile,)).fetchone():
                         return self._send(400, json.dumps({"error": "Профиль не найден"}, ensure_ascii=False),
                                           "application/json; charset=utf-8")
                     db.execute("DELETE FROM auth_tokens WHERE profile=?", (profile,))
                     db.commit()
-                    cookie = create_session(db, profile)
-                    return self._send(200, json.dumps({"account": {"username": account[0],
-                                      "email": account[1], "email_verified": True}}, ensure_ascii=False),
-                                      "application/json; charset=utf-8", [("Set-Cookie", cookie)])
+                    # Сессии здесь нет: ссылка из письма только подтверждает почту, а вход — по паролю
+                    return self._send(200, json.dumps({"email_verified": True}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 try:
                     db.execute("UPDATE accounts SET email=?,email_verified=1 WHERE profile=?",
                                (email, profile))
@@ -1851,10 +2022,10 @@ class Handler(BaseHTTPRequestHandler):
                 data = self._read_json()
                 email = str(data.get("email", "")).strip().lower() if isinstance(data, dict) else ""
                 generic = {"message": "Если для этой почты ждёт подтверждения профиль, мы отправили письмо."}
-                if valid_email(email) and mail_request_allowed("verify:" + email):
+                if valid_email(email):
                     row = db.execute("SELECT profile FROM accounts WHERE email=? COLLATE NOCASE "
                                      "AND email_verified=0", (email,)).fetchone()
-                    if row:
+                    if row and mail_request_allowed("verify:" + email, client_ip(self)):
                         token = issue_auth_token(db, row[0], "email_verify", email)
                         db.commit()
                         try:
@@ -1873,10 +2044,10 @@ class Handler(BaseHTTPRequestHandler):
                 data = self._read_json()
                 email = str(data.get("email", "")).strip().lower() if isinstance(data, dict) else ""
                 generic = {"message": "Если почта подтверждена, мы отправили на неё ссылку для восстановления."}
-                if valid_email(email) and mail_request_allowed("reset:" + email):
+                if valid_email(email):
                     row = db.execute("SELECT profile FROM accounts WHERE email=? COLLATE NOCASE "
                                      "AND email_verified=1", (email,)).fetchone()
-                    if row:
+                    if row and mail_request_allowed("reset:" + email, client_ip(self)):
                         token = issue_auth_token(db, row[0], "password_reset", email,
                                                  lifetime=30 * 60)
                         db.commit()
@@ -1946,6 +2117,9 @@ class Handler(BaseHTTPRequestHandler):
                               (email, account["profile"])).fetchone():
                     return self._send(409, json.dumps({"error": "Эта почта уже привязана к другому профилю"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
+                if not mail_request_allowed("verify:" + email, client_ip(self)):
+                    return self._send(429, json.dumps({"error": "Письма уже отправлены. Попробуй позже."}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 token = issue_auth_token(db, account["profile"], "email_change", email)
                 db.commit()
                 try:
@@ -1969,8 +2143,12 @@ class Handler(BaseHTTPRequestHandler):
                                       "application/json; charset=utf-8")
                 username = str(data.get("username", "")).strip()
                 password = data.get("password", "")
-                client = self.client_address[0]
-                if not isinstance(password, str) or not login_allowed(username, client):
+                # пароль не строкой — это плохой запрос, а не попытка входа: в счётчик не идёт
+                if not isinstance(password, str):
+                    return self._send(400, json.dumps({"error": "Введи имя и пароль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                client = client_ip(self)
+                if not login_allowed(username, client):
                     return self._send(429, json.dumps({"error": "Слишком много попыток. Попробуй позже."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 row = db.execute("SELECT username,profile,salt,digest,email,email_verified FROM accounts "
@@ -1992,7 +2170,10 @@ class Handler(BaseHTTPRequestHandler):
                                   "application/json; charset=utf-8", [("Set-Cookie", cookie)])
 
             if path == "/api/auth/logout":
-                account = account_for_request(db, self)
+                # GET не выходит: ссылка или картинка с чужого сайта не должна разлогинивать
+                if self.command != "POST":
+                    return self._send(405, json.dumps({"error": "метод не поддерживается"}),
+                                      "application/json")
                 jar = http.cookies.SimpleCookie()
                 try:
                     jar.load(self.headers.get("Cookie", ""))
@@ -2063,8 +2244,8 @@ class Handler(BaseHTTPRequestHandler):
                 q = self._query("q").strip()
                 conditions, args = ["s.profile=?"], [cid]
                 if q:
-                    conditions.append("p.text LIKE ?")
-                    args.append(f"%{q}%")
+                    conditions.append("p.text LIKE ? ESCAPE '\\'")
+                    args.append(like_pattern(q))
                 if any(self._query(k) for k in ("before_saved", "before_channel", "before_id")):
                     try:
                         before_saved = cursor_int(self._query("before_saved"))
@@ -2120,6 +2301,11 @@ class Handler(BaseHTTPRequestHandler):
                                   "application/json; charset=utf-8")
 
             if path == "/api/feed":
+                # Лента ходит в t.me, поэтому без входа в профиль не отвечает, как превью и каталог
+                unread_profile = client_id(self, db)
+                if not unread_profile:
+                    return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 q = self._query("q")
                 chans = list(dict.fromkeys(
                     c for c in self._query("channels", "").split(",") if c
@@ -2152,7 +2338,6 @@ class Handler(BaseHTTPRequestHandler):
                 wait_for(request_refresh(db, public_chans))
                 errors = failures_for(public_chans)
 
-                unread_profile = client_id(self, db)
                 # прочитанное по умолчанию не показываем: фильтр в запросе, а не на клиенте,
                 # чтобы страница не приходила полупустой
                 hide_read = unread_profile if self._query("hide_read") == "1" else None
@@ -2190,7 +2375,6 @@ class Handler(BaseHTTPRequestHandler):
                         if p.get(k):
                             try: p[k] = json.loads(p[k])
                             except ValueError: p[k] = None
-                unread_profile = client_id(self, db)
                 # флажок «сохранено» нужен кнопке под каждым постом
                 saved_keys = {(r[0], r[1]) for r in db.execute(
                     "SELECT channel,msg_id FROM saved_posts WHERE profile=?", (unread_profile,))} if unread_profile else set()
@@ -2271,7 +2455,10 @@ class Handler(BaseHTTPRequestHandler):
                                       "application/json; charset=utf-8")
                 token = str(data.get("token", ""))
                 try:
-                    result = tg.poll_link(token)
+                    result = tg.poll_link(token, cid)
+                except tg.ForeignLogin:
+                    return self._send(404, json.dumps({"error": "такого входа нет"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 except Exception as exc:
                     return self._send(502, json.dumps({"error": "вход не удался"},
                                                       ensure_ascii=False),
@@ -2295,8 +2482,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(data, json.dumps({"error": "неверные данные"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 token = str(data.get("token", ""))
-                return self._send(200, json.dumps(tg.cancel_link(token)),
-                                  "application/json; charset=utf-8")
+                try:
+                    result = tg.cancel_link(token, cid)
+                except tg.ForeignLogin:
+                    return self._send(404, json.dumps({"error": "такого входа нет"}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                return self._send(200, json.dumps(result), "application/json; charset=utf-8")
 
             if path == "/api/tg/unlink":
                 if self.command != "POST":
@@ -2344,6 +2535,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not cid:
                     return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
                                       "application/json")
+                # как у входа: без Telethon отвечаем до всякой сети и с тем же текстом
+                if not tg.installed():
+                    return self._send(503, json.dumps({"error": tg.MISSING_MESSAGE}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 try:
                     found = tg.discover(cid)
                 except tg.TelegramMissing as exc:
@@ -2369,7 +2564,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 channel, msg = self._query("channel"), self._query("msg")
-                if not private_channel(channel) or not msg.isdigit() or len(msg) > 20:
+                if not private_channel(channel) or not DIGITS.fullmatch(msg) or len(msg) > 20:
                     return self._send(400, json.dumps({"error": "неверный адрес медиа"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 if not db.execute("SELECT 1 FROM user_subs WHERE profile=? AND channel=?",
@@ -2609,7 +2804,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(keys, list):
                     return self._send(400, json.dumps({"error": "неверный список постов"}),
                                       "application/json")
-                state = mark_posts_read(db, cid, keys, unread=data.get("unread") is True)
+                try:
+                    state = mark_posts_read(db, cid, keys, unread=data.get("unread") is True)
+                except ValueError as exc:
+                    return self._send(409, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
                 return self._send(200, json.dumps(state, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
@@ -2618,7 +2817,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(401, json.dumps({"error": "нужно войти в профиль"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 offset = self._query("offset", "0")
-                if not offset.isdigit() or int(offset) > 5000:
+                if not DIGITS.fullmatch(offset) or len(offset) > 6 or int(offset) > 5000:
                     return self._send(400, json.dumps({"error": "неверная страница каталога"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 try:
@@ -2721,7 +2920,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Свежие ссылки на кадры поста, когда старые не открываются. Ходит в t.me,
                 # поэтому только для подписчика канала: иначе сайт снова станет чужим обходом.
                 channel, _, msg = (self._query("post") or "").partition("/")
-                if not valid_channel(channel) or not msg.isdigit():
+                if not valid_channel(channel) or not DIGITS.fullmatch(msg):
                     return self._send(400, json.dumps({"error": "неверный пост"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 try:
@@ -2762,7 +2961,7 @@ class Handler(BaseHTTPRequestHandler):
                     title, posts = fetch_channel(c)
                     store_channel_cache(db, c, title, posts)
                     db.commit()
-                except ValueError as exc:
+                except ChannelError as exc:
                     # Наши собственные сообщения: «канал не найден», «t.me попросил ждать».
                     return self._send(404, json.dumps({"error": str(exc)}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
@@ -2783,18 +2982,30 @@ class Handler(BaseHTTPRequestHandler):
     def _query(self, k, default=""):
         return parse_qs(urlparse(self.path).query).get(k, [default])[0]
 
-    def _read_json(self):
+    def _chunked(self):
+        return "chunked" in self.headers.get("Transfer-Encoding", "").lower()
+
+    def _body_size(self):
+        """Длина тела, которое можно дочитать. None: тело чанками, с непонятной длиной или больше лимита."""
+        if self._chunked():
+            return None
         try:
             size = int(self.headers.get("Content-Length") or 0)
         except ValueError:
-            return 400
-        if size < 0:
-            return 400
-        if size > 4_000_000:
-            return 413
+            return None
+        return size if 0 <= size <= BODY_LIMIT else None
+
+    def _read_json(self):
+        size = self._body_size()
+        if size is None:
+            # тело не читаем: _send закроет соединение, и остаток тела уйдёт вместе с ним
+            return 411 if self._chunked() else 413
         try:
             raw = self.rfile.read(size)
         except OSError:
+            # тело не пришло за отведённое время: отвечаем и закрываем соединение
+            self._body_read = True
+            self.close_connection = True
             return 400
         self._body_read = True
         try:
@@ -2808,21 +3019,19 @@ class Handler(BaseHTTPRequestHandler):
 
         Иначе оно остаётся в сокете, и следующий запрос на том же соединении
         читается с середины: после выхода из профиля страница перезагружалась
-        и получала «Unsupported method ('{}GET')».
+        и получала «Unsupported method ('{}GET')». Тело, которое не дочитать
+        (чанками или больше лимита), не читаем: соединение уже закрыто в _send.
         """
-        if getattr(self, "_body_read", False):
+        if self._body_read:
             return
         self._body_read = True
-        try:
-            size = int(self.headers.get("Content-Length") or 0)
-        except (TypeError, ValueError):
-            size = 0
-        if size <= 0:
+        size = self._body_size()
+        if not size:
             return
         try:
             self.rfile.read(size)
         except OSError:
-            pass
+            self.close_connection = True
 
     def log_message(self, fmt, *a):
         # Логи выключены по умолчанию: при каждом запросе к t.me и картинкам они
@@ -2854,4 +3063,4 @@ if __name__ == "__main__":
     threading.Thread(target=_backfill_loop, daemon=True, name="backfill").start()
     threading.Thread(target=_private_loop, daemon=True, name="private").start()
     threading.Thread(target=_media_loop, daemon=True, name="media").start()
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    Server(("0.0.0.0", PORT), Handler).serve_forever()

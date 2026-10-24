@@ -2,10 +2,13 @@
 import asyncio
 import contextlib
 import gzip
+import http.client
+import ipaddress
 import json
 import os
 import re
 import shutil
+import socket
 import sqlite3
 import subprocess
 import tempfile
@@ -65,7 +68,8 @@ def register_with_mail(base, username, password="long-password-1"):
     """Регистрация с почтой по HTTP и подтверждение по ссылке из письма (письмо перехватываем).
     Возвращает cookie сессии, которую выдаёт подтверждение."""
     sent = {}
-    with patch.object(app, "SMTP_ENABLED", True), \
+    # лимит писем на адрес у каждого теста свой: иначе регистрация другого теста с тем же именем молчит
+    with patch.dict(app.MAIL_REQUESTS, clear=True), patch.object(app, "SMTP_ENABLED", True), \
             patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(token=t)):
         request = Request(base + "/api/auth/register", method="POST",
                           data=json.dumps({"username": username, "password": password,
@@ -77,7 +81,27 @@ def register_with_mail(base, username, password="long-password-1"):
                      data=json.dumps({"token": sent["token"]}).encode(),
                      headers={"Content-Type": "application/json"})
     with urlopen(verify, timeout=5) as response:
+        assert response.headers.get("Set-Cookie") is None
+    login = Request(base + "/api/auth/login", method="POST",
+                    data=json.dumps({"username": username, "password": password}).encode(),
+                    headers={"Content-Type": "application/json"})
+    with urlopen(login, timeout=5) as response:
         return response.headers.get("Set-Cookie", "").split(";", 1)[0]
+
+
+_client_mail_limit_off = None
+
+
+def setUpModule():
+    # Все тесты ходят с одного адреса (127.0.0.1): общий лимит писем сломал бы чужие регистрации.
+    # Лимит проверяет MailLimitTest, и он включает его сам.
+    global _client_mail_limit_off
+    _client_mail_limit_off = patch.object(app, "MAIL_PER_CLIENT", 10 ** 9)
+    _client_mail_limit_off.start()
+
+
+def tearDownModule():
+    _client_mail_limit_off.stop()
 
 
 class FeedAPITest(unittest.TestCase):
@@ -92,6 +116,8 @@ class FeedAPITest(unittest.TestCase):
         self.thread.start()
         self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
         self.cookie = ""
+        # лента отвечает только профилю: тесты ленты идут от имени входящего читателя
+        self.register("feed_reader", "password123")
 
     def tearDown(self):
         self.server.shutdown()
@@ -586,16 +612,21 @@ class FeedAPITest(unittest.TestCase):
 
     @patch.object(app, "SMTP_ENABLED", True)
     def test_resend_verification_waits_a_minute_between_mails(self):
+        # регистрация тоже отправка: повтор в ту же минуту письма не шлёт (A5), потом шлёт
         with patch.object(app, "send_verification_email") as send, patch.dict(app.MAIL_REQUESTS, clear=True):
             self.request("/api/auth/register", method="POST", data={
                 "username": "resend_user", "password": "password123", "email": "resend-user@example.com"})
             self.request("/api/auth/resend-verification", method="POST", data={"email": "resend-user@example.com"})
+            self.assertEqual(send.call_count, 1)
+            app.MAIL_REQUESTS["verify:resend-user@example.com"] -= 61
             self.request("/api/auth/resend-verification", method="POST", data={"email": "resend-user@example.com"})
-        self.assertEqual(send.call_count, 2)  # регистрация и одна повторная отправка, вторая попытка ждёт минуту
+            self.request("/api/auth/resend-verification", method="POST", data={"email": "resend-user@example.com"})
+        self.assertEqual(send.call_count, 2)  # регистрация, повтор через минуту, и ещё один повтор ждёт минуту
 
     @patch.object(app, "SMTP_ENABLED", True)
     def test_email_change_needs_the_password_and_a_confirmed_link(self):
         # A8: смена почты требует текущий пароль и работает только по ссылке из нового письма
+        self.cookie = ""
         sent = {}
         with patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(verify=t)):
             self.assertEqual(self.request("/api/auth/register", method="POST", data={
@@ -604,6 +635,8 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(self.request("/api/auth/email", method="POST",
                                       data={"password": "password123", "email": "new-mail@example.com"})[0], 401)
         self.assertEqual(self.request("/api/auth/verify", method="POST", data={"token": sent["verify"]})[0], 200)
+        self.assertEqual(self.request("/api/auth/login", method="POST",
+                                      data={"username": "change_user", "password": "password123"})[0], 200)
         with patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(change=t)):
             self.assertEqual(self.request("/api/auth/email", method="POST",
                                           data={"password": "wrong-pass", "email": "new-mail@example.com"})[0], 401)
@@ -643,6 +676,7 @@ class FeedAPITest(unittest.TestCase):
 
     def test_catalog_is_for_signed_in_profiles_only(self):
         # Каталог и категории отдают список каналов, поэтому без входа их не получают
+        self.cookie = ""
         self.assertEqual(self.request("/api/catalog")[0], 401)
         self.assertEqual(self.request("/api/categories")[0], 401)
         self.login("catalogcheck")
@@ -776,13 +810,14 @@ class FeedAPITest(unittest.TestCase):
         self.cookie = ""
         with patch.object(app, "fetch_channel") as fetch:
             self.assertEqual(self.request("/api/check?c=durov")[0], 401)
-            self.assertEqual(self.request("/api/feed?channels=alpha&refresh=1")[0], 200)
-        # refresh=1 больше не форсирует обновление: кэш свежий, сети быть не должно
+            # лента без профиля тоже не отвечает (A10): ни кэша, ни обхода для гостя
+            self.assertEqual(self.request("/api/feed?channels=alpha&refresh=1")[0], 401)
         fetch.assert_not_called()
 
     def test_channel_preview_pages_through_every_cached_post(self):
         # предпросмотр читает канал и обновляет его: с 19 октября только
         # с профилем, иначе сервис становился чужим прокси в t.me
+        self.cookie = ""
         self.assertEqual(self.request("/api/preview?c=alpha")[0], 401)
         self.register("preview_user", "long-password")
         status, first = self.request("/api/preview?c=alpha")
@@ -824,6 +859,7 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(status, 401)
 
     def test_state_rejects_browser_supplied_identity(self):
+        self.cookie = ""
         status, payload = self.request("/api/state", client_id="someone-else")
         self.assertEqual(status, 401)
         self.assertIn("error", payload)
@@ -892,7 +928,7 @@ class FeedAPITest(unittest.TestCase):
                                        data={"username": "no_email_one", "password": "long-password"})
         self.assertEqual(status, 400)
         self.assertIn("почта", payload["error"])
-        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM accounts").fetchone()[0], 0)
+        self.assertIsNone(self.db.execute("SELECT 1 FROM accounts WHERE username='no_email_one'").fetchone())
 
     def test_feed_stops_at_two_hundred_channels(self):
         self.register("cap_profile", "long-password")
@@ -1596,7 +1632,7 @@ class PrivateChannelsTest(unittest.TestCase):
 
     def sign_in(self, username):
         sent = {}
-        with patch.object(app, "SMTP_ENABLED", True), \
+        with patch.dict(app.MAIL_REQUESTS, clear=True), patch.object(app, "SMTP_ENABLED", True), \
                 patch.object(app, "send_verification_email", side_effect=lambda e, t: sent.update(token=t)):
             status, _ = self.call("/api/auth/register", method="POST",
                                   data={"username": username, "password": "long-password",
@@ -1763,19 +1799,28 @@ class ThemeContrastTest(unittest.TestCase):
             raise unittest.SkipTest("кит не установлен: нет ui/node_modules")
         with open(themes, encoding="utf-8") as page:
             css = page.read()
+        # Двенадцать блоков кита: палитра × светлота, каждый как [data-theme=…][data-mode=…].
+        # Блоки :root — это умолчания тех же палитр, их не считаем отдельной парой.
         cls.themes = []
-        for block in re.findall(r"(:root[^\{]*)\{(.*?)\}", css, re.S):
-            selector, body = block
+        for palette, mode, body in re.findall(r'\[data-theme="([\w-]+)"\]\[data-mode="(\w+)"\]\s*\{([^}]*)\}', css):
             tokens = dict(re.findall(r"--ui-([\w-]+):\s*(#[0-9a-fA-F]{6})", body))
-            if tokens:
-                cls.themes.append((selector.strip(), tokens))
+            cls.themes.append((f"{palette}/{mode}", tokens))
 
     def test_every_theme_pair_clears_4_5(self):
-        self.assertTrue(self.themes, "палитра кита не разобралась")
-        for selector, tokens in self.themes:
+        # Палитры — те же, что принимает сервер (SETTINGS_ALLOWED), светлоты — две.
+        expected = sorted(f"{palette}/{mode}" for palette in app.SETTINGS_ALLOWED["theme"]
+                          for mode in ("light", "dark"))
+        found = sorted(name for name, _tokens in self.themes)
+        self.assertEqual(found, expected)
+        self.assertEqual(len(self.themes), 12)
+        checked = 0
+        for name, tokens in self.themes:
             for text, bg in self.PAIRS:
-                with self.subTest(theme=selector, text=text, bg=bg):
+                with self.subTest(theme=name, text=text, bg=bg):
+                    checked += 1
                     self.assertGreaterEqual(contrast(tokens[text], tokens[bg]), 4.5)
+        # 12 пар палитра/светлота, на каждой все текстовые роли: тест не может молча стать пустым
+        self.assertEqual(checked, 12 * len(self.PAIRS))
 
 
 class SpacingScaleTest(unittest.TestCase):
@@ -2116,6 +2161,7 @@ class CursorIntTest(unittest.TestCase):
 
     def test_oversized_cursor_gives_an_answer_instead_of_a_broken_connection(self):
         with feed_server() as server:
+            server.cookie = register_with_mail(server.base, "cursor_user")
             status, payload = server.request("/api/feed?channels=alpha"
                                             "&before_ts=99999999999999999999999"
                                             "&before_channel=alpha&before_id=1")
@@ -2245,14 +2291,695 @@ class TgLinkRenewTest(unittest.TestCase):
         qr = self.FakeQR()
         app.tg._pending["live"] = {"profile": "p", "client": None, "qr": qr,
                                    "started": time.time(), "task": None}
-        self.assertEqual(app.tg.poll_link("live"), {"state": "waiting", "url": "tg://login?token=0"})
+        self.assertEqual(app.tg.poll_link("live", "p"), {"state": "waiting", "url": "tg://login?token=0"})
         qr.token = 1
-        self.assertEqual(app.tg.poll_link("live")["url"], "tg://login?token=1")
+        self.assertEqual(app.tg.poll_link("live", "p")["url"], "tg://login?token=1")
         app.tg._pending["live"]["account"] = {"title": "Ира", "phone": ""}
-        self.assertEqual(app.tg.poll_link("live")["state"], "done")
+        self.assertEqual(app.tg.poll_link("live", "p")["state"], "done")
         app.tg._pending["old"] = {"profile": "p", "client": None, "qr": qr,
                                   "started": time.time() - 700, "task": None}
-        self.assertEqual(app.tg.poll_link("old"), {"state": "expired"})
+        self.assertEqual(app.tg.poll_link("old", "p"), {"state": "expired"})
+
+
+class AuthFixesTest(unittest.TestCase):
+    """Вход и регистрация: подтверждение почты не входит, старые учётки отдаются заново, письма не чаще минуты."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="koloda-auth-fixes-")
+        self.previous_db = app.DB
+        app.DB = self.temp.name + "/feed.db"
+        self.db = app.connect()
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+        self.cookie = ""
+        self.sent = []
+        self.request = types.MethodType(FeedAPITest.request, self)
+        self.request_raw = types.MethodType(FeedAPITest.request_raw, self)
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        app.wait_refresh_idle()
+        self.db.close()
+        app.DB = self.previous_db
+        self.temp.cleanup()
+
+    def on_mail(self, email, token):
+        self.sent.append((email, token))
+
+    def register(self, name, email, password="new-password-1"):
+        with patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email", side_effect=self.on_mail):
+            return self.request("/api/auth/register", method="POST",
+                                data={"username": name, "password": password, "email": email})
+
+    def insert_account(self, name, email, created, verified=0, password="old-password-1"):
+        profile = "profile-" + name
+        salt = os.urandom(16).hex()
+        self.db.execute("INSERT INTO profiles (code, created, initialized) VALUES (?,?,1)", (profile, created))
+        self.db.execute("INSERT INTO accounts (username, profile, salt, digest, created, email, email_verified)"
+                        " VALUES (?,?,?,?,?,?,?)",
+                        (name, profile, salt, app.password_digest(password, salt), created, email, verified))
+        self.db.commit()
+        return profile
+
+    def login_from(self, forwarded):
+        req = Request(self.base + "/api/auth/login", method="POST",
+                      data=json.dumps({"username": "victim", "password": "wrong-pass"}).encode(),
+                      headers={"Content-Type": "application/json", "X-Forwarded-For": forwarded})
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status
+        except HTTPError as exc:
+            return exc.code
+
+    def test_verify_link_confirms_the_mail_and_gives_no_session(self):
+        # A3: ссылка из письма подтверждает почту; сессию даёт только вход по паролю
+        status, _ = self.register("verify_user", "verify-user@example.com")
+        self.assertEqual(status, 202)
+        status, headers, body = self.request_raw("/api/auth/verify", method="POST", data={"token": self.sent[0][1]})
+        self.assertEqual(status, 200)
+        self.assertIsNone(headers.get("Set-Cookie"))
+        self.assertTrue(json.loads(body)["email_verified"])
+        self.assertIsNone(self.request("/api/auth/me")[1]["account"])
+        status, headers, _ = self.request_raw("/api/auth/login", method="POST",
+                                              data={"username": "verify_user", "password": "new-password-1"})
+        self.assertEqual(status, 200)
+        self.assertIn(app.SESSION_COOKIE, headers.get("Set-Cookie", ""))
+
+    def test_a_stale_unverified_profile_gives_its_name_and_mail_to_a_new_registration(self):
+        # A4: строку переписываем, а не удаляем; 24 часа отсчитываются заново
+        old = int(time.time()) - 25 * 3600
+        profile = self.insert_account("stale_name", "stale@example.com", created=old)
+        status, _ = self.register("stale_name", "stale@example.com")
+        self.assertEqual(status, 202)
+        rows = self.db.execute("SELECT profile, created FROM accounts WHERE username='stale_name'").fetchall()
+        self.assertEqual(rows[0][0], profile)
+        self.assertEqual(len(rows), 1)
+        self.assertGreater(rows[0][1], old)
+        self.assertEqual(self.sent[-1][0], "stale@example.com")
+        self.assertEqual(self.request("/api/auth/verify", method="POST", data={"token": self.sent[-1][1]})[0], 200)
+        self.assertEqual(self.request("/api/auth/login", method="POST",
+                                      data={"username": "stale_name", "password": "old-password-1"})[0], 401)
+        self.assertEqual(self.request("/api/auth/login", method="POST",
+                                      data={"username": "stale_name", "password": "new-password-1"})[0], 200)
+
+    def test_a_fresh_unverified_profile_still_holds_its_name_and_mail(self):
+        self.insert_account("fresh_name", "fresh@example.com", created=int(time.time()) - 3600)
+        status, payload = self.register("fresh_name", "other@example.com")
+        self.assertEqual((status, payload["error"]), (409, "Это имя уже занято. Выбери другое."))
+        status, payload = self.register("other_name", "fresh@example.com")
+        self.assertEqual((status, payload["error"]), (409, "Эта почта уже привязана к профилю"))
+        self.assertEqual(self.sent, [])
+
+    def test_a_confirmed_profile_is_never_given_away(self):
+        old = int(time.time()) - 30 * 3600
+        self.insert_account("kept_name", "kept@example.com", created=old, verified=1)
+        self.assertEqual(self.register("kept_name", "new@example.com")[0], 409)
+        self.assertEqual(self.register("new_name", "kept@example.com")[0], 409)
+        self.assertEqual(self.sent, [])
+
+    def test_a_stale_profile_found_by_mail_takes_the_new_name(self):
+        old = int(time.time()) - 30 * 3600
+        profile = self.insert_account("old_name", "shared@example.com", created=old)
+        self.assertEqual(self.register("new_name", "shared@example.com")[0], 202)
+        self.assertEqual(self.db.execute("SELECT username, profile FROM accounts").fetchall(),
+                         [("new_name", profile)])
+
+    def test_two_stale_profiles_holding_the_name_and_the_mail_apart_are_both_freed(self):
+        # имя у одной старой учётки, почта у другой: отдаём первой, у второй почту снимаем
+        old = int(time.time()) - 30 * 3600
+        by_name = self.insert_account("dup_name", "first@example.com", created=old)
+        by_mail = self.insert_account("other_name", "second@example.com", created=old)
+        self.assertEqual(self.register("dup_name", "second@example.com")[0], 202)
+        emails = dict(self.db.execute("SELECT profile, email FROM accounts").fetchall())
+        self.assertEqual(emails, {by_name: "second@example.com", by_mail: None})
+
+    def test_a_failed_mail_to_a_stale_profile_leaves_it_free_for_a_retry(self):
+        old = int(time.time()) - 30 * 3600
+        self.insert_account("again_name", "again@example.com", created=old)
+        with patch.dict(app.MAIL_REQUESTS, clear=True), \
+                patch.object(app, "SMTP_ENABLED", True), \
+                patch.object(app, "send_verification_email", side_effect=OSError("smtp down")):
+            status, _ = self.request("/api/auth/register", method="POST", data={
+                "username": "again_name", "password": "new-password-1", "email": "again@example.com"})
+        self.assertEqual(status, 503)
+        self.assertEqual(self.register("again_name", "again@example.com")[0], 202)
+
+    def test_a_failed_mail_to_a_new_name_does_not_block_the_retry(self):
+        with patch.dict(app.MAIL_REQUESTS, clear=True), \
+                patch.object(app, "SMTP_ENABLED", True), \
+                patch.object(app, "send_verification_email", side_effect=OSError("smtp down")):
+            status, _ = self.request("/api/auth/register", method="POST", data={
+                "username": "retry_name", "password": "new-password-1", "email": "retry@example.com"})
+        self.assertEqual(status, 503)
+        self.assertEqual(self.register("retry_name", "retry@example.com")[0], 202)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_registration_inside_a_minute_of_a_mail_to_the_address_gets_202_without_mail(self):
+        # A5: тот же лимит на адрес, что у повторной отправки; ответ тот же 202, письма нет
+        email = "quiet@example.com"
+        status, sent_answer = self.register("sent_name", "sent@example.com")
+        self.assertEqual(status, 202)
+        with patch.dict(app.MAIL_REQUESTS, {"verify:" + email: time.time()}):
+            status, payload = self.register("quiet_name", email)
+        self.assertEqual(status, 202)
+        # ответ тот же, что и при отправленном письме: по нему не видно, ушло ли письмо
+        self.assertEqual(payload, sent_answer)
+        self.assertEqual(len(self.sent), 1)
+        self.assertIsNone(self.db.execute("SELECT 1 FROM accounts WHERE username='quiet_name'").fetchone())
+
+    def test_a_password_that_is_not_text_is_a_bad_request_not_a_lockout(self):
+        # A20: 400, и такие попытки в счётчик входа не идут
+        with patch.dict(app.LOGIN_FAILURES, clear=True):
+            statuses = [self.request("/api/auth/login", method="POST",
+                                     data={"username": "nobody", "password": 12345})[0] for _ in range(10)]
+        self.assertEqual(statuses, [400] * 10)
+
+    def test_logout_works_only_by_post(self):
+        # A21: GET не выходит из профиля
+        status, payload = self.request("/api/auth/logout")
+        self.assertEqual(status, 405)
+        self.assertEqual(payload["error"], "метод не поддерживается")
+        self.assertEqual(self.request("/api/auth/logout", method="POST", data={})[0], 200)
+
+    def test_the_login_lock_follows_the_real_client_only_behind_a_trusted_proxy(self):
+        # A6: за доверенным прокси ключ входа — адрес из X-Forwarded-For
+        with patch.dict(app.LOGIN_FAILURES, clear=True), \
+                patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("127.0.0.0/8")]):
+            for _ in range(8):
+                self.login_from("203.0.113.9")
+            self.assertEqual(self.login_from("203.0.113.9"), 429)
+            self.assertEqual(self.login_from("198.51.100.7"), 401)
+
+    def test_a_forged_left_address_does_not_move_the_login_lock_behind_a_trusted_proxy(self):
+        # A6: подделанный левый адрес не даёт новый ключ входа: блокировка идёт по настоящему клиенту
+        with patch.dict(app.LOGIN_FAILURES, clear=True), \
+                patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("127.0.0.0/8")]):
+            for forged in range(8):
+                self.login_from("192.0.2.%d, 203.0.113.9" % (forged + 1))
+            self.assertEqual(self.login_from("192.0.2.200, 203.0.113.9"), 429)
+            self.assertEqual(self.login_from("192.0.2.201, 198.51.100.7"), 401)
+
+    def test_the_forwarded_header_does_not_move_the_login_lock_without_a_trusted_proxy(self):
+        with patch.dict(app.LOGIN_FAILURES, clear=True), patch.object(app, "TRUSTED_PROXIES", []):
+            for _ in range(8):
+                self.login_from("203.0.113.9")
+            self.assertEqual(self.login_from("198.51.100.7"), 429)
+
+
+class MailLimitTest(unittest.TestCase):
+    """Письма: на адрес раз в минуту, с одного адреса клиента десять за час; все три маршрута делят этот счёт."""
+
+    def post_as(self, server, path, data, forwarded=None):
+        headers = {"Content-Type": "application/json"}
+        if forwarded is not None:
+            headers["X-Forwarded-For"] = forwarded
+        if server.cookie:
+            headers["Cookie"] = server.cookie
+        req = Request(server.base + path, data=json.dumps(data).encode(), headers=headers, method="POST")
+        try:
+            with urlopen(req, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    def register_as(self, server, number, forwarded=None):
+        return self.post_as(server, "/api/auth/register", {
+            "username": "mail_user%d" % number, "password": "long-password-1",
+            "email": "letter%d@example.com" % number}, forwarded)
+
+    def test_the_eleventh_letter_from_one_client_is_not_sent(self):
+        # A5: одиннадцатое письмо с разных адресов с одного клиента не уходит; ответ тот же 202
+        with feed_server() as server, patch.object(app, "MAIL_PER_CLIENT", 10), \
+                patch.dict(app.CLIENT_MAILS, clear=True), patch.dict(app.MAIL_REQUESTS, clear=True), \
+                patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email") as send:
+            for number in range(10):
+                self.assertEqual(self.register_as(server, number)[0], 202)
+            self.assertEqual(send.call_count, 10)
+            status, payload = self.register_as(server, 10)
+            self.assertEqual(status, 202)
+            self.assertEqual(payload, app.REGISTER_ANSWER)
+            self.assertEqual(send.call_count, 10)
+            db = app.connect()
+            try:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM accounts WHERE username='mail_user10'").fetchone()[0], 0)
+            finally:
+                db.close()
+
+    def test_every_letter_route_spends_the_same_client_quota(self):
+        with feed_server() as server, patch.object(app, "MAIL_PER_CLIENT", 10), \
+                patch.dict(app.CLIENT_MAILS, clear=True), patch.dict(app.MAIL_REQUESTS, clear=True), \
+                patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email") as verify_mail, \
+                patch.object(app, "send_password_reset_email") as reset_mail:
+            db = app.connect()
+            try:
+                salt = os.urandom(16).hex()
+                db.execute("INSERT INTO profiles (code, created, initialized) VALUES ('pool-user', 0, 1)")
+                db.execute("INSERT INTO accounts (username, profile, salt, digest, created, email, email_verified)"
+                           " VALUES ('pool_user', 'pool-user', ?, ?, 0, 'pool@example.com', 1)",
+                           (salt, app.password_digest("long-password-1", salt)))
+                db.commit()
+            finally:
+                db.close()
+            login = Request(server.base + "/api/auth/login", method="POST",
+                            data=json.dumps({"username": "pool_user", "password": "long-password-1"}).encode(),
+                            headers={"Content-Type": "application/json"})
+            with urlopen(login, timeout=5) as response:
+                server.cookie = response.headers.get("Set-Cookie", "").split(";", 1)[0]
+            self.assertTrue(server.cookie)
+            # письмо 1: восстановление пароля; письмо 2: регистрация
+            self.assertEqual(self.post_as(server, "/api/auth/forgot", {"email": "pool@example.com"})[0], 200)
+            reset_mail.assert_called_once()
+            self.assertEqual(self.register_as(server, 2)[0], 202)
+            self.assertEqual(verify_mail.call_count, 1)
+            # восемь писем занимают остаток счёта: десять — предел
+            app.CLIENT_MAILS["127.0.0.1"].extend([time.time()] * 8)
+            status, payload = self.register_as(server, 3)
+            self.assertEqual((status, payload), (202, app.REGISTER_ANSWER))
+            self.assertEqual(verify_mail.call_count, 1)
+            # восстановление после минуты тоже упирается в счёт: письма нет, ответ тот же 200
+            app.MAIL_REQUESTS["reset:pool@example.com"] -= 61
+            self.assertEqual(self.post_as(server, "/api/auth/forgot", {"email": "pool@example.com"})[0], 200)
+            reset_mail.assert_called_once()
+            # смена почты тоже тратит счёт: отказ — 429, письма нет
+            status, _ = self.post_as(server, "/api/auth/email", {"password": "long-password-1", "email": "new@example.com"})
+            self.assertEqual(status, 429)
+            verify_mail.assert_called_once()
+
+    def test_another_client_behind_the_proxy_has_its_own_quota(self):
+        with feed_server() as server, patch.object(app, "MAIL_PER_CLIENT", 10), \
+                patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("127.0.0.0/8")]), \
+                patch.dict(app.CLIENT_MAILS, clear=True), patch.dict(app.MAIL_REQUESTS, clear=True), \
+                patch.object(app, "SMTP_ENABLED", True), patch.object(app, "send_verification_email") as send:
+            for number in range(10):
+                self.register_as(server, number, forwarded="203.0.113.1")
+            self.assertEqual(send.call_count, 10)
+            self.register_as(server, 10, forwarded="203.0.113.1")
+            self.assertEqual(send.call_count, 10)
+            self.register_as(server, 11, forwarded="203.0.113.2")
+            self.assertEqual(send.call_count, 11)
+
+
+class ClientAddressTest(unittest.TestCase):
+    """Адрес клиента для входа: адрес соединения, а за доверенным прокси — адрес из X-Forwarded-For."""
+
+    def handler(self, peer, forwarded=None):
+        headers = {"X-Forwarded-For": forwarded} if forwarded is not None else {}
+        return SimpleNamespace(client_address=(peer, 40000), headers=headers)
+
+    def test_forwarded_header_is_ignored_without_a_trusted_proxy(self):
+        with patch.object(app, "TRUSTED_PROXIES", []):
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "203.0.113.9")), "10.0.0.5")
+            self.assertEqual(app.login_key("ivan", app.client_ip(self.handler("10.0.0.5", "198.51.100.7"))),
+                             app.login_key("ivan", app.client_ip(self.handler("10.0.0.5"))))
+
+    def test_forwarded_header_counts_only_from_a_trusted_proxy(self):
+        with patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("10.0.0.0/8")]):
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "203.0.113.9, 10.0.0.7")), "203.0.113.9")
+            self.assertEqual(app.client_ip(self.handler("198.51.100.7", "203.0.113.9")), "198.51.100.7")
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "not-an-ip")), "10.0.0.5")
+
+    def test_the_rightmost_untrusted_address_is_the_client(self):
+        # прокси дописывает адрес справа; левую часть клиент подделывает
+        with patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("10.0.0.0/8")]):
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "192.0.2.66, 203.0.113.9")), "203.0.113.9")
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "192.0.2.66, 203.0.113.9, 10.0.0.8")),
+                             "203.0.113.9")
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "192.0.2.66, 203.0.113.9, 10.0.0.8, 10.0.0.7")),
+                             "203.0.113.9")
+
+    def test_a_forged_left_part_does_not_change_the_client(self):
+        with patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("10.0.0.0/8")]):
+            first = app.client_ip(self.handler("10.0.0.5", "1.1.1.1, 203.0.113.9"))
+            second = app.client_ip(self.handler("10.0.0.5", "2.2.2.2, 203.0.113.9"))
+        self.assertEqual(first, second)
+
+    def test_a_broken_address_on_the_right_means_the_peer_is_used(self):
+        with patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("10.0.0.0/8")]):
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "203.0.113.9, junk")), "10.0.0.5")
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "")), "10.0.0.5")
+
+    def test_when_every_hop_is_trusted_the_leftmost_address_is_used(self):
+        with patch.object(app, "TRUSTED_PROXIES", [ipaddress.ip_network("10.0.0.0/8")]):
+            self.assertEqual(app.client_ip(self.handler("10.0.0.5", "10.0.0.9, 10.0.0.7")), "10.0.0.9")
+
+
+class HttpFixesTest(unittest.TestCase):
+    """Разбор HTTP: тело, которое не читаем, таймаут сокета, методы и очередь соединений."""
+
+    def read_until_eof(self, sock):
+        data = b""
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                return data
+            data += chunk
+
+    def test_a_body_over_the_limit_is_not_read_and_the_connection_is_closed(self):
+        # A7: лимит 4 МБ; тело не ждём и не буферизуем, соединение закрываем
+        with feed_server() as server:
+            sock = socket.create_connection(server.server_address, timeout=5)
+            try:
+                sock.sendall(("POST /api/auth/logout HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n"
+                              % (app.BODY_LIMIT + 1)).encode())
+                started = time.time()
+                answer = self.read_until_eof(sock)
+            finally:
+                sock.close()
+        head = answer.partition(b"\r\n\r\n")[0]
+        self.assertIn(b" 200 ", head.split(b"\r\n", 1)[0])
+        self.assertIn(b"Connection: close", head)
+        self.assertLess(time.time() - started, 4)
+
+    def test_a_body_that_never_arrives_does_not_hold_the_thread_forever(self):
+        # A8: обещанное тело не пришло за таймаут сокета: ответ и закрытое соединение
+        with patch.object(app.Handler, "timeout", 1), feed_server() as server:
+            sock = socket.create_connection(server.server_address, timeout=6)
+            try:
+                sock.sendall(b"POST /api/auth/login HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n"
+                             b"Content-Length: 50\r\n\r\n")
+                answer = self.read_until_eof(sock)
+            finally:
+                sock.close()
+        self.assertIn(b" 400 ", answer.split(b"\r\n", 1)[0])
+        self.assertIn(b"Connection: close", answer)
+
+    def test_a_chunked_body_is_not_read_and_the_connection_is_closed(self):
+        # A23: Transfer-Encoding: chunked не дочитываем
+        with feed_server() as server:
+            sock = socket.create_connection(server.server_address, timeout=5)
+            try:
+                sock.sendall(b"POST /api/auth/login HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n"
+                             b"Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n")
+                answer = self.read_until_eof(sock)
+            finally:
+                sock.close()
+        head = answer.partition(b"\r\n\r\n")[0]
+        self.assertIn(b" 411 ", head.split(b"\r\n", 1)[0])
+        self.assertIn(b"Connection: close", head)
+
+    def test_head_answers_like_get_without_a_body_and_unknown_methods_get_json(self):
+        # A22: HEAD — как GET без тела; TRACE и любой неизвестный метод — JSON 405, а не HTML 501
+        with feed_server() as server:
+            host, port = server.server_address
+            conn = http.client.HTTPConnection(host, port, timeout=5)
+            try:
+                for path in ("/api/health", "/"):
+                    conn.request("HEAD", path)
+                    head = conn.getresponse()
+                    self.assertEqual(head.status, 200, path)
+                    self.assertEqual(head.read(), b"", path)
+                for method in ("TRACE", "FOO"):
+                    conn.request(method, "/api/health")
+                    answer = conn.getresponse()
+                    body = answer.read()
+                    self.assertEqual(answer.status, 405, method)
+                    self.assertTrue(answer.getheader("Content-Type").startswith("application/json"), method)
+                    self.assertEqual(json.loads(body)["error"], "метод не поддерживается", method)
+                conn.request("GET", "/api/health")   # соединение после них остаётся в строю
+                answer = conn.getresponse()
+                self.assertEqual((answer.status, json.loads(answer.read())["ok"]), (200, True))
+            finally:
+                conn.close()
+
+    def test_the_server_asks_the_system_for_a_queue_of_128_connections(self):
+        # A9: очередь listen, по умолчанию пять
+        with patch.object(socket.socket, "listen") as listen:
+            server = app.Server(("127.0.0.1", 0), app.Handler)
+        try:
+            listen.assert_called_once_with(128)
+        finally:
+            server.server_close()
+
+
+class InputFixesTest(unittest.TestCase):
+    """Ввод из браузера и ответы ленты: имена каналов, целые в путях, поиск, отметки, текст ошибок."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="koloda-input-fixes-")
+        self.previous_db = app.DB
+        app.DB = self.temp.name + "/feed.db"
+        self.db = app.connect()
+        now = int(time.time())
+        self.db.executemany("INSERT INTO posts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+            ("alpha", 1, "https://t.me/alpha/1", "скидка 50% на всё", None, None, now - 30, None, None, None, None, None, None),
+            ("alpha", 2, "https://t.me/alpha/2", "обычный текст", None, None, now - 20, None, None, None, None, None, None),
+            ("alpha", 3, "https://t.me/alpha/3", "a_b", None, None, now - 10, None, None, None, None, None, None),
+        ])
+        self.db.execute("INSERT INTO cache VALUES ('alpha', 'Alpha', ?)", (now,))
+        self.db.commit()
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+        self.cookie = ""
+        self.request = types.MethodType(FeedAPITest.request, self)
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        app.wait_refresh_idle()
+        app._failed.clear()
+        self.db.close()
+        app.DB = self.previous_db
+        self.temp.cleanup()
+
+    def login_as(self, name):
+        self.cookie = register_with_mail(self.base, name)
+        return self.db.execute("SELECT profile FROM accounts WHERE username=?", (name,)).fetchone()[0]
+
+    def test_anonymous_feed_is_refused_before_any_network_call(self):
+        # A10: лента ходит в t.me, без профиля не отвечает
+        with patch.object(app, "fetch_channel") as fetch:
+            self.assertEqual(self.request("/api/feed?channels=alpha")[0], 401)
+            self.assertEqual(self.request("/api/feed?channels=")[0], 401)
+        fetch.assert_not_called()
+
+    def test_a_channel_name_with_a_trailing_newline_is_refused(self):
+        # A12: $ в регулярном выражении пропускал перевод строки в конце имени
+        self.login_as("newline_user")
+        self.assertFalse(app.valid_channel("gamedev_ru\n"))
+        self.assertFalse(app.valid_feed_channel("private:-100123456789\n"))
+        self.assertTrue(app.valid_channel("gamedev_ru"))
+        self.assertEqual(self.request("/api/state/subscription", method="POST",
+                                      data={"channel": "gamedev_ru\n", "subscribed": True})[0], 400)
+        self.assertEqual(self.request("/api/feed?" + urlencode({"channels": "gamedev_ru\n"}))[0], 400)
+
+    def test_superscript_digits_are_refused_as_bad_requests_not_broken_connections(self):
+        # A13: str.isdigit() пропускал «²», int() её не разбирал, и ответ не приходил
+        self.login_as("digits_user")
+        self.assertEqual(self.request("/api/catalog?offset=%C2%B2")[0], 400)
+        self.assertEqual(self.request("/api/feed?channels=alpha&before_ts=%C2%B2&before_channel=alpha&before_id=1")[0], 400)
+        self.assertEqual(self.request("/api/media?post=alpha/%C2%B2")[0], 400)
+        self.assertEqual(self.request("/api/tg/media?channel=private:-100123456789&msg=%C2%B2")[0], 400)
+        for bad in ("²", "١٢", "1_000", "-1", ""):
+            with self.subTest(value=bad):
+                self.assertRaises(ValueError, app.cursor_int, bad)
+        self.assertRaises(ValueError, app.sql_int, "²")
+        self.assertEqual(app.sql_int("12"), 12)
+
+    def test_post_keys_take_ascii_digits_only(self):
+        # A19: ключ отметки «канал/номер» только с ASCII-цифрами
+        self.assertTrue(app.valid_post_key("alpha/12"))
+        self.assertFalse(app.valid_post_key("alpha/²"))
+        self.assertFalse(app.valid_post_key("alpha/１２"))
+        self.assertFalse(app.valid_post_key("alpha/" + "1" * 21))
+
+    def test_a_merge_past_the_read_cap_is_refused_and_changes_nothing(self):
+        # N2: слияние проверяет итог: 20 000 старых и 20 000 новых отметок — 409, состояние прежнее
+        profile = self.login_as("merge_cap")
+        self.db.executemany("INSERT INTO user_reads VALUES (?,?)",
+                            [(profile, "alpha/%d" % i) for i in range(1, app.READS_CAP + 1)])
+        self.db.commit()
+        body = {"subs": ["gamedev_ru"], "reads": ["alpha/%d" % i for i in range(100000, 100000 + app.READS_CAP)]}
+        status, payload = self.request("/api/state/merge", method="POST", data=body)
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["error"], app.READS_FULL)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?",
+                                         (profile,)).fetchone()[0], app.READS_CAP)
+        self.assertIsNone(self.db.execute("SELECT 1 FROM user_subs WHERE profile=? AND channel='gamedev_ru'",
+                                          (profile,)).fetchone())
+        # внутри лимита: 10 000 старых и 10 000 новых — 20 000, слияние проходит
+        self.db.executemany("DELETE FROM user_reads WHERE profile=? AND post=?",
+                            [(profile, "alpha/%d" % i) for i in range(1, 10001)])
+        self.db.commit()
+        body["reads"] = body["reads"][:10000]
+        status, payload = self.request("/api/state/merge", method="POST", data=body)
+        self.assertEqual(status, 200)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?",
+                                         (profile,)).fetchone()[0], app.READS_CAP)
+        self.assertIn("gamedev_ru", payload["subs"])
+
+    def test_read_marks_stop_at_twenty_thousand_per_profile(self):
+        # A19: отметок на профиль не больше READS_CAP; сверх — 409, и состояние не меняется
+        profile = self.login_as("marks_cap")
+        self.db.executemany("INSERT INTO user_reads VALUES (?,?)",
+                            [(profile, "alpha/%d" % i) for i in range(1, app.READS_CAP)])
+        self.db.commit()
+        self.assertEqual(self.request("/api/state/read", method="POST", data={"posts": ["alpha/20000"]})[0], 200)
+        status, payload = self.request("/api/state/read", method="POST", data={"posts": ["alpha/20001"]})
+        self.assertEqual(status, 409)
+        self.assertIn("20 000", payload["error"])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?",
+                                         (profile,)).fetchone()[0], app.READS_CAP)
+        # уже отмеченный пост не новая отметка, и снятие отметок не ограничено
+        self.assertEqual(self.request("/api/state/read", method="POST", data={"posts": ["alpha/5"]})[0], 200)
+        self.assertEqual(self.request("/api/state/read", method="POST",
+                                      data={"posts": ["alpha/5"], "unread": True})[0], 200)
+        self.assertEqual(self.request("/api/state/read", method="POST", data={"posts": ["alpha/20001"]})[0], 200)
+
+    def test_search_reads_percent_and_underscore_as_plain_text(self):
+        # A18: % и _ в запросе не шаблон
+        self.assertEqual([r[1] for r in app.search_posts(self.db, "%", ["alpha"])], [1])
+        self.assertEqual([r[1] for r in app.search_posts(self.db, "_", ["alpha"])], [3])
+        self.assertEqual([r[1] for r in app.search_posts(self.db, "обычн", ["alpha"])], [2])
+
+    def test_saved_search_reads_percent_and_underscore_as_plain_text(self):
+        self.login_as("saved_search")
+        for msg_id in (1, 2, 3):
+            self.request("/api/saved", method="POST", data={"channel": "alpha", "msg_id": msg_id, "on": True})
+        status, payload = self.request("/api/saved?" + urlencode({"q": "%"}))
+        self.assertEqual(status, 200)
+        self.assertEqual([p["msg_id"] for p in payload["posts"]], [1])
+        status, payload = self.request("/api/saved?" + urlencode({"q": "_"}))
+        self.assertEqual([p["msg_id"] for p in payload["posts"]], [3])
+
+    def test_feed_error_text_has_no_raw_exception(self):
+        # A25: в ленте текст ошибки не содержит адреса и системной ошибки
+        self.login_as("errors_user")
+        self.db.execute("UPDATE cache SET fetched=0 WHERE channel='alpha'")
+        self.db.commit()
+        with patch.object(app, "fetch_channel", side_effect=OSError("[Errno 111] urlopen error timed out")):
+            self.request("/api/feed?channels=alpha")
+            self.assertTrue(app.wait_refresh_idle())
+            status, payload = self.request("/api/feed?channels=alpha")
+        self.assertEqual(status, 200)
+        self.assertEqual([e["message"] for e in payload["errors"]], [app.CHANNEL_FAILED])
+        self.assertNotIn("urlopen", json.dumps(payload))
+        self.assertNotIn("Errno", json.dumps(payload))
+        app._failed.clear()
+
+    def test_own_channel_error_text_is_kept_for_the_reader(self):
+        # свои сообщения канала («не найден») остаются: по ним читатель понимает, что делать
+        self.login_as("errors_kept")
+        self.db.execute("UPDATE cache SET fetched=0 WHERE channel='alpha'")
+        self.db.commit()
+        message = "канал «alpha» не найден, закрыт или без постов"
+        with patch.object(app, "fetch_channel", side_effect=app.ChannelError(message)):
+            self.request("/api/feed?channels=alpha")
+            self.assertTrue(app.wait_refresh_idle())
+            status, payload = self.request("/api/feed?channels=alpha")
+        self.assertEqual([e["message"] for e in payload["errors"]], [message])
+        app._failed.clear()
+
+    def test_ten_parallel_saves_of_one_collection_name_make_one_collection(self):
+        # A11: проверка имени и вставка под одним замком
+        profile = self.login_as("collect_race")
+        self.db.execute("INSERT INTO user_subs (profile, channel) VALUES (?, 'alpha')", (profile,))
+        self.db.commit()
+        barrier = threading.Barrier(10)
+        results, errors = [], []
+
+        def save():
+            db = app.connect()
+            try:
+                barrier.wait()
+                app.save_collection(db, profile, {"name": "Гонка", "channels": ["alpha"]})
+                results.append("ok")
+            except ValueError:
+                results.append("taken")
+            except Exception as exc:  # чужая ошибка — тест должен её увидеть
+                errors.append(exc)
+            finally:
+                db.close()
+
+        threads = [threading.Thread(target=save) for _ in range(10)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        self.assertEqual(errors, [])
+        self.assertEqual(results.count("ok"), 1)
+        self.assertEqual(results.count("taken"), 9)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM collections WHERE profile=?", (profile,)).fetchone()[0], 1)
+
+    def test_channel_title_is_unescaped_before_it_is_stored(self):
+        # A14: «Tom &amp; Jerry» сохраняется как «Tom & Jerry», как в каталоге
+        page = '<meta property="og:title" content="Tom &amp; Jerry"/>'.encode()
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = page
+            title, posts = app.fetch_channel("tomjerry", before=1)
+        self.assertEqual((title, posts), ("Tom & Jerry", []))
+
+
+class TelegramFixesTest(unittest.TestCase):
+    """Вход в Telegram: токен принадлежит профилю, а без Telethon ответ один и тот же до сети."""
+
+    def setUp(self):
+        self.addCleanup(app.tg._pending.clear)
+        app.tg._pending.clear()
+        app.tg._pending["tok"] = {"profile": "owner", "client": None,
+                                  "qr": SimpleNamespace(url="tg://login?token=1"),
+                                  "started": time.time(), "task": None}
+
+    def test_another_profile_can_neither_poll_nor_cancel_the_login(self):
+        # A16: уровень хранилища, без Telethon
+        with self.assertRaises(app.tg.ForeignLogin):
+            app.tg.poll_link("tok", "stranger")
+        with self.assertRaises(app.tg.ForeignLogin):
+            app.tg.cancel_link("tok", "stranger")
+        self.assertIn("tok", app.tg._pending)
+
+    def test_the_owner_polls_and_cancels_its_own_login(self):
+        self.assertEqual(app.tg.poll_link("tok", "owner")["state"], "waiting")
+        self.assertEqual(app.tg.cancel_link("tok", "owner"), {"ok": True})
+        self.assertNotIn("tok", app.tg._pending)
+
+    def test_the_link_of_another_profile_answers_404_over_http(self):
+        # A16: через HTTP чужой вход — 404, свой — ответ как обычно
+        with feed_server() as server:
+            server.cookie = register_with_mail(server.base, "tg_owner")
+            check = app.connect()
+            owner_profile = check.execute("SELECT profile FROM accounts WHERE username='tg_owner'").fetchone()[0]
+            check.close()
+            app.tg._pending["tok-owner"] = {"profile": owner_profile, "client": None,
+                                            "qr": SimpleNamespace(url="tg://login?token=2"),
+                                            "started": time.time(), "task": None}
+            self.addCleanup(app.tg._pending.pop, "tok-owner", None)
+            server.cookie = register_with_mail(server.base, "tg_stranger")
+            self.assertEqual(server.request("/api/tg/link/poll", method="POST", data={"token": "tok-owner"})[0], 404)
+            self.assertEqual(server.request("/api/tg/link/cancel", method="POST", data={"token": "tok-owner"})[0], 404)
+            self.assertIn("tok-owner", app.tg._pending)
+
+    def test_discover_without_telethon_answers_like_the_link_start(self):
+        # A24: без Telethon — 503 с тем же текстом, и поиск в сеть не уходит
+        with patch.object(app.tg, "installed", lambda: False), \
+                patch.object(app.tg, "discover", side_effect=AssertionError("сеть")), feed_server() as server:
+            server.cookie = register_with_mail(server.base, "tg_no_lib")
+            start_status, start = server.request("/api/tg/link/start", method="POST", data={})
+            discover_status, discover = server.request("/api/tg/discover", method="POST", data={})
+        self.assertEqual((start_status, discover_status), (503, 503))
+        self.assertEqual(start["error"], discover["error"])
+        self.assertEqual(discover["error"], app.tg.MISSING_MESSAGE)
+
+
+class SecurityHeadersTest(unittest.TestCase):
+    """A15: политика содержимого на страницах и на ответах JSON."""
+
+    def test_html_and_json_answers_carry_the_content_security_policy(self):
+        with feed_server() as server:
+            status, headers, _ = server.request_raw("/")
+            json_status, json_headers, _ = server.request_raw("/api/health")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Content-Security-Policy"), app.CSP)
+        self.assertEqual(json_status, 200)
+        self.assertEqual(json_headers.get("Content-Security-Policy"), app.CSP)
+        for directive in ("default-src 'self'", "script-src 'self'", "frame-ancestors 'none'", "object-src 'none'"):
+            self.assertIn(directive, app.CSP)
 
 
 if __name__ == "__main__":
@@ -2575,9 +3302,10 @@ class ReviewFixesTest(unittest.TestCase):
         self.assertNotIn("channel.description", html)
 
     def test_channel_title_uses_the_field_the_server_sends(self):
-        """Сервер отдаёт titles (словарь), а не title: заголовок канала должен обновляться."""
+        """/api/preview отдаёт title (строку), а не titles: заголовок канала берём из title."""
         html = self.source("components/ChannelView.svelte")
-        self.assertIn("answer.titles", html)
+        self.assertIn("answer.title", html)
+        self.assertNotIn("answer.titles", html)
 
     def test_raw_markup_is_only_used_where_the_server_cleaned_it(self):
         """{@html} — только там, где разметку прислал и почистил сервер."""

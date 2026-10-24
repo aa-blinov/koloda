@@ -181,6 +181,7 @@ whole list.
 | `SMTP_FROM` | `SMTP_USER` | The sender address. |
 | `APP_BASE_URL` | `http://127.0.0.1:8090` | The base of the links in the letters: the confirmation of the address and the reset of the password. |
 | `COOKIE_SECURE` | `0` | `1` adds the Secure flag to the session cookie. |
+| `TRUSTED_PROXY` | none | The reverse proxy in front of the service: IP addresses or CIDR ranges, comma-separated, e.g. `172.40.0.1`. Only a connection from one of them takes the client address from `X-Forwarded-For`: the rightmost address that is not one of them, because the proxy appends to the right and the left part is the client's own. The login lock uses that address. Without it the header is ignored, and every request behind the proxy shares one lock. |
 | `LOG` | `0` | `1` writes the request log. `compose.yaml` takes it from `LENTELE_LOG`. |
 | `DATA_DIR` | `<the app>/data`, `/data` in the image | Where `feed.db` and the files of the Telegram sessions live. |
 | `PORT` | `8000` | The port to listen on. The argument of the command line wins over it. |
@@ -201,6 +202,20 @@ log shows it. `APP_BASE_URL` goes into the links in the letters: while it still
 says `http://127.0.0.1:8090`, the letter to a friend carries a link that opens
 only on your own computer, and the password cannot be recovered. On
 `http://127.0.0.1:8090` leave `COOKIE_SECURE` at `0`.
+
+Letters are limited in two ways: one address gets one letter a minute, and one
+client address gets ten letters an hour. The limit covers the registration, the
+repeated confirmation, the reset of the password and the change of the address,
+and all of them share the ten. A letter that the mail server refused still
+counts. A refused letter does not change the answer, so nobody can tell from it
+whether the address is in use: the registration answers 202 with the same text as
+a sent letter, the confirmation and the reset answer 200 with the generic text, and
+the change of the address answers 429 with «Письма уже отправлены. Попробуй
+позже.». The client address is the address of the connection, or with
+`TRUSTED_PROXY` set, the rightmost `X-Forwarded-For` address that is not a trusted
+proxy. Behind a proxy without `TRUSTED_PROXY` every client has the proxy's address,
+so the ten an hour are shared by all of them: set `TRUSTED_PROXY` for the site.
+The counters live in memory and start again after a restart.
 
 `docker-compose.override.yml` can take the `ports` line away and put the
 container on a shared network with Caddy. That file belongs to one machine and
