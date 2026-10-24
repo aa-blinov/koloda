@@ -13,6 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.2 — 2026-10-24
+
+### Fixed
+
+- A signed-in reader who changes the address no longer learns from the answer
+  that the address belongs to another profile. A taken address answers as a
+  sent letter would, and counts against the same letter limit.
+
 ## 0.3.1 — 2026-10-24
 
 ### Fixed

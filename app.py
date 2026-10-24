@@ -1745,6 +1745,8 @@ class Server(ThreadingHTTPServer):
 # неподтверждённую учётку (старше UNVERIFIED_TTL) регистрация отдаёт заново.
 REGISTER_ANSWER = {"verification_required": True,
                    "message": "Если адрес можно использовать, письмо придёт. Перейди по ссылке из него."}
+# Смена почты: тот же ответ, ушло письмо или занята почта другим профилем.
+CHANGE_ANSWER = {"message": "Перейди по ссылке в письме, чтобы подтвердить почту."}
 # Тело запроса больше этого не читаем: иначе один запрос занимает память и поток.
 BODY_LIMIT = 4_000_000
 # Политика для всех ответов: интерфейс — свой же код, картинки и видео — с Telegram.
@@ -2121,12 +2123,14 @@ class Handler(BaseHTTPRequestHandler):
                 if row[2] and row[2].lower() == email and row[3]:
                     return self._send(200, json.dumps({"message": "Эта почта уже подтверждена"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                if db.execute("SELECT 1 FROM accounts WHERE email=? COLLATE NOCASE AND profile<>?",
-                              (email, account["profile"])).fetchone():
-                    return self._send(409, json.dumps({"error": "Эта почта уже привязана к другому профилю"}, ensure_ascii=False),
-                                      "application/json; charset=utf-8")
                 if not mail_request_allowed("verify:" + email, client_ip(self)):
                     return self._send(429, json.dumps({"error": "Письма уже отправлены. Попробуй позже."}, ensure_ascii=False),
+                                      "application/json; charset=utf-8")
+                # Почту держит другой профиль: ответ тот же, что и при письме, но ни токена, ни письма.
+                # Счёт тратится и здесь, поэтому по лимиту занятость тоже не видна.
+                if db.execute("SELECT 1 FROM accounts WHERE email=? COLLATE NOCASE AND profile<>?",
+                              (email, account["profile"])).fetchone():
+                    return self._send(202, json.dumps(CHANGE_ANSWER, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 token = issue_auth_token(db, account["profile"], "email_change", email)
                 db.commit()
@@ -2138,7 +2142,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.commit()
                     return self._send(503, json.dumps({"error": "Не удалось отправить письмо. Проверь настройки и попробуй ещё раз."}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                return self._send(202, json.dumps({"message": "Перейди по ссылке в письме, чтобы подтвердить почту."}, ensure_ascii=False),
+                return self._send(202, json.dumps(CHANGE_ANSWER, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
             if path == "/api/auth/login":
