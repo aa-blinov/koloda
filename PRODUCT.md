@@ -103,6 +103,9 @@ Confirmed by the code:
   low. Turned sideways, the phone keeps the deck: its buttons stand in a column
   on the right, and the card keeps the height. On a wide screen the same feed
   stays a column: there is a mouse, and the column is read by scrolling.
+- The deck has a full-screen mode, a button in its top row: the header and the
+  tab bar go away and the card takes the whole screen. The reader leaves it by the
+  same button, and the mode is remembered on the device. The undo line stays.
 - The vertical scroll of the feed is only on the wide screen. The card scrolls
   inside itself when the post is longer than the card.
 - An unread post says so: a dot and the word next to the name of the channel,
@@ -194,6 +197,11 @@ Deliberately not true, and worth knowing before a change:
 - Nothing arrives in the browser by itself: the new posts wait for the reader.
   On a phone the deck has a button over it, on a desktop the feed refreshes
   when the page reloads or the channel changes.
+- A channel that the server has not read yet when the feed opens is asked for
+  again by the page, up to three times, four seconds apart, so its posts arrive
+  without a reload. Once it is read, the feed stops asking.
+- The photos of the channels come in rounds of twelve channels per request from
+  the server, and the page asks for the rest until every channel has been checked.
 - The history of a channel stops at 500 posts, and the rest is only in Telegram.
 - A private channel is not read through `t.me/s`. It needs the login of the
   reader, and the file of the session is a ready-made login into the account.

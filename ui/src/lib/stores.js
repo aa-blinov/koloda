@@ -12,6 +12,7 @@ const LS = {
   pending: 'koloda.pending',
   view: 'koloda.view',
   showRead: 'koloda.showRead',
+  immersive: 'koloda.immersive',
   migrated: 'koloda.migrated',
 };
 
@@ -39,6 +40,15 @@ export function setShowRead(value) {
   const next = Boolean(value);
   showRead.set(next);
   writeLocal(LS.showRead, next);
+}
+
+// Полный экран колоды: шапка и панель разделов уходят, карточка занимает экран. Помнится на устройстве.
+export const immersive = writable(readLocal(LS.immersive, false));
+
+export function setImmersive(value) {
+  const next = Boolean(value);
+  immersive.set(next);
+  writeLocal(LS.immersive, next);
 }
 
 export const isSubscribed = derived(subs, ($subs) => new Set($subs));
@@ -279,23 +289,41 @@ export function clearUndo() {
 // --- the photos of the channels ---
 
 const avatarChecked = new Set();
+const avatarWaiting = new Set();
+// Сервер ходит на t.me не больше чем за AVATAR_FETCH_CAP (12) каналов за запрос и оставляет
+// остальные непроверенными. Отмечаем только то, что он подтвердил в `checked`, и спрашиваем
+// остальных следующими порциями, пока есть прогресс.
+const AVATAR_ROUNDS = 10;
 
 export async function loadAvatars(list) {
-  const want = [...new Set(list)].filter((c) => !avatarChecked.has(c)).slice(0, 60);
-  if (!want.length) return;
-  want.forEach((c) => avatarChecked.add(c));
+  const asked = [...new Set(list)].filter((c) => !avatarChecked.has(c) && !avatarWaiting.has(c));
+  if (!asked.length) return;
+  asked.forEach((c) => avatarWaiting.add(c));
+  let want = asked;
   try {
-    const data = await api.avatars(want);
-    if (!data || !data.avatars) return;
-    avatars.update((current) => {
-      const next = new Map(current);
-      for (const [channel, url] of Object.entries(data.avatars)) {
-        if (url) next.set(channel, url);
+    for (let round = 0; round < AVATAR_ROUNDS && want.length; round++) {
+      const batch = want.slice(0, 60);
+      const data = await api.avatars(batch);
+      if (!data || !Array.isArray(data.checked)) break;
+      const done = new Set(data.checked);
+      const found = batch.filter((c) => done.has(c));
+      if (!found.length) break;
+      found.forEach((c) => avatarChecked.add(c));
+      if (data.avatars) {
+        avatars.update((current) => {
+          const next = new Map(current);
+          for (const [channel, url] of Object.entries(data.avatars)) {
+            if (url) next.set(channel, url);
+          }
+          return next;
+        });
       }
-      return next;
-    });
+      want = want.filter((c) => !avatarChecked.has(c));
+    }
   } catch (err) {
-    // No photos is not a failure: the letter of the channel stays.
+    // No photos is not a failure: the letter of the channel stays, and the next call asks again.
+  } finally {
+    asked.forEach((c) => avatarWaiting.delete(c));
   }
 }
 

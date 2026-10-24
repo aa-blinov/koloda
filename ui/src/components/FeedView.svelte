@@ -24,6 +24,8 @@
     setSubscription,
     setShowRead,
     showRead,
+    immersive,
+    setImmersive,
     stateReady,
   } from '../lib/stores.js';
   import { feedChannels } from '../lib/feed.js';
@@ -43,6 +45,12 @@
 
   let posts = [];
   let errors = [];
+  // Каналы, которых в кэше сервера ещё не было, догружаются в фоне. Ленту спрашиваем ещё раз,
+  // пока они не придут (не больше LOADING_RETRIES подряд), иначе их посты ждут следующего открытия.
+  const LOADING_RETRIES = 3;
+  let loadingRetries = 0;
+  let loadingTimer = null;
+  onDestroy(() => clearTimeout(loadingTimer));
   let hasMore = false;
   let cursor = null;
   let loading = false;
@@ -125,6 +133,13 @@
       syncSaved(answer.posts || [], !append);
       hasMore = Boolean(answer.has_more);
       errors = answer.errors || [];
+      if (append || !answer.loading || !answer.loading.length) {
+        loadingRetries = 0;
+      } else if (loadingRetries < LOADING_RETRIES) {
+        loadingRetries += 1;
+        clearTimeout(loadingTimer);
+        loadingTimer = setTimeout(() => load(false), 4000);
+      }
       if (answer.titles) titles.set(answer.titles);
       // Один знак ничего не ищет: лента показана без отбора, и об этом сказано.
       searchHint = effectiveQuery
@@ -473,6 +488,10 @@
           </span>
         {/if}
         <Button variant="quiet" size="sm" on:click={() => load(false)}>Обновить</Button>
+        <!-- Полный экран: шапка и разделы уходят, карточка занимает экран. Выход — этой же кнопкой. -->
+        <Button variant="quiet" size="sm" on:click={() => setImmersive(!$immersive)} aria-pressed={$immersive}>
+          {$immersive ? 'Обычный вид' : 'Полный экран'}
+        </Button>
       </div>
       {#if searchHint}
         <p class="deck-hint" role="status">{searchHint}</p>
@@ -695,15 +714,20 @@
     position: absolute;
     inset: 0 0 var(--ui-space-base);
     z-index: 1;
-    transition: inset var(--ui-duration-base) cubic-bezier(0.2, 0.7, 0.3, 1);
+    transition: transform var(--ui-duration-base) cubic-bezier(0.2, 0.7, 0.3, 1);
   }
 
-  /* Следующая карточка поднимается вместе с протяжкой: при --lift 0 она на
-     отступ уже верхней, при 1 — во весь размер. */
+  /* Следующая карточка поднимается вместе с протяжкой: при --lift 0 она чуть меньше
+     и выглядывает снизу полоской, при 1 — во весь размер. Подъём идёт через transform,
+     а не через inset: inset пересчитывал раскладку на каждом движении пальца, и карточка
+     подлагивала на телефоне (замер в браузере: ~45 пересчётов раскладки на протяжку). */
   .deck-card.behind {
-    inset: calc(var(--ui-space-base) * (1 - var(--lift))) calc(var(--ui-space-base) * (1 - var(--lift))) 0;
+    inset: 0;
     z-index: 0;
     pointer-events: none;
+    transform-origin: 50% 100%;
+    transform: scale(calc(0.94 + 0.06 * var(--lift)));
+    will-change: transform;
   }
 
   /* Пока палец тянет карточку, следующая идёт за ним без задержки. */

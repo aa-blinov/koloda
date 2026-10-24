@@ -246,6 +246,27 @@ class FeedAPITest(unittest.TestCase):
         self.assertTrue(payload["posts"])
         self.assertLess(elapsed, 3)
 
+    def test_feed_names_the_channels_still_loading_so_the_client_asks_again(self):
+        # канал без кэша, который ещё грузится, назван в loading; когда он пришёл, loading пуст
+        self.db.execute("DELETE FROM cache WHERE channel='beta'")
+        self.db.commit()
+        release = threading.Event()
+
+        def slow(channel):
+            if channel == "beta":
+                release.wait(5)
+            return "Alpha", []
+
+        with patch.object(app, "fetch_channel", side_effect=slow), patch.object(app, "REFRESH_TIMEOUT", 0.2):
+            status, payload = self.request("/api/feed?channels=alpha,beta")
+            release.set()
+            self.assertTrue(app.wait_refresh_idle())
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["loading"], ["beta"])
+        status, payload = self.request("/api/feed?channels=alpha,beta")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["loading"], [])
+
     def test_failing_channel_is_not_retried_on_every_request(self):
         self.db.execute("UPDATE cache SET fetched=0 WHERE channel='alpha'")
         self.db.commit()

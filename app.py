@@ -2349,6 +2349,13 @@ class Handler(BaseHTTPRequestHandler):
                 public_chans = public_channels(chans)
                 wait_for(request_refresh(db, public_chans))
                 errors = failures_for(public_chans)
+                # Каналы без кэша и без ошибки ещё догружаются в фоне: их посты клиент получит,
+                # если спросит ленту ещё раз (поле loading), иначе они появятся только при следующем открытии.
+                cached_now = {r[0] for r in db.execute(
+                    "SELECT channel FROM cache WHERE channel IN (%s)" % ",".join("?" * len(public_chans)),
+                    public_chans)} if public_chans else set()
+                failed_now = {e["channel"] for e in errors}
+                loading = [c for c in public_chans if c not in cached_now and c not in failed_now]
 
                 # прочитанное по умолчанию не показываем: фильтр в запросе, а не на клиенте,
                 # чтобы страница не приходила полупустой
@@ -2407,7 +2414,7 @@ class Handler(BaseHTTPRequestHandler):
                         "SELECT channel,title FROM tg_channels WHERE profile=? AND channel IN (%s)"
                         % ",".join("?" * len(want_private)), [unread_profile] + want_private)))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
-                                                   "errors": errors, "has_more": has_more,
+                                                   "errors": errors, "loading": loading, "has_more": has_more,
                                                    "history": history_status(db, unread_profile),
                                                    "next": next_cursor}),
                                   "application/json; charset=utf-8")
