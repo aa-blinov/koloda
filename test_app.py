@@ -1289,6 +1289,28 @@ class ViewsTextTest(unittest.TestCase):
         self.assertEqual(out.splitlines(), [expected for _, expected in cases])
 
 
+class ReactionParseTest(unittest.TestCase):
+    """Реакции на странице t.me: обычный эмодзи приходит картинкой, а её имя — его код в UTF-8.
+    Парсер, который ждал символ в <b>, отдавал пустые эмодзи: под постами оставались одни числа."""
+
+    def test_reactions_keep_their_emoji_in_every_markup_the_page_uses(self):
+        chunk = (
+            '<div class="tgme_widget_message_reactions compact js-message_reactions">'
+            '<span class="tgme_reaction"><i class="emoji" style="background-image:url(\'//telegram.org/img/emoji/40/E29DA4.png\')"></i>1.68K</span>'
+            '<span class="tgme_reaction"><i class="emoji" style="background-image:url(\'//telegram.org/img/emoji/40/E29DA4E2808DF09F94A5.png\')"></i>503</span>'
+            '<span class="tgme_reaction"><tg-emoji emoji-id="5474250661329650233"></tg-emoji>83</span>'
+            '<span class="tgme_reaction tgme_reaction_paid"><i class="icon icon-telegram-stars"></i>15</span>'
+            '<span class="tgme_reaction"><b>👍</b>7</span>'
+            '</div>')
+        self.assertEqual(app.parse_reactions(chunk), [
+            {"emoji": "❤", "count": "1.68K", "paid": False},
+            {"emoji": "❤‍🔥", "count": "503", "paid": False},
+            {"emoji": "", "count": "83", "paid": False},
+            {"emoji": "⭐", "count": "15", "paid": True},
+            {"emoji": "👍", "count": "7", "paid": False},
+        ])
+
+
 class CollectionFeedTest(unittest.TestCase):
     """Лента коллекции это лента с фильтром: каналы берём из коллекции и только из подписок."""
 
