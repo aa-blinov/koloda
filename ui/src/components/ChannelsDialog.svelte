@@ -176,7 +176,7 @@
       autocomplete="off"
       variant="boxed"
     />
-    <Button type="submit" loading={adding}>Добавить</Button>
+    <Button class="cta" type="submit" loading={adding}>Добавить</Button>
   </form>
 
   {#if linkState}
@@ -224,11 +224,11 @@
             </span>
             <span class="copy">
               <span class="name">{name}</span>
-              {#if item}
+              {#if item && ['loading', 'waiting', 'paused'].includes(item.state)}
                 <span class="state">{historyDetail(item, cap)}</span>
               {/if}
             </span>
-            {#if item}
+            {#if item && item.state === 'loading'}
               <span class="bar" aria-hidden="true">
                 <span style="width: {historyPercent(item, cap)}%"></span>
               </span>
@@ -237,12 +237,12 @@
           <!-- Быстрое «в коллекцию»: канал и его коллекции, без похода в каталог. -->
           <button
             type="button"
-            class="quiet-btn unsub-btn"
+            class="quiet-btn btn-outline unsub-btn"
             on:click={() => dispatch('unsubscribe', channel)}
           >Отписаться</button>
           <button
             type="button"
-            class="quiet-btn"
+            class="quiet-btn btn-outline"
             on:click={() => dispatch('channelCollections', channel)}
           >
             {collectionCounts.get(channel)
@@ -333,7 +333,7 @@
         variant="boxed"
         size="sm"
       />
-      <Button type="submit" size="sm" loading={creating} disabled={!collectionName.trim()}>
+      <Button class="cta" type="submit" size="sm" loading={creating} disabled={!collectionName.trim()}>
         Создать
       </Button>
     </form>
@@ -405,6 +405,13 @@
     .row > .chan {
       flex: 1 1 100%;
     }
+  }
+
+  .quiet-btn.btn-outline {
+    border: 1px solid var(--ui-line);
+    border-radius: var(--ui-radius);
+    padding: 0 var(--ui-space-snug);
+    color: var(--ui-ink);
   }
 
   .quiet-btn {

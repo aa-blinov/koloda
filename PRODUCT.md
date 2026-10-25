@@ -133,6 +133,10 @@ Confirmed by the code:
   Material 3 app bar does, and the tab bar marks the current tab with a pill
   behind its sign. The refresh button of the deck is a sign with its name kept
   for the screen reader.
+- On a phone the screen has one heading: the one in the top bar. The heading of the
+  page (the catalogue, the profile, the channel) stays for the screen reader only. The
+  main action of a screen is a filled button, the secondary ones are outlined or text,
+  and the five tabs of the profile stand on one row.
 - The address follows the screen (`#/feed`, `#/saved`, `#/cat`,
   `#/channel/<name>`, `#/me`), and the back button of the browser does the same
   as the arrow in the header. The arrow never takes the reader off the site:

@@ -112,12 +112,12 @@
   {:else}
     <!-- По прямой ссылке название приходит с первой страницей канала: до тех пор
          берём его из кэша, а логин остаётся только там, где названия нет нигде. -->
-    <h1 id="chTitle">{heading || $titles[channelName] || channelName}</h1>
+    <h1 id="chTitle" class="phone-hidden-title">{heading || $titles[channelName] || channelName}</h1>
     <p class="ch-meta" id="chMeta">@{channelName}</p>
 
     <div class="ch-actions">
       <span id="chAction">
-        <Button on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
+        <Button class="cta" on:click={toggle}>{subscribed ? 'Убрать из ленты' : 'Добавить в ленту'}</Button>
       </span>
       <span id="chColl" class="ch-coll">
         {#if subscribed}

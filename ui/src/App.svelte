@@ -32,6 +32,7 @@
     session,
     subs,
     syncStatus,
+    titles,
     undo,
     setSubscription,
     setShowRead,
@@ -89,7 +90,12 @@
   $: isSub = view === 'channel' || view === 'profile';
   // Заголовок верхней панели на телефоне: название того, что открыто.
   const TITLES = { feed: 'Лента', saved: 'Сохранённое', catalog: 'Каталог', channel: 'Канал', profile: 'Профиль' };
-  $: screenTitle = view === 'feed' && feedMode === 'saved' ? TITLES.saved : TITLES[view] || 'Колода';
+  $: screenTitle =
+    view === 'feed' && feedMode === 'saved'
+      ? TITLES.saved
+      : view === 'channel' && channelName
+        ? $titles[channelName] || channelName
+        : TITLES[view] || 'Колода';
   $: section = sectionOf({ view, feedMode });
   $: screenKey = keyOf({ view, feedMode, channelName });
   $: collectionFilter = collectionFilterId

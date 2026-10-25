@@ -873,3 +873,45 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* Главное действие экрана: заполненная кнопка на паре ink/bg кита (основной текст и фон, их контраст
+   проверяет тест палитр). Цвет не свой: меняется вместе с темой. */
+.cta {
+  background: var(--ui-ink);
+  color: var(--ui-bg);
+  font-weight: 700;
+  border-radius: var(--ui-radius);
+  min-height: 44px;
+  padding-inline: var(--ui-space-comfortable);
+}
+
+@media (hover: hover) {
+  .cta:hover {
+    opacity: 0.85;
+  }
+}
+
+.cta:disabled {
+  opacity: 0.4;
+}
+
+/* Второстепенное действие в строке: контур кита, не голый текст. */
+.btn-outline {
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  padding-inline: var(--ui-space-snug);
+  color: var(--ui-ink-soft);
+}
+
+/* На телефоне название экрана уже стоит в верхней панели: заголовок страницы остаётся для
+   скринридера, но на экране не занимает место. */
+@media (max-width: 900px), (pointer: coarse) {
+  .phone-hidden-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

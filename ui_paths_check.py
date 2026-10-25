@@ -571,10 +571,10 @@ def f3(c):
         raise Skip("постов меньше трёх")
     # кнопка говорит действием: «Показать прочитанные» значит, что они спрятаны сейчас
     assert toggle_label(c.pg) == "Показать прочитанные", "по умолчанию прочитанное должно быть спрятано"
-    for _ in range(3):
-        c.pg.evaluate("window.scrollBy(0, 900)")
-        c.pg.wait_for_timeout(700)
-    c.pg.wait_for_timeout(4000)
+    # прокрутка не отмечает посты (с 0.3.8): прочитанный пост делаем кнопкой
+    first = post_rows(c.pg)[0]["post"]
+    c.pg.locator(".post[data-post='%s'] button:has-text('Отметить прочитанным')" % first).first.click()
+    c.pg.wait_for_timeout(2000)
     shown_toggle(c.pg).click()
     c.pg.wait_for_timeout(3000)
     assert toggle_label(c.pg) == "Скрыть прочитанные", "кнопка не показала прочитанные"
@@ -891,6 +891,22 @@ def f25(c):
     assert tools["h"] <= 52, "строка управления в несколько линий: высота %s px" % round(tools["h"])
     assert not tools["overflow"], "строка управления шире экрана"
     assert tools["right"] <= tools["vw"], "строка управления вылезает за экран"
+
+
+@check("F27", "Телефон: все пять вкладок профиля видны на одной строке", device="phone")
+def f27(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_timeout(1000)
+    open_profile(c.pg)
+    c.pg.wait_for_timeout(800)
+    tabs = c.pg.evaluate("""() => [...document.querySelectorAll('[role=tablist] [role=tab]')].filter(t => t.offsetParent !== null)
+        .map(t => { const r = t.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.left), Math.round(r.right), t.innerText.trim()]; })""")
+    assert len(tabs) == 5, "вкладок профиля не пять: %s" % tabs
+    rows = {t[0] for t in tabs}
+    assert len(rows) == 1, "вкладки на нескольких строках: %s" % tabs
+    width = c.pg.evaluate("innerWidth")
+    off = [t[3] for t in tabs if t[1] < 0 or t[2] > width]
+    assert not off, "вкладки за краем экрана: %s" % off
 
 
 @check("F26", "Телефон: три круглые кнопки под колодой, внутри карточки строки действий нет", device="phone")

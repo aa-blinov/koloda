@@ -13,6 +13,21 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.15 — 2026-10-25
+
+### Changed
+
+- On a phone the main action of each screen is a filled button: sign in, subscribe,
+  add by link, save the email, create and save a collection.
+- The text fields have a visible frame, so it is clear where to type.
+- The five tabs of the profile stand on one row, centred.
+- The page heading is kept for the screen reader only on a phone: the top bar carries
+  the name of the screen (the channel's name for a channel page).
+- On the catalogue the description is hidden on a phone, and the link field and its
+  button stand on one row.
+- The channel list shows a state only while a channel is loading, waiting or paused;
+  its progress bar is shown only while loading. The two actions of a channel are outlined.
+
 ## 0.3.14 — 2026-10-25
 
 ### Changed

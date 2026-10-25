@@ -247,7 +247,7 @@
 
     <form novalidate on:submit|preventDefault={submit}>
       {#if mode === 'register' || mode === 'forgot'}
-        <TextField
+        <TextField variant="boxed"
           id="authEmail"
           type="email"
           label="Почта"
@@ -259,7 +259,7 @@
       {/if}
 
       {#if mode === 'login' || mode === 'register'}
-        <TextField
+        <TextField variant="boxed"
           id="authUsername"
           label="Имя профиля"
           bind:value={username}
@@ -270,7 +270,7 @@
       {/if}
 
       {#if mode === 'login' || mode === 'register' || mode === 'reset'}
-        <TextField
+        <TextField variant="boxed"
           id="authPassword"
           type="password"
           label={mode === 'reset' ? 'Новый пароль' : 'Пароль'}
@@ -281,7 +281,7 @@
       {/if}
 
       {#if mode === 'register' || mode === 'reset'}
-        <TextField
+        <TextField variant="boxed"
           id="authConfirm"
           type="password"
           label="Повтори пароль"
@@ -302,7 +302,7 @@
         <p class="auth-text">
           Профиль ещё ждёт подтверждения почты. Введи почту профиля. {NEUTRAL_NOTE}
         </p>
-        <TextField
+        <TextField variant="boxed"
           id="authEmail"
           type="email"
           label="Почта"
@@ -320,7 +320,7 @@
           Ссылка устарела, уже использована или неполная. Если почта уже подтверждена, просто войди.
           Иначе введи почту профиля. {NEUTRAL_NOTE}
         </p>
-        <TextField
+        <TextField variant="boxed"
           id="authEmail"
           type="email"
           label="Почта"
@@ -352,7 +352,7 @@
 
       {#if label}
         <span id="authSubmit" class="submit">
-          <Button type="submit" full loading={busy} disabled={blocked} size="lg">{label}</Button>
+          <Button class="cta" type="submit" full loading={busy} disabled={blocked} size="lg">{label}</Button>
         </span>
       {/if}
 

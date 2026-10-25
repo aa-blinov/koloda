@@ -139,7 +139,7 @@
       </ul>
     {/if}
   {:else}
-    <TextField id="collName" label="Название" bind:value={name} placeholder="Новости" />
+    <TextField variant="boxed" id="collName" label="Название" bind:value={name} placeholder="Новости" />
 
     <div class="channels" id="collPick">
       {#if !available.length}
@@ -183,7 +183,7 @@
     <Button variant="secondary" on:click={() => dispatch('close')}>Отмена</Button>
     {#if !channel}
       <span id="collSave">
-        <Button on:click={save} loading={busy}>Сохранить</Button>
+        <Button class="cta" on:click={save} loading={busy}>Сохранить</Button>
       </span>
     {/if}
   </svelte:fragment>
