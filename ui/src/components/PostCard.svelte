@@ -166,8 +166,11 @@
   }
 
   // Кнопки под колодой шлют команду сюда: её принимает только верхняя карточка.
+  // «Поделиться» — кнопка под колодой, не жест: ссылка уходит, карточка остаётся на месте.
   function onDeckAction(event) {
-    if (front) commit(event.detail);
+    if (!front) return;
+    if (event.detail === 'share') share();
+    else commit(event.detail);
   }
 
   $: tilt = Math.max(-14, Math.min(14, swipeX / 18));

@@ -579,11 +579,15 @@
       {/if}
     </div>
 
-    <!-- Кнопки делают то же, что жест: левая сохраняет, правая отмечает прочитанным. -->
+    <!-- Кнопки делают то же, что жест: левая сохраняет, правая отмечает прочитанным, средняя делится ссылкой. -->
     <div class="deck-actions">
       <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('left')}>
         <span class="deck-ring deck-save"><Icon name={inSaved ? 'close' : 'bookmark'} size={24} /></span>
         <span class="deck-label">{leftLabel}</span>
+      </button>
+      <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('share')}>
+        <span class="deck-ring deck-share"><Icon name="share" size={22} /></span>
+        <span class="deck-label">Поделиться</span>
       </button>
       <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('right')}>
         <span class="deck-ring deck-read"><Icon name="check" size={26} /></span>
@@ -908,11 +912,10 @@
     line-height: 1.6;
   }
 
-  /* Действия поста уходят вниз карточки: там палец их и ищет. «Сохранить» в
-     колоде есть кнопкой под ней, здесь она лишняя. */
+  /* На телефоне действия поста — круглые кнопки под колодой, а не строка внутри карточки:
+     сохранить, поделиться и прочитано там же. Строка в карточке скрыта. */
   .deck-card :global(.post-actions) {
-    margin-top: auto;
-    padding-top: var(--ui-space-base);
+    display: none;
   }
 
   .deck-card :global(.act-save) {
@@ -982,6 +985,10 @@
 
   .deck-save {
     color: var(--ui-accent-text);
+  }
+
+  .deck-share {
+    color: var(--ui-ink);
   }
 
   .deck-read {

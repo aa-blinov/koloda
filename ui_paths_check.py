@@ -893,6 +893,17 @@ def f25(c):
     assert tools["right"] <= tools["vw"], "строка управления вылезает за экран"
 
 
+@check("F26", "Телефон: три круглые кнопки под колодой, внутри карточки строки действий нет", device="phone")
+def f26(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_selector("#deck .post", timeout=60000)
+    c.pg.wait_for_timeout(1500)
+    names = c.pg.evaluate("[...document.querySelectorAll('#deck .deck-actions .deck-btn')].map(b => b.innerText.trim())")
+    assert names == ["Сохранить", "Поделиться", "Прочитано"], "круглые кнопки под колодой: %s" % names
+    rows = c.pg.evaluate("[...document.querySelectorAll('#deck .post-actions')].filter(e => e.getBoundingClientRect().height > 0).length")
+    assert rows == 0, "строка действий осталась внутри карточки: %s" % rows
+
+
 @check("F24", "Реакции под постом: у каждой реакции виден счётчик, стандартные эмодзи выводятся")
 def f24(c):
     login(c.pg, c.user)
