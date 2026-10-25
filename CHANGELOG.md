@@ -13,6 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.11 — 2026-10-25
+
+### Changed
+
+- On a phone the row of controls over the deck is one line, as on the desktop: the
+  date, the "Show read ones" button, the refresh button and the full-screen button,
+  which is an icon now with its name kept for the screen reader.
+
 ## 0.3.10 — 2026-10-25
 
 ### Fixed

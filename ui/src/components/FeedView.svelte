@@ -523,9 +523,14 @@
           <Icon name="refresh" size={18} />
         </IconButton>
         <!-- Полный экран: шапка и разделы уходят, карточка занимает экран. Выход — этой же кнопкой. -->
-        <Button variant="quiet" size="sm" on:click={() => setImmersive(!$immersive)} aria-pressed={$immersive}>
-          {$immersive ? 'Обычный вид' : 'Полный экран'}
-        </Button>
+        <IconButton
+          label={$immersive ? 'Обычный вид' : 'Полный экран'}
+          variant="ghost"
+          size="sm"
+          on:click={() => setImmersive(!$immersive)}
+        >
+          <Icon name={$immersive ? 'collapse' : 'expand'} size={18} />
+        </IconButton>
       </div>
       {#if searchHint}
         <p class="deck-hint" role="status">{searchHint}</p>
@@ -737,11 +742,13 @@
     font-weight: 600;
   }
 
+  /* Строка управления колодой — одна линия: переключатель, обновить и полный экран. */
   .deck-tools {
     display: flex;
     align-items: center;
     gap: var(--ui-space-snug);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-width: 0;
   }
 
   .deck-stack {
