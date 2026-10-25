@@ -13,6 +13,13 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.10 — 2026-10-25
+
+### Fixed
+
+- A reaction with a count such as "2.37K" showed an empty chip under the post:
+  the count was read as a plain number. It is shown the way the views are shown.
+
 ## 0.3.9 — 2026-10-25
 
 ### Added

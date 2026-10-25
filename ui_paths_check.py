@@ -880,6 +880,18 @@ def f23(c):
     assert left == 0, "кнопка «Новые публикации» не ушла после загрузки"
 
 
+@check("F24", "Реакции под постом: у каждой реакции виден счётчик, стандартные эмодзи выводятся")
+def f24(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_timeout(2500)
+    chips = c.pg.evaluate("""() => [...document.querySelectorAll('.post .rx > span')].map(s => s.textContent.trim())""")
+    assert chips, "в ленте нет постов с реакциями, проверка пуста"
+    empty = [t for t in chips if not t]
+    assert not empty, "пустых реакций: %s из %s" % (len(empty), len(chips))
+    with_emoji = [t for t in chips if any(ord(ch) > 0x2000 for ch in t)]
+    assert with_emoji, "ни одна реакция не показала эмодзи"
+
+
 @check("X4", "Шапка ПК: одна строка, поиск в правом верхнем углу, «Прочитанные» на одной оси с ним")
 def x4(c):
     login(c.pg, c.user)
