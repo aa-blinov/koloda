@@ -9,7 +9,7 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { historyDetail, historyPercent } from '../lib/history.js';
-  import { subs, titles, avatars, collections, setSubscription, loadAvatars } from '../lib/stores.js';
+  import { subs, titles, avatars, collections, setSubscription, loadAvatars, renewAvatar } from '../lib/stores.js';
 
   export let open = false;
 
@@ -207,13 +207,16 @@
           <div class="row">
           <button type="button" class="chan" on:click={() => pickChannel(channel)}>
             <span class="photo" aria-hidden="true">
-              {#if $avatars.get(channel) && !broken.has(channel)}
+              {#if $avatars.get(channel) && !broken.has($avatars.get(channel))}
                 <img
                   src={$avatars.get(channel)}
                   alt=""
                   loading="lazy"
                   referrerpolicy="no-referrer"
-                  on:error={() => (broken = new Set(broken).add(channel))}
+                  on:error={() => {
+                    broken = new Set(broken).add($avatars.get(channel));
+                    renewAvatar(channel);
+                  }}
                 />
               {:else}
                 {letter(name)}

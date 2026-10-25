@@ -863,6 +863,23 @@ def f22(c):
     assert top == newer, "отмена подняла старый пост наверх: сверху %s, ждали %s" % (top, newer)
 
 
+@check("F23", "Новые публикации: фоновая проверка показывает кнопку, по нажатию пост наверху, кнопка уходит")
+def f23(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_timeout(1500)
+    newer = insert_newer_post(CHANNELS[0])
+    # фоновую минутную проверку не ждём: тот же путь запускается событием koloda:check
+    c.pg.evaluate("window.dispatchEvent(new Event('koloda:check'))")
+    button = c.pg.locator("button:has-text('Новые публикации')").locator("visible=true").first
+    button.wait_for(state="visible", timeout=8000)
+    button.click()
+    c.pg.wait_for_function("key => (document.querySelector('#postList .post, #deck .post') || {}).dataset?.post === key",
+                           arg=newer, timeout=15000)
+    c.pg.wait_for_timeout(800)
+    left = c.pg.locator("button:has-text('Новые публикации')").locator("visible=true").count()
+    assert left == 0, "кнопка «Новые публикации» не ушла после загрузки"
+
+
 @check("X4", "Шапка ПК: одна строка, поиск в правом верхнем углу, «Прочитанные» на одной оси с ним")
 def x4(c):
     login(c.pg, c.user)

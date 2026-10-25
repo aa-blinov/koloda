@@ -289,6 +289,7 @@ export function clearUndo() {
 // --- the photos of the channels ---
 
 const avatarChecked = new Set();
+const avatarRenewed = new Set();
 const avatarWaiting = new Set();
 // Сервер ходит на t.me не больше чем за AVATAR_FETCH_CAP (12) каналов за запрос и оставляет
 // остальные непроверенными. Отмечаем только то, что он подтвердил в `checked`, и спрашиваем
@@ -324,6 +325,20 @@ export async function loadAvatars(list) {
     // No photos is not a failure: the letter of the channel stays, and the next call asks again.
   } finally {
     asked.forEach((c) => avatarWaiting.delete(c));
+  }
+}
+
+// Картинка канала не открылась: ссылка протухла. Берём свежую у t.me, один раз на канал за сессию;
+// если ссылка пришла новая, картинка перерисуется сама (компоненты ключуют ошибку по адресу).
+export async function renewAvatar(channel) {
+  if (!channel || avatarRenewed.has(channel)) return;
+  avatarRenewed.add(channel);
+  try {
+    const data = await api.avatars([channel], true);
+    const url = data && data.avatars && data.avatars[channel];
+    if (url) avatars.update((current) => new Map(current).set(channel, url));
+  } catch (err) {
+    // The letter of the channel stays.
   }
 }
 

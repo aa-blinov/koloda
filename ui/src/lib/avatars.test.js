@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 vi.mock('./api.js', () => ({ api: { avatars: vi.fn() } }));
 
 import { api } from './api.js';
-import { avatars, loadAvatars } from './stores.js';
+import { avatars, loadAvatars, renewAvatar } from './stores.js';
 
 const PER_REQUEST = 12;
 
@@ -58,5 +58,18 @@ describe('loadAvatars', () => {
     api.avatars.mockImplementation(async () => ({ avatars: {}, checked: [] }));
     await loadAvatars(names('stuck', 40));
     expect(api.avatars).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('renewAvatar', () => {
+  it('asks t.me once per channel for a fresh link and puts it in the store', async () => {
+    api.avatars.mockReset();
+    avatars.set(new Map());
+    api.avatars.mockImplementation(async () => ({ avatars: { renewed_one: 'https://cdn4.telesco.pe/file/new.jpg' } }));
+    await renewAvatar('renewed_one');
+    await renewAvatar('renewed_one');
+    expect(api.avatars).toHaveBeenCalledTimes(1);
+    expect(api.avatars.mock.calls[0]).toEqual([['renewed_one'], true]);
+    expect(get(avatars).get('renewed_one')).toBe('https://cdn4.telesco.pe/file/new.jpg');
   });
 });
