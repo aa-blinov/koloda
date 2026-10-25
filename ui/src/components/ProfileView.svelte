@@ -207,7 +207,7 @@
 </script>
 
 <div class="column profile">
-  <h1>Профиль</h1>
+  <h1 class="phone-hidden-title">Профиль</h1>
 
   <Tabs
     items={[
@@ -242,21 +242,21 @@
           {/if}
 
           <form class="email-form" on:submit|preventDefault={saveEmail}>
-            <TextField
+            <TextField variant="boxed"
               type="email"
               label={$session && $session.email ? 'Новая почта' : 'Почта'}
               bind:value={email}
               placeholder="например, you@example.com"
               class="form-field"
             />
-            <TextField
+            <TextField variant="boxed"
               type="password"
               label="Пароль профиля"
               bind:value={password}
               autocomplete="current-password"
               class="form-field"
             />
-            <Button type="submit" loading={busy}>Сохранить почту</Button>
+            <Button class="cta" type="submit" loading={busy}>Сохранить почту</Button>
           </form>
 
           {#if emailMessage}
@@ -446,9 +446,21 @@
   /* Вкладки кита держат строку в одну линию и прокручивают её: на 320–390 px
      «Справка» оставалась за краем без признака. Переносим, все пять видны. */
   .profile :global([role='tablist']) {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     overflow: visible;
-    row-gap: var(--ui-space-snug);
+    gap: 0;
+  }
+
+  .profile :global([role='tablist'] > *) {
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    padding-inline: 2px;
+    font-size: 11px;
+    letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .email-form {

@@ -193,14 +193,14 @@
 <svelte:window on:resize={checkMore} />
 
 <div class="column catalog">
-  <h1>Каталог каналов</h1>
+  <h1 class="phone-hidden-title">Каталог каналов</h1>
   <p class="catalog-lead">
     Каталог собран из открытого списка Telegram-каналов. Подпишись на нужные — и их публикации
     появятся в ленте.
   </p>
 
   <form class="channel-form" on:submit|preventDefault={addByLink}>
-    <TextField
+    <TextField variant="boxed"
       id="channelInput"
       label="Канал по ссылке"
       bind:value={link}
@@ -209,7 +209,7 @@
       class="channel-field"
     />
     <span id="channelAdd">
-      <Button type="submit">Добавить по ссылке</Button>
+      <Button class="cta" type="submit">Добавить по ссылке</Button>
     </span>
   </form>
 
@@ -355,6 +355,21 @@
     font-weight: 700;
     letter-spacing: -0.025em;
     margin: 0 0 var(--ui-space-snug);
+  }
+
+  @media (max-width: 900px), (pointer: coarse) {
+    .catalog-lead {
+      display: none;
+    }
+
+    .channel-form {
+      flex-wrap: nowrap;
+    }
+
+    .channel-form :global(.channel-field) {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
   }
 
   .catalog-lead {
