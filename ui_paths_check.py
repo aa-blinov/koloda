@@ -880,6 +880,19 @@ def f23(c):
     assert left == 0, "кнопка «Новые публикации» не ушла после загрузки"
 
 
+@check("F25", "Телефон: строка управления колодой в одну линию, без переноса и вылезания за экран", device="phone")
+def f25(c):
+    login(c.pg, c.user)
+    c.pg.wait_for_selector("#deck .post", timeout=60000)
+    c.pg.wait_for_timeout(1500)
+    tools = c.pg.evaluate("""() => { const t = document.querySelector('#deck .deck-tools');
+        return {h: t.getBoundingClientRect().height, overflow: t.scrollWidth > t.clientWidth + 1,
+                right: t.getBoundingClientRect().right, vw: innerWidth}; }""")
+    assert tools["h"] <= 52, "строка управления в несколько линий: высота %s px" % round(tools["h"])
+    assert not tools["overflow"], "строка управления шире экрана"
+    assert tools["right"] <= tools["vw"], "строка управления вылезает за экран"
+
+
 @check("F24", "Реакции под постом: у каждой реакции виден счётчик, стандартные эмодзи выводятся")
 def f24(c):
     login(c.pg, c.user)
