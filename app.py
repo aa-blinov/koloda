@@ -408,6 +408,10 @@ def parse_reactions(chunk):
             emoji = unescape(text.group(1))
         else:
             emoji = "⭐" if paid else ""
+        # Кастомные реакции (Premium) символа не имеют, на странице t.me их картинки нет:
+        # показывать одно число без значка не нужно, поэтому пропускаем.
+        if not emoji:
+            continue
         # Счётчик — то, что после иконки и символа, иначе в него попадёт сам символ.
         tail = re.sub(r"<i\b.*?</i>|<b>.*?</b>", "", inner, flags=re.S)
         count = re.sub(r"<[^>]+>", "", tail).strip()

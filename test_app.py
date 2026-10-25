@@ -1291,7 +1291,7 @@ class ViewsTextTest(unittest.TestCase):
 
 class ReactionParseTest(unittest.TestCase):
     """Реакции на странице t.me: обычный эмодзи приходит картинкой, а её имя — его код в UTF-8.
-    Парсер, который ждал символ в <b>, отдавал пустые эмодзи: под постами оставались одни числа."""
+    Кастомные реакции (Premium) символа не имеют и не показываются: только стандартные эмодзи и звёзды."""
 
     def test_reactions_keep_their_emoji_in_every_markup_the_page_uses(self):
         chunk = (
@@ -1305,7 +1305,6 @@ class ReactionParseTest(unittest.TestCase):
         self.assertEqual(app.parse_reactions(chunk), [
             {"emoji": "❤", "count": "1.68K", "paid": False},
             {"emoji": "❤‍🔥", "count": "503", "paid": False},
-            {"emoji": "", "count": "83", "paid": False},
             {"emoji": "⭐", "count": "15", "paid": True},
             {"emoji": "👍", "count": "7", "paid": False},
         ])

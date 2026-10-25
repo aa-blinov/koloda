@@ -13,6 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.14 — 2026-10-25
+
+### Changed
+
+- Custom reactions (Telegram Premium emoji) are not shown under a post. Their symbol is
+  not on the public page, so only a count was left. The standard emoji and the
+  Telegram stars stay.
+
 ## 0.3.13 — 2026-10-25
 
 ### Fixed
