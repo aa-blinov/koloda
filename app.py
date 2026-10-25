@@ -494,6 +494,18 @@ class ChannelError(ValueError):
     Любое другое исключение наружу не отдаём: в тексте бывают адрес и детали запроса."""
 
 
+# Новая разметка t.me не отдаёт текст некоторых публикаций: вместо него заглушка «открой в Telegram».
+# Без подписи карточка была пустой, поэтому даём короткую строку и ссылку на саму публикацию.
+UNSUPPORTED_RE = re.compile(r"message_media_not_supported|text_not_supported")
+
+
+def unsupported_text(chunk, owner, msg_id):
+    if not UNSUPPORTED_RE.search(chunk) or not valid_channel(owner):
+        return ""
+    return rich_text('<i>Публикация открывается только в Telegram.</i> '
+                     f'<a href="https://t.me/{owner}/{msg_id}">Открыть</a>')
+
+
 def fetch_channel(channel, before=None):
     """Один канал -> (title, [posts]). before — страница старее этого msg_id.
     Бросает ChannelError, если канала нет, и когда t.me попросил подождать (капча)."""
@@ -568,7 +580,7 @@ def fetch_channel(channel, before=None):
             "channel": channel,
             "msg_id": int(msg_id),
             "url": f"https://t.me/{owner}/{msg_id}",
-            "text": rich_text(txt.group(1)) if txt else "",
+            "text": rich_text(txt.group(1)) if txt else unsupported_text(chunk, owner, msg_id),
             # Список медиа одним JSON: альбомы хранятся целиком.
             "media": J(media),
             "views": views.group(1).strip() if views else None,

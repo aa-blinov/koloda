@@ -1560,6 +1560,28 @@ class PrivateFetchTest(unittest.TestCase):
         self.assertEqual(run.call_count, 1)  # второй раз берём с диска
 
 
+class UnsupportedPostTest(unittest.TestCase):
+    """Публикация, которую веб-просмотр не отдаёт (заглушка «Please open Telegram»): карточка
+    не пустая, а говорит, что открывается в Telegram, и ведёт на саму публикацию."""
+
+    def test_a_post_the_web_view_does_not_carry_says_so_and_links_to_it(self):
+        html = ('<meta property="og:title" content="Канал"/>'
+                '<div class="tgme_widget_message text_not_supported_wrap" data-post="durov/7">'
+                '<div class="message_media_not_supported_wrap"><div class="message_media_not_supported">'
+                '<div class="message_media_not_supported_label">Please open Telegram to view this post</div>'
+                '<a href="https://t.me/durov/7" class="message_media_view_in_telegram">VIEW IN TELEGRAM</a>'
+                '</div></div></div>')
+        with patch.object(app.urllib.request, "urlopen") as net:
+            net.return_value.read.return_value = html.encode()
+            title, posts = app.fetch_channel("durov")
+        self.assertEqual(posts[0]["msg_id"], 7)
+        self.assertIn("только в Telegram", posts[0]["text"])
+        self.assertIn('href="https://t.me/durov/7"', posts[0]["text"])
+
+    def test_an_ordinary_post_without_text_keeps_an_empty_text(self):
+        self.assertEqual(app.unsupported_text('<div class="tgme_widget_message" data-post="durov/1"></div>', "durov", 1), "")
+
+
 class MediaParseTest(unittest.TestCase):
     """Пост без медиа не должен получать эмодзи из текста вместо картинки."""
 
