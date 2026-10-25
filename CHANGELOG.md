@@ -13,6 +13,14 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.13 — 2026-10-25
+
+### Fixed
+
+- Some posts showed an empty card: Telegram's new page gives a placeholder instead of
+  the text for them ("Please open Telegram to view this post"). The card now says the
+  post opens only in Telegram, with a link to it.
+
 ## 0.3.12 — 2026-10-25
 
 ### Changed
