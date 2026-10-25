@@ -201,9 +201,11 @@ Confirmed by the code:
 Deliberately not true, and worth knowing before a change:
 
 - There is no automatic update.
-- Nothing arrives in the browser by itself: the new posts wait for the reader.
-  On a phone the deck has a button over it, on a desktop the feed refreshes
-  when the page reloads or the channel changes.
+- The feed checks itself once a minute while the tab is visible and the reader
+  is not searching. It counts the unread posts that are newer than the top one
+  and shows a button "New posts: N", above the list or in the top row of the
+  deck. The screen does not move: the posts come when the reader presses the
+  button, and the button goes away once they are in.
 - A channel that the server has not read yet when the feed opens is asked for
   again by the page, up to three times, four seconds apart, so its posts arrive
   without a reload. Once it is read, the feed stops asking.

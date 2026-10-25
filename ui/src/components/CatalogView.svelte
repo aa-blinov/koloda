@@ -11,7 +11,7 @@
   import { api } from '../lib/api.js';
   import { searchValue } from '../lib/search.js';
   import { catRu, kfmt } from '../lib/format.js';
-  import { subs, avatars, titles, setSubscription, showUndo, loadAvatars } from '../lib/stores.js';
+  import { subs, avatars, titles, setSubscription, showUndo, loadAvatars, renewAvatar } from '../lib/stores.js';
 
   const dispatch = createEventDispatcher();
 
@@ -296,14 +296,15 @@
           on:click={() => dispatch('openChannel', { channel: channel.username, title: channel.name })}
         >
           <span class="channel-mark" aria-hidden="true">
-            {#if $avatars.get(channel.username) && !brokenAvatars.has(channel.username)}
+            {#if $avatars.get(channel.username) && !brokenAvatars.has($avatars.get(channel.username))}
               <img
                 src={$avatars.get(channel.username)}
                 alt=""
                 loading="lazy"
                 referrerpolicy="no-referrer"
                 on:error={() => {
-                  brokenAvatars = new Set(brokenAvatars).add(channel.username);
+                  brokenAvatars = new Set(brokenAvatars).add($avatars.get(channel.username));
+                  renewAvatar(channel.username);
                 }}
               />
             {:else}

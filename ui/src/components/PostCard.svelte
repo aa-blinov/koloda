@@ -9,7 +9,7 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { when, nfmt, viewsText, postKey, postLink } from '../lib/format.js';
-  import { markRead, markUnread } from '../lib/stores.js';
+  import { markRead, markUnread, renewAvatar } from '../lib/stores.js';
 
   export let post;
   export let read = false;
@@ -26,7 +26,7 @@
   let media = post.media || [];
   let loading = false;
   let fresh = false; // the addresses were asked for once already
-  let avatarFailed = false; // the photo of the channel died: the letter stands in
+  let failedAvatar = ''; // the address of the photo that did not open: the letter stands in until a new one comes
 
   $: media = post.media || [];
 
@@ -211,9 +211,12 @@
     {/if}
     <button type="button" class="who" title="Показать только этот канал" on:click={openChannel}>
       <span class="chan-dot" aria-hidden="true">
-        {#if avatar && !avatarFailed}
+        {#if avatar && avatar !== failedAvatar}
           <img src={avatar} alt="" loading="lazy" referrerpolicy="no-referrer"
-               on:error={() => (avatarFailed = true)} />
+               on:error={() => {
+                 failedAvatar = avatar;
+                 renewAvatar(post.channel);
+               }} />
         {:else}
           {letter}
         {/if}

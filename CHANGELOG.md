@@ -13,6 +13,21 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.9 — 2026-10-25
+
+### Added
+
+- The feed checks itself once a minute while the tab is visible. New unread posts
+  come with a button "New posts: N", above the list or in the top row of the deck;
+  they arrive when the reader presses it, and the screen does not move before that.
+
+### Fixed
+
+- The photos of the channels did not show in the catalog and in the feed: the
+  server kept a photo link for a week, but the links expire in hours. The cache
+  keeps a link for six hours now, and a photo that does not open asks for a fresh
+  link once per channel.
+
 ## 0.3.8 — 2026-10-24
 
 ### Changed

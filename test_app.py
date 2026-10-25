@@ -2036,6 +2036,38 @@ class AvatarEndpointTest(unittest.TestCase):
             self.get("/api/avatars?channels=alpha,beta")
         self.assertEqual(sorted(seen), ["alpha", "beta"])  # второй раз t.me не спрашиваем
 
+    def test_a_dead_photo_link_is_renewed_on_request_and_expires_in_hours(self):
+        # ссылка CDN короткоживущая: кэш держит её не дольше AVATAR_TTL, а по просьбе fresh берёт заново
+        hour = 3600
+        now = int(time.time())
+        db = app.connect()
+        db.execute("INSERT OR REPLACE INTO avatars VALUES (?,?,?)",
+                   ("gamma", "https://cdn4.telesco.pe/file/old.jpg", now - hour))
+        db.execute("INSERT OR REPLACE INTO avatars VALUES (?,?,?)",
+                   ("delta", "https://cdn4.telesco.pe/file/older.jpg", now - 7 * hour))
+        db.commit()
+        db.close()
+        seen = []
+
+        def fake(channel):
+            seen.append(channel)
+            return f"https://cdn4.telesco.pe/file/{channel}-new.jpg"
+
+        with patch.object(app, "fetch_avatar", side_effect=fake):
+            # в пределах TTL без просьбы отдаём кэш, t.me не спрашиваем
+            status, body = self.get("/api/avatars?channels=gamma")
+            self.assertEqual(body["avatars"]["gamma"], "https://cdn4.telesco.pe/file/old.jpg")
+            self.assertEqual(seen, [])
+            # просьба fresh берёт ссылку заново, но не чаще раза в кулдаун
+            status, body = self.get("/api/avatars?channels=gamma&fresh=1")
+            self.assertEqual(body["avatars"]["gamma"], "https://cdn4.telesco.pe/file/gamma-new.jpg")
+            self.get("/api/avatars?channels=gamma&fresh=1")
+            self.assertEqual(seen, ["gamma"])
+            # старше TTL канал спрашиваем без просьбы
+            status, body = self.get("/api/avatars?channels=delta")
+            self.assertEqual(body["avatars"]["delta"], "https://cdn4.telesco.pe/file/delta-new.jpg")
+        self.assertEqual(sorted(seen), ["delta", "gamma"])
+
     def test_private_channels_have_no_public_page_to_ask(self):
         with patch.object(app, "fetch_avatar") as fetch:
             status, body = self.get("/api/avatars?channels=private:-1001234567890")

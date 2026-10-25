@@ -55,7 +55,8 @@ export const api = {
   // Каталог
   catalog: (params) => get('/api/catalog?' + new URLSearchParams(params)),
   categories: () => get('/api/categories'),
-  avatars: (channels) => get('/api/avatars?channels=' + encodeURIComponent(channels.join(','))),
+  avatars: (channels, fresh = false) =>
+    get('/api/avatars?channels=' + encodeURIComponent(channels.join(',')) + (fresh ? '&fresh=1' : '')),
   check: (channel) => get('/api/check?c=' + encodeURIComponent(channel)),
 
   // Сохранённое

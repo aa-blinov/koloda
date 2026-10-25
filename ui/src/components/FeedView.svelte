@@ -12,7 +12,7 @@
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { dayLabel, postKey } from '../lib/format.js';
-  import { insertByTime } from '../lib/order.js';
+  import { comesBefore, insertByTime } from '../lib/order.js';
   import {
     subs,
     reads,
@@ -51,7 +51,41 @@
   const LOADING_RETRIES = 3;
   let loadingRetries = 0;
   let loadingTimer = null;
-  onDestroy(() => clearTimeout(loadingTimer));
+  onDestroy(() => {
+    clearTimeout(loadingTimer);
+    clearInterval(checkTimer);
+  });
+
+  // Новые публикации: лента сама спрашивает первую страницу раз в минуту и считает посты, которые
+  // новее верхнего и ещё не прочитаны. Экран не трогает: новые приходят кнопкой, чтобы не сбить чтение.
+  const CHECK_MS = 60000;
+  let freshCount = 0;
+  let checkTimer = null;
+
+  async function checkNew() {
+    if (document.hidden || loading || !started || feedMode !== 'feed') return;
+    if (query.trim().length >= 2) return;
+    const list = feedChannels(tab, collection, $subs);
+    if (!list.length) return;
+    const params = new URLSearchParams({ channels: list.join(','), q: '' });
+    if (!$showRead) params.set('hide_read', '1');
+    try {
+      const answer = await api.feed(params);
+      const top = posts[0];
+      const have = new Set(posts.map(postKey));
+      freshCount = (answer.posts || []).filter(
+        (p) => !have.has(postKey(p)) && !$reads.has(postKey(p)) && (!top || comesBefore(p, top))
+      ).length;
+    } catch (err) {
+      // Фоновая проверка молчит: лента на экране остаётся как есть.
+    }
+  }
+
+  function applyFresh() {
+    freshCount = 0;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    load(false);
+  }
   let hasMore = false;
   let cursor = null;
   let loading = false;
@@ -93,6 +127,7 @@
     // Новый запрос отменяет предыдущий, а не ждёт его: клик по фильтру во время
     // загрузки иначе терялся, и лента оставалась прежней.
     failed = false;
+    if (!append) freshCount = 0;
     const id = ++requestId;
     if (controller) controller.abort();
     controller = new AbortController();
@@ -431,7 +466,11 @@
     window.addEventListener('koloda:search', onSearch);
     window.addEventListener('koloda:refresh', onRefresh);
     window.addEventListener('koloda:key', onKey);
+    window.addEventListener('koloda:check', checkNew);
+    checkTimer = setInterval(checkNew, CHECK_MS);
     return () => {
+      clearInterval(checkTimer);
+      window.removeEventListener('koloda:check', checkNew);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('koloda:search', onSearch);
       window.removeEventListener('koloda:refresh', onRefresh);
@@ -467,6 +506,9 @@
           <Chip tone="accent" removable removeLabel="Снять фильтр" on:remove={() => dispatch('tab', '')}>
             {filterName}
           </Chip>
+        {/if}
+        {#if freshCount}
+          <Button variant="secondary" size="sm" on:click={applyFresh}>Новые публикации: {freshCount}</Button>
         {/if}
         {#if feedMode === 'feed'}
           <span id="readToggleDeck" class="read-toggle">
@@ -627,6 +669,11 @@
       </svelte:fragment>
     </EmptyState>
   {:else}
+    {#if freshCount}
+      <div class="fresh-new">
+        <Button variant="secondary" size="sm" on:click={applyFresh}>Новые публикации: {freshCount}</Button>
+      </div>
+    {/if}
     {#each groups as group (group.day)}
       <p class="day-sep">{group.day}</p>
       {#each group.posts as post (postKey(post))}
@@ -660,6 +707,12 @@
 {/if}
 
 <style>
+  .fresh-new {
+    display: flex;
+    justify-content: center;
+    padding: var(--ui-space-base) 0;
+  }
+
   /* --- колода: одна карточка, без вертикальной прокрутки --- */
 
   .deck {

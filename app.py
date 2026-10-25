@@ -1113,7 +1113,10 @@ def store_channel_cache(db, channel, title, posts):
 # Фото каналов. Берём og:image со страницы t.me/s, которую приложение и так открывает.
 # Ссылку пускаем только на картинки Telegram (telesco.pe, без кавычек и скобок): она
 # уходит в атрибут src, и чужой адрес в ответе t.me в ленту попадать не должен.
-AVATAR_TTL = 7 * 86400
+# Ссылка на фото — короткоживущая: через неделю в кэше уже 404 (проверено на проде). Поэтому кэш
+# держит её шесть часов, а клиент, у которого картинка не открылась, просит свежую (fresh=1).
+AVATAR_TTL = 6 * 3600
+AVATAR_FRESH_COOLDOWN = 10 * 60  # секунд: канал по просьбе fresh берём с t.me не чаще, чем раз в десять минут
 AVATAR_FETCH_CAP = 12   # страница t.me весит около 150 КБ: за один запрос ходим не больше чем за 12 каналов
 AVATAR_RETRY = 10 * 60  # секунд: канал, который t.me не ответил, спросим снова не раньше чем через десять минут
 AVATAR_URL = re.compile(r'https://[\w.-]+\.telesco\.pe/[^\s"\'<>]+')
@@ -1133,8 +1136,9 @@ def fetch_avatar(channel):
     return avatar_url(html)
 
 
-def channel_avatars(db, channels):
+def channel_avatars(db, channels, fresh=()):
     """Фото каналов: сначала своя таблица, устаревшие и новые догружаем с t.me, но не больше AVATAR_FETCH_CAP.
+    fresh — каналы, у которых картинка не открылась: их берём с t.me заново (с кулдауном).
     Возвращает (фото по каналам, какие каналы уже проверены): непроверенные спросим в следующий раз."""
     now = int(time.time())
     known = {}
@@ -1142,7 +1146,8 @@ def channel_avatars(db, channels):
         marks = ",".join("?" * len(channels))
         known = {c: (u, f) for c, u, f in db.execute(
             f"SELECT channel, url, fetched FROM avatars WHERE channel IN ({marks})", channels)}
-    stale = [c for c in channels if c not in known or now - known[c][1] > AVATAR_TTL][:AVATAR_FETCH_CAP]
+    stale = [c for c in channels if c not in known or now - known[c][1] > AVATAR_TTL
+             or (c in fresh and now - known[c][1] > AVATAR_FRESH_COOLDOWN)][:AVATAR_FETCH_CAP]
 
     def pull(channel):
         try:
@@ -2942,7 +2947,8 @@ class Handler(BaseHTTPRequestHandler):
                 if any(not valid_feed_channel(c) for c in chans):
                     return self._send(400, json.dumps({"error": "неверное имя канала"}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
-                avatars, checked = channel_avatars(db, public_channels(chans))
+                fresh = set(chans) if self._query("fresh") == "1" else set()
+                avatars, checked = channel_avatars(db, public_channels(chans), fresh=fresh)
                 return self._send(200, json.dumps({"avatars": avatars, "checked": checked}, ensure_ascii=False),
                                   "application/json; charset=utf-8")
 
