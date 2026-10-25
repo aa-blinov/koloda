@@ -8,7 +8,7 @@
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
-  import { when, nfmt, viewsText, postKey, postLink } from '../lib/format.js';
+  import { when, viewsText, postKey, postLink } from '../lib/format.js';
   import { markRead, markUnread, renewAvatar } from '../lib/stores.js';
 
   export let post;
@@ -331,7 +331,7 @@
       {#each post.reactions as reaction}
         <span>
           {#if reaction.emoji}<span>{reaction.emoji}</span>{/if}
-          {nfmt(reaction.count)}
+          {viewsText(reaction.count)}
         </span>
       {/each}
     </div>
