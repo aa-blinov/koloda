@@ -93,8 +93,9 @@ Confirmed by the code:
   right it is marked read, to the left it is saved. The card follows the
   finger, says what will happen, and the action can be taken back: the card
   comes back to its place in time in the deck, and both the mark and the save are undone.
-  Two round buttons under the deck do the same without a gesture: the left saves,
-  the right marks read. On the saved screen the left one takes the post out of
+  Three round buttons under the deck do the same without a gesture: the left saves,
+  the middle shares the link of the post, the right marks read. On a phone the card
+  has no action row of its own: the buttons under the deck are its actions. On the saved screen the left one takes the post out of
   the saved list, and the left swipe does the same. Pulling the card down scrolls it and does not refresh the
   feed; the button over the deck does that. The next post rises with the
   finger. A post with pictures shows its first picture as the face of the card,

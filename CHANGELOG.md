@@ -13,6 +13,13 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+## 0.3.12 — 2026-10-25
+
+### Changed
+
+- On a phone the post's actions are the round buttons under the deck: save, share and
+  mark read. The card has no action row of its own.
+
 ## 0.3.11 — 2026-10-25
 
 ### Changed
