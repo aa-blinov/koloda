@@ -29,6 +29,8 @@
   let failedAvatar = ''; // the address of the photo that did not open: the letter stands in until a new one comes
 
   $: media = post.media || [];
+  // Кастомные реакции (Premium) без символа не показываем: в старых записях кэша они ещё есть.
+  $: reactions = (post.reactions || []).filter((r) => r.emoji);
 
   const letter = (String(title || post.channel).trim()[0] || '?').toUpperCase();
 
@@ -329,9 +331,9 @@
     </a>
   {/if}
 
-  {#if post.reactions && post.reactions.length}
+  {#if reactions.length}
     <div class="rx">
-      {#each post.reactions as reaction}
+      {#each reactions as reaction}
         <span>
           {#if reaction.emoji}<span>{reaction.emoji}</span>{/if}
           {viewsText(reaction.count)}
