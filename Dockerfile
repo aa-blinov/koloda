@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS ui
+FROM node:26-bookworm-slim AS ui
 
 # Интерфейс собирается на node: Svelte 4, Vite и ки�� Monos.
 # Сборка идёт в отдельной стадии, поэтому в итоговый образ попадает только
