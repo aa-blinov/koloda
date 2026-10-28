@@ -263,6 +263,19 @@ def a4(c):
     c.pg.wait_for_selector("#authScreen", timeout=20000)
 
 
+@check("A10", "Отписка на втором устройстве обновляет открытую ленту", device="both")
+def a10(c):
+    login(c.pg, c.user)
+    visible = c.pg.locator("#postList .post, #deck .post").first.get_attribute("data-post")
+    if not visible:
+        raise Skip("в ленте нет поста для проверки синхронизации")
+    channel = visible.split("/", 1)[0]
+    api("/api/state/subscription", {"channel": channel, "subscribed": False}, c.user["cookie"])
+    c.pg.wait_for_function(
+        "channel => ![...document.querySelectorAll('#postList .post, #deck .post')].some(p => p.dataset.post.startsWith(channel + '/'))",
+        arg=channel, timeout=25000)
+
+
 # ---------- C: коллекции ----------
 
 @check("C1", "Создать коллекцию из списка каналов")
@@ -452,12 +465,12 @@ def c19(c):
     login(c.pg, c.user)
     if len(post_rows(c.pg)) < 3:
         raise Skip("постов меньше трёх, каналы ещё не подтянулись")
-    for _ in range(3):
-        c.pg.evaluate("window.scrollBy(0, 900)")
-        c.pg.wait_for_timeout(700)
-    c.pg.wait_for_timeout(4000)
-    read = {r for r in api("/api/state", None, c.user["cookie"])[2].get("reads", [])}
-    assert read, "после прокрутки отметок на сервере нет"
+    # прокрутка не отмечает (F2): прочитанным пост делает только кнопка
+    first = post_rows(c.pg)[0]["post"]
+    c.pg.locator(".post[data-post='%s'] button:has-text('Отметить прочитанным')" % first).first.click()
+    c.pg.wait_for_timeout(2500)
+    read = set(api("/api/state", None, c.user["cookie"])[2].get("reads") or [])
+    assert first in read, "кнопка не отметила пост на сервере"
     make_collection(c.user, "Новости", ["rybolos_channel", "evilfreelancer"])
     pick_collection(c.pg, "Новости")
     rows = post_rows(c.pg)
@@ -544,6 +557,15 @@ def c23(c):
 
 # ---------- F: лента ----------
 
+@check("F1", "Пустая лента ведёт прямо в каталог за первым каналом", device="both")
+def f1(c):
+    for channel in CHANNELS:
+        api("/api/state/subscription", {"channel": channel, "subscribed": False}, c.user["cookie"])
+    login(c.pg, c.user)
+    c.pg.get_by_role("button", name="Открыть каталог").click()
+    c.pg.wait_for_function("location.hash === '#/cat'", timeout=10000)
+    c.pg.wait_for_selector("#channelInput", timeout=20000)
+
 @check("F2", "Прокрутка не отмечает прочитанным; кнопка «Отметить прочитанным» отмечает свой пост")
 def f2(c):
     login(c.pg, c.user)
@@ -616,19 +638,29 @@ def f8(c):
     assert len(keys) == len(set(keys)), "повторы при подгрузке"
 
 
-@check("F12", "Убрать канал из ленты с отменой")
+@check("F12", "Убрать канал из открытой ленты с отменой", device="both")
 def f12(c):
     login(c.pg, c.user)
+    visible = c.pg.locator("#postList .post, #deck .post").first.get_attribute("data-post")
+    assert visible, "в ленте нет поста для проверки отписки"
+    channel = visible.split("/", 1)[0]
     open_list(c.pg)
-    c.pg.locator("#chanList .unsub-btn").first.click()
+    c.pg.locator("#chanList .row[data-channel='%s'] .unsub-btn" % channel).click()
     # панель живёт UNDO_MS = 4 с: ждём её сразу после клика, иначе она уходит до проверки
     c.pg.wait_for_selector("#undoBar", state="visible", timeout=3000)
     c.pg.wait_for_timeout(800)
     removed = [ch for ch in CHANNELS if ch not in subscriptions_of(c.user)]
     assert len(removed) == 1, "канал не ушёл из подписок: %s" % removed
+    assert channel in removed, "из ленты отписали другой канал"
+    c.pg.wait_for_function(
+        "channel => ![...document.querySelectorAll('#postList .post, #deck .post')].some(p => p.dataset.post.startsWith(channel + '/'))",
+        arg=channel, timeout=5000)
     c.pg.locator("#undoBar button").first.click()
     c.pg.wait_for_timeout(2000)
     assert sorted(subscriptions_of(c.user)) == sorted(CHANNELS), "отмена не вернула канал"
+    c.pg.wait_for_function(
+        "channel => [...document.querySelectorAll('#postList .post, #deck .post')].some(p => p.dataset.post.startsWith(channel + '/'))",
+        arg=channel, timeout=10000)
 
 
 @check("F15", "Галерея: кадр открывает просмотрщик, стрелка листает «N из M»")
@@ -649,7 +681,7 @@ def f15(c):
     wait_closed(c.pg, "lightbox")
 
 
-@check("F20", "В колоде протяжка не обновляет ленту, кнопка «Обновить» обновляет", device="phone")
+@check("F20", "Кнопка «Обновить» запускает свежую проверку на телефоне и ПК", device="both")
 def f20(c):
     login(c.pg, c.user)
     # холодный старт: канал, которого сервер ещё не прочитал, лента спрашивает снова через 4 с (loading);
@@ -657,20 +689,22 @@ def f20(c):
     c.pg.wait_for_timeout(6000)
     c.pg.evaluate("window.scrollTo(0, 0)")
     c.pg.wait_for_timeout(300)
-    cdp = c.ctx.new_cdp_session(c.pg)
     seen = []
     c.pg.on("request", lambda r: seen.append(r.url) if "/api/feed" in r.url else None)
-    # Протяжка вниз в колоде — прокрутка карточки, а не обновление: запроса быть не должно.
-    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": 200, "y": 200}]})
-    for dy in (40, 80, 120):
-        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": 200, "y": 200 + dy}]})
-        c.pg.wait_for_timeout(60)
-    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
-    c.pg.wait_for_timeout(2000)
-    assert not seen, "протяжка в колоде обновила ленту: %s" % seen
-    c.pg.click("#deck button[aria-label='Обновить']")
-    c.pg.wait_for_timeout(2000)
-    assert seen, "кнопка «Обновить» не запросила ленту"
+    if c.ctx.pages[0].evaluate("matchMedia('(pointer: coarse)').matches"):
+        cdp = c.ctx.new_cdp_session(c.pg)
+        # Протяжка вниз в колоде — прокрутка карточки, а не обновление.
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": 200, "y": 200}]})
+        for dy in (40, 80, 120):
+            cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": 200, "y": 200 + dy}]})
+            c.pg.wait_for_timeout(60)
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+        c.pg.wait_for_timeout(1000)
+        assert not seen, "протяжка в колоде обновила ленту: %s" % seen
+        c.pg.click("#deck button[aria-label='Обновить']")
+    else:
+        c.pg.get_by_role("button", name="Обновить").click()
+    c.pg.wait_for_function("urls => urls.some(url => url.includes('refresh=1'))", arg=seen, timeout=10000)
 
 
 # ---------- H, V, D: профиль ----------
@@ -842,6 +876,9 @@ def f22(c):
     c.pg.wait_for_timeout(1500)
     # пост создаём до жеста: запись в базу стенда медленная, а строка «Вернуть» живёт 4 с
     newer = insert_newer_post(CHANNELS[0])
+    # Проверяется место поста после отмены, а не скорость t.me: «Обновить» с refresh=1 ждёт Telegram до
+    # восьми секунд, а строка «Вернуть» живёт четыре. Запрос идёт без refresh=1 и отвечает из кэша.
+    c.pg.route("**/api/feed?*", lambda route: route.continue_(url=route.request.url.replace("&refresh=1", "")))
     cdp = c.ctx.new_cdp_session(c.pg)
     # жест начинаем со строки автора: видео и кнопки управления в карточке жест не отдают
     x0, y0 = c.pg.evaluate("""() => { const r = document.querySelector('#deck .post .meta').getBoundingClientRect();
@@ -1066,6 +1103,20 @@ def run(device_filter, only):
     return results
 
 
+def warm_up():
+    """Каналы стенда читаются с t.me по первому запросу, и пока они грузятся, лента перестраивается
+    посреди жеста. Без прогрева первая проверка на пустом стенде красная из-за начального состояния,
+    а не из-за продукта: ждём, пока лента вернёт все каналы прочитанными."""
+    user = new_user("warm")
+    path = "/api/feed?channels=%s&q=" % ",".join(CHANNELS)
+    for _ in range(30):
+        status, _, answer = api(path, None, user["cookie"])
+        if status == 200 and not answer.get("loading"):
+            return
+        time.sleep(3)
+    print("прогрев: каналы не прочитались за 90 с, холодные проверки могут быть красными", flush=True)
+
+
 def main():
     global BASE
     parser = argparse.ArgumentParser(description="Проверка пользовательских путей в браузере")
@@ -1078,6 +1129,7 @@ def main():
     DATA_DIR = args.data_dir
     BASE = args.base.rstrip("/")
     only = {item.strip().upper() for item in args.only.split(",") if item.strip()}
+    warm_up()
     results = run(args.device, only)
     for pid, title, status, detail in results:
         print("%-5s %-4s %s%s" % (status, pid, title, ("  [" + detail + "]") if detail else ""), flush=True)

@@ -101,6 +101,9 @@
   $: collectionFilter = collectionFilterId
     ? $collectionsList.find((c) => String(c.id) === String(collectionFilterId)) || null
     : null;
+  // Отписка на этом или другом устройстве снимает фильтр, если он указывал
+  // на этот канал. Лента затем перечитывается по обновлённому списку.
+  $: if (feedTab && !$subs.includes(feedTab)) feedTab = '';
   // Имя действующего фильтра ленты: коллекция или канал.
   $: filterName = collectionFilter ? collectionFilter.name : feedTab;
 
@@ -549,6 +552,13 @@
                 <Button variant="text" size="sm" on:click={() => setShowRead(!$showRead)}>
                   {$showRead ? 'Скрыть прочитанные' : 'Показать прочитанные'}
                 </Button>
+                <span class="desktop-refresh">
+                  <Button
+                    variant="text"
+                    size="sm"
+                    on:click={() => window.dispatchEvent(new Event('koloda:refresh'))}
+                  >Обновить</Button>
+                </span>
               </div>
             {/if}
           </div>
@@ -593,6 +603,8 @@
             collection={collectionFilter}
             on:ready={onReady}
             on:clearSearch={clearSearch}
+            on:openCatalog={() => pickSection('catalog')}
+            on:openChannels={() => (channelsOpen = true)}
             on:clearCollection={() => (collectionFilterId = null)}
             on:tab={(event) => {
               // Клик по имени канала в посте — это фильтр, второй клик снимает
@@ -1130,11 +1142,22 @@
       order: 1;
     }
 
+    .desktop-refresh {
+      display: inline-flex;
+      align-items: center;
+    }
+
     .brand {
       display: none;
     }
 
     .head-icons {
+      display: none;
+    }
+  }
+
+  @media (max-width: 900px), (pointer: coarse) {
+    .desktop-refresh {
       display: none;
     }
   }

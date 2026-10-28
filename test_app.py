@@ -199,6 +199,32 @@ class FeedAPITest(unittest.TestCase):
         self.assertFalse(ids1 & ids2)
         self.assertFalse(second["has_more"])
 
+    def test_manual_feed_refresh_bypasses_ttl_and_returns_the_new_page(self):
+        self.db.execute("UPDATE cache SET fetched=? WHERE channel='alpha'", (int(time.time()) - 60,))
+        self.db.commit()
+        fresh = fake_post("alpha", 900, 2_100_000_000)
+        app._failed.clear()
+        with patch.object(app, "fetch_channel", return_value=("Alpha", [fresh])) as fetch:
+            status, payload = self.request("/api/feed?channels=alpha&refresh=1")
+            self.assertEqual(status, 200)
+            self.assertTrue(app.wait_refresh_idle())
+        fetch.assert_called_once_with("alpha")
+        self.assertIn(("alpha", 900), {(p["channel"], p["msg_id"]) for p in payload["posts"]})
+
+    def test_manual_feed_refresh_does_not_refetch_a_channel_just_loaded(self):
+        self.db.execute("UPDATE cache SET fetched=? WHERE channel='alpha'", (int(time.time()) - 60,))
+        self.db.commit()
+        fresh = fake_post("alpha", 901, 2_100_000_001)
+        app._failed.clear()
+        with patch.object(app, "fetch_channel", return_value=("Alpha", [fresh])) as fetch:
+            first_status, _ = self.request("/api/feed?channels=alpha&refresh=1")
+            self.assertEqual(first_status, 200)
+            self.assertTrue(app.wait_refresh_idle())
+            second_status, payload = self.request("/api/feed?channels=alpha&refresh=1")
+        self.assertEqual(second_status, 200)
+        self.assertEqual(fetch.call_count, 1)
+        self.assertIn(("alpha", 901), {(p["channel"], p["msg_id"]) for p in payload["posts"]})
+
     def test_feed_accepts_more_than_twenty_channels(self):
         now = int(time.time())
         names = ["ch%03d" % i for i in range(21)]
@@ -838,6 +864,14 @@ class FeedAPITest(unittest.TestCase):
             # лента без профиля тоже не отвечает (A10): ни кэша, ни обхода для гостя
             self.assertEqual(self.request("/api/feed?channels=alpha&refresh=1")[0], 401)
         fetch.assert_not_called()
+
+    def test_preview_of_a_channel_telegram_has_not_answered_yet_is_not_called_missing(self):
+        # время ожидания вышло, а ни ошибки, ни кэша нет: это «ещё грузится», а не «Канал не найден»
+        self.register("slow_preview", "long-password")
+        with patch.object(app, "request_refresh", return_value=[]):
+            status, payload = self.request("/api/preview?c=neverread")
+        self.assertEqual(status, 502)
+        self.assertNotEqual(payload["error"], "Канал не найден")
 
     def test_channel_preview_pages_through_every_cached_post(self):
         # предпросмотр читает канал и обновляет его: с 19 октября только

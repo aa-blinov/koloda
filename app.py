@@ -191,6 +191,7 @@ DIGITS = re.compile(r"[0-9]+")
 # Короткий TTL: t.me отдаёт превью без ограничений, но и обновляется не мгновенно.
 TTL = 300
 TTL_SPREAD = 60       # TTL канала = TTL ± TTL_SPREAD: каналы, загруженные вместе, не устаревают разом
+MANUAL_REFRESH_MIN_AGE = 60  # один канал не перечитываем вручную чаще раза в минуту
 FETCH_TIMEOUT = 8     # сколько ждём ответа t.me на один канал
 REFRESH_TIMEOUT = 8   # сколько запрос ленты ждёт канал, которого ещё нет в кэше
 BACKFILL_CAP = 500    # постов истории на канал; дальше только в Telegram
@@ -1056,9 +1057,10 @@ def _finish(channel, error):
         event.set()
 
 
-def request_refresh(db, channels, wait_all=False):
+def request_refresh(db, channels, wait_all=False, force=False):
     """Ставит в фон устаревшие каналы и возвращает события, которых стоит дождаться:
-    для каналов без кэша, а при wait_all и для всех устаревших."""
+    для каналов без кэша, а при wait_all — для всех. force обходит обычный TTL,
+    но не перечитывает канал, который уже обновляли последнюю минуту."""
     now = int(time.time())
     cached = dict(db.execute(
         "SELECT channel,fetched FROM cache WHERE channel IN (%s)" %
@@ -1069,16 +1071,19 @@ def request_refresh(db, channels, wait_all=False):
         for channel in channels:
             needed = wait_all or channel not in cached
             if channel in _jobs:
-                if needed:
+                if needed or force:
                     waits.append(_jobs[channel])
                 continue
-            if channel in cached and now - cached[channel] < channel_ttl(channel):
+            age = now - cached[channel] if channel in cached else None
+            if age is not None and force and age < MANUAL_REFRESH_MIN_AGE:
+                continue
+            if age is not None and not force and age < channel_ttl(channel):
                 continue
             failure = _failed.get(channel)
             if failure and time.time() < failure["retry_at"]:
                 continue
             event = _jobs[channel] = threading.Event()
-            if needed:
+            if needed or force:
                 waits.append(event)
             _ensure_workers()
             _fetch_pool.submit(_fetch_job, channel)
@@ -2388,9 +2393,11 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send(400, json.dumps({"error": "неверная позиция ленты"}),
                                           "application/json")
 
-                # Кэш отдаём сразу. Ждём только каналы, которых в базе ещё нет совсем
+                # Обычно сразу отдаём кэш и ждём только каналы без кэша. Явная
+                # кнопка обновления дополнительно ждёт запрошенные каналы.
                 public_chans = public_channels(chans)
-                wait_for(request_refresh(db, public_chans))
+                force_refresh = self._query("refresh") == "1"
+                wait_for(request_refresh(db, public_chans, force=force_refresh))
                 errors = failures_for(public_chans)
                 # Каналы без кэша и без ошибки ещё догружаются в фоне: их посты клиент получит,
                 # если спросит ленту ещё раз (поле loading), иначе они появятся только при следующем открытии.
@@ -2399,6 +2406,8 @@ class Handler(BaseHTTPRequestHandler):
                     public_chans)} if public_chans else set()
                 failed_now = {e["channel"] for e in errors}
                 loading = [c for c in public_chans if c not in cached_now and c not in failed_now]
+                with _jobs_lock:
+                    refreshing = [c for c in public_chans if c in _jobs]
 
                 # прочитанное по умолчанию не показываем: фильтр в запросе, а не на клиенте,
                 # чтобы страница не приходила полупустой
@@ -2458,6 +2467,7 @@ class Handler(BaseHTTPRequestHandler):
                         % ",".join("?" * len(want_private)), [unread_profile] + want_private)))
                 return self._send(200, json.dumps({"posts": posts, "titles": titles,
                                                    "errors": errors, "loading": loading, "has_more": has_more,
+                                                   "refreshing": refreshing,
                                                    "history": history_status(db, unread_profile),
                                                    "next": next_cursor}),
                                   "application/json; charset=utf-8")
@@ -2928,8 +2938,12 @@ class Handler(BaseHTTPRequestHandler):
                     " ORDER BY ts DESC,msg_id DESC LIMIT ?", args + [CHANNEL_PAGE_SIZE + 1]
                 ).fetchall()
                 if not rows and not paging:
-                    status = 502 if errors else 404
-                    message = "Не удалось загрузить публикации канала" if errors else "Канал не найден"
+                    # Ни ошибки, ни кэша: Telegram ещё не ответил за время ожидания, канал не «не найден».
+                    never_read = not errors and not db.execute(
+                        "SELECT 1 FROM cache WHERE channel=?", (channel,)).fetchone()
+                    status = 502 if errors or never_read else 404
+                    message = ("Не удалось загрузить публикации канала" if errors else
+                               "Telegram отвечает долго, попробуй ещё раз" if never_read else "Канал не найден")
                     return self._send(status, json.dumps({"error": message}, ensure_ascii=False),
                                       "application/json; charset=utf-8")
                 has_more = len(rows) > CHANNEL_PAGE_SIZE
