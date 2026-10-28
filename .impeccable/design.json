@@ -1,21 +1,217 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-01-01T00:00:00Z",
+  "generatedAt": "2026-10-26T02:45:06Z",
   "title": "Design System: koloda",
   "extensions": {
-    "colorMeta": {},
-    "typographyMeta": {},
-    "shadows": [],
-    "motion": [],
-    "breakpoints": []
+    "colorMeta": {
+      "dark.bg": {
+        "role": "neutral",
+        "displayName": "Тёплая тёмная бумага",
+        "canonical": "#282828",
+        "tonalRamp": [
+          "#161616",
+          "#1c1c1c",
+          "#222222",
+          "#282828",
+          "#34302e",
+          "#3c3836",
+          "#504945",
+          "#ebdbb2"
+        ]
+      },
+      "dark.fg": {
+        "role": "neutral",
+        "displayName": "Пергаментный текст",
+        "canonical": "#ebdbb2",
+        "tonalRamp": [
+          "#282828",
+          "#3c3836",
+          "#504945",
+          "#7c6f64",
+          "#928374",
+          "#bdae93",
+          "#d5c4a1",
+          "#ebdbb2"
+        ]
+      },
+      "dark.acc": {
+        "role": "primary",
+        "displayName": "Приглушённая мята",
+        "canonical": "#9ec5b8",
+        "tonalRamp": [
+          "#18221f",
+          "#263732",
+          "#354c45",
+          "#48665d",
+          "#638579",
+          "#82a99b",
+          "#9ec5b8",
+          "#d8e9e3"
+        ]
+      },
+      "light.bg": {
+        "role": "neutral",
+        "displayName": "Светлая бумага",
+        "canonical": "#fbf1c7",
+        "tonalRamp": [
+          "#282828",
+          "#3c3836",
+          "#504945",
+          "#7c6f64",
+          "#a89984",
+          "#d5c4a1",
+          "#ebdbb2",
+          "#fbf1c7"
+        ]
+      },
+      "light.acc": {
+        "role": "primary",
+        "displayName": "Глубокий бирюзовый",
+        "canonical": "#05525e",
+        "tonalRamp": [
+          "#082126",
+          "#0b3037",
+          "#10414a",
+          "#05525e",
+          "#28717d",
+          "#5e9299",
+          "#9ec5b8",
+          "#dce9e5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "JetBrains Mono",
+        "purpose": "Основной текст постов и интерфейса."
+      },
+      "ui": {
+        "displayName": "Моноширинный интерфейсный",
+        "purpose": "Короткие подписи и действия с плотным набором."
+      },
+      "serif": {
+        "displayName": "Source Serif 4",
+        "purpose": "Альтернативная настройка профиля для чтения."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lifted-card",
+        "value": "0 1px 2px rgba(0,0,0,.03)",
+        "purpose": "Только при подъёме карточки."
+      },
+      {
+        "name": "dialog",
+        "value": "0 25px 50px -12px rgba(0,0,0,.5)",
+        "purpose": "Диалог и подложка."
+      }
+    ],
+    "motion": [
+      {
+        "name": "screen-transition",
+        "value": "220ms",
+        "purpose": "Короткий переход между экранами; отключается при prefers-reduced-motion."
+      },
+      {
+        "name": "control-transition",
+        "value": "opacity 0.18s, transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1)",
+        "purpose": "Переходы интерактивных элементов."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-header",
+        "value": "900px",
+        "purpose": "По ширине или coarse pointer интерфейс переходит к компоновке для касания."
+      },
+      {
+        "name": "phone",
+        "value": "640px",
+        "purpose": "Узкая одноколоночная компоновка телефона."
+      }
+    ]
   },
-  "components": [],
+  "components": [
+    {
+      "name": "Text action",
+      "kind": "button",
+      "description": "Текстовая кнопка без заливки и рамки.",
+      "html": "<button class=\"ds-button\">Открыть</button>",
+      "css": ".ds-button { color: var(--ui-ink); background: transparent; border: 0; border-radius: var(--ui-radius); padding: 10px 12px; font: 700 12px/1.4 \"JetBrains Mono\", monospace; letter-spacing: .1em; text-transform: uppercase; transition: opacity .18s; } .ds-button:hover { opacity: .7; } .ds-button:active { opacity: .55; } .ds-button:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Search field",
+      "kind": "input",
+      "description": "Поле поиска на поверхности; на телефоне остаётся удобным для касания.",
+      "html": "<input class=\"ds-input\" type=\"search\" placeholder=\"Поиск\">",
+      "css": ".ds-input { width: 100%; min-height: 44px; padding: 10px 16px; color: var(--ui-ink); background: var(--ui-surface); border: 1px solid transparent; border-radius: 999px; font: 400 16px/1.5 \"JetBrains Mono\", monospace; } .ds-input:focus-visible { border-color: var(--ui-accent); outline: 2px solid color-mix(in srgb, var(--ui-accent) 28%, transparent); outline-offset: 1px; }"
+    },
+    {
+      "name": "Navigation item",
+      "kind": "nav",
+      "description": "Пункт основного раздела с различимым выбранным состоянием.",
+      "html": "<a class=\"ds-nav\" href=\"#/feed\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 5h16M4 12h16M4 19h16\" /></svg><span>Лента</span></a>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; color: var(--ui-ink-soft); border-radius: var(--ui-radius); text-decoration: none; font: 700 12px/1.4 \"JetBrains Mono\", monospace; } .ds-nav[aria-current=\"page\"] { color: var(--ui-ink); background: var(--ui-surface-2); } .ds-nav:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; } .ds-nav svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }"
+    },
+    {
+      "name": "Filter chip",
+      "kind": "chip",
+      "description": "Короткий фильтр, выбранное состояние читается по фону и подписи.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">Непрочитанные</button>",
+      "css": ".ds-chip { min-height: 40px; padding: 8px 12px; color: var(--ui-ink-soft); background: transparent; border: 0; border-radius: 999px; font: 700 12px/1.4 \"JetBrains Mono\", monospace; } .ds-chip[aria-pressed=\"true\"] { color: var(--ui-ink); background: var(--ui-surface-2); } .ds-chip:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Post card",
+      "kind": "card",
+      "description": "Карточка поста с тонкой границей и плотной типографикой.",
+      "html": "<article class=\"ds-card\"><p>Текст поста</p></article>",
+      "css": ".ds-card { padding: 16px 24px; color: var(--ui-ink); background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: var(--ui-radius); } .ds-card p { margin: 0; font: 400 14px/1.625 \"JetBrains Mono\", monospace; white-space: pre-wrap; }"
+    },
+    {
+      "name": "Dialog",
+      "kind": "custom",
+      "description": "Ограниченный по ширине диалог на фоне страницы.",
+      "html": "<section class=\"ds-dialog\" role=\"dialog\" aria-label=\"Каналы\">Каналы</section>",
+      "css": ".ds-dialog { width: min(420px, 100%); max-height: 86vh; overflow: auto; padding: 32px; color: var(--ui-ink); background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: var(--ui-radius); box-shadow: 0 25px 50px -12px rgba(0,0,0,.5); }"
+    },
+    {
+      "name": "Phone navigation",
+      "kind": "nav",
+      "description": "Нижняя навигация из трёх основных разделов.",
+      "html": "<nav class=\"ds-bottom-nav\" aria-label=\"Разделы\"><a href=\"#/feed\" aria-current=\"page\">Лента</a><a href=\"#/cat\">Каталог</a><a href=\"#/saved\">Сохранённое</a></nav>",
+      "css": ".ds-bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); min-height: 64px; padding: 6px 8px; background: var(--ui-bg); } .ds-bottom-nav a { display: grid; align-content: center; justify-items: center; gap: 2px; color: var(--ui-ink-soft); text-decoration: none; font: 700 12px/1.4 \"JetBrains Mono\", monospace; } .ds-bottom-nav a[aria-current=\"page\"] { color: var(--ui-accent); } .ds-bottom-nav a:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }"
+    }
+  ],
   "narrative": {
-    "northStar": "",
-    "overview": "",
-    "keyCharacteristics": [],
-    "rules": [],
-    "dos": [],
-    "donts": []
+    "northStar": "Paper and Ink",
+    "overview": "Лента читается как печатная страница: тёплый фон, чернильные оттенки, моноширинный текст и карточки с тонкими разделителями. Плотность намеренная: посты занимают главное место, а телефон сохраняет ту же страницу с нижней навигацией и удобными для касания элементами.",
+    "keyCharacteristics": [
+      "Палитра и светлый режим настраиваются в профиле.",
+      "Основной шрифт JetBrains Mono; Source Serif 4 доступен как настройка чтения.",
+      "Глубина строится оттенками и тонкими границами; тени редки.",
+      "Иконки — inline SVG, один штрих, currentColor."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Акцент обозначает выбор или состояние; на экране не конкурируют несколько акцентных элементов.",
+        "section": "colors"
+      },
+      {
+        "name": "The Contrast Floor Rule",
+        "body": "Текстовые пары сохраняют контраст не ниже 4.5:1 в обеих темах.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do брать цвета, радиус и расстояния из токенов.",
+      "Do сохранять минимум 48 px для целей касания на телефоне.",
+      "Do рисовать иконки inline SVG с currentColor."
+    ],
+    "donts": [
+      "Don’t задавать цвет, радиус или шрифт напрямую в разметке.",
+      "Don’t заменять иконки эмодзи или символами Unicode.",
+      "Don’t добавлять второй радиус, градиент или постоянную тень карточке."
+    ]
   }
 }

@@ -61,6 +61,7 @@
   const CHECK_MS = 60000;
   let freshCount = 0;
   let checkTimer = null;
+  let refreshingChannels = [];
 
   async function checkNew() {
     if (document.hidden || loading || !started || feedMode !== 'feed') return;
@@ -108,6 +109,8 @@
 
   // Имя действующего фильтра: коллекция или канал.
   $: filterName = collection ? collection.name : tab;
+  $: collectionHasChannels =
+    Boolean(collection && (collection.channels || []).some((channel) => $subs.includes(channel)));
 
   function groupByDay(items) {
     const out = [];
@@ -123,7 +126,7 @@
     return out;
   }
 
-  async function load(append = false) {
+  async function load(append = false, forceRefresh = false) {
     // Новый запрос отменяет предыдущий, а не ждёт его: клик по фильтру во время
     // загрузки иначе терялся, и лента оставалась прежней.
     failed = false;
@@ -155,6 +158,7 @@
         // со старым списком — фильтр не сработал бы.
         const list = feedChannels(tab, collection, $subs);
         const params = new URLSearchParams({ channels: list.join(','), q: effectiveQuery });
+        if (forceRefresh) params.set('refresh', '1');
         if (append && cursor) {
           params.set('before_ts', cursor.ts);
           params.set('before_channel', cursor.channel);
@@ -169,6 +173,7 @@
       syncSaved(answer.posts || [], !append);
       hasMore = Boolean(answer.has_more);
       errors = answer.errors || [];
+      refreshingChannels = answer.refreshing || [];
       if (append || !answer.loading || !answer.loading.length) {
         loadingRetries = 0;
       } else if (loadingRetries < LOADING_RETRIES) {
@@ -287,13 +292,17 @@
     ? 'Ничего не нашлось'
     : feedMode === 'saved'
       ? 'Сохранённых публикаций нет'
-      : subs.length
+      : collection && !collectionHasChannels
+        ? 'В коллекции пока нет каналов'
+        : collectionHasChannels || subs.length
         ? 'Ты всё прочитал'
         : 'Пока пусто';
   $: deckEmptyText = query
     ? 'Измени запрос или выбери канал.'
     : feedMode === 'saved'
       ? 'Публикацию сохраняет кнопка «Сохранить» у поста.'
+      : collection && !collectionHasChannels
+        ? 'Добавь каналы в коллекцию из списка каналов или со страницы канала.'
       : subs.length
         ? 'Новых публикаций нет. Загляни позже или проверь сейчас.'
         : 'Добавь канал в каталоге — и публикации появятся здесь.';
@@ -450,15 +459,26 @@
 
   function pullRefresh() {
     refreshing = true;
-    load(false).finally(() => (refreshing = false));
+    load(false, true).finally(() => (refreshing = false));
   }
 
   // Лента ждёт подписок: без них запрос ушёл бы без каналов, а сервер отдал
   // бы весь кэш — на экране мелькнули бы чужие каналы.
   let started = false;
-  $: if ($stateReady && !started) {
-    started = true;
-    load(false);
+  let lastSubscriptionKey = null;
+  $: if ($stateReady) {
+    const subscriptionKey = $subs.slice().sort().join(',');
+    if (!started) {
+      started = true;
+      lastSubscriptionKey = subscriptionKey;
+      load(false);
+    } else if (subscriptionKey !== lastSubscriptionKey) {
+      lastSubscriptionKey = subscriptionKey;
+      // Если подписку сняли с текущего канала, сначала убираем фильтр. Иначе
+      // экран оставался бы пустым под именем уже отписанного канала.
+      if (tab && !$subs.includes(tab)) dispatch('tab', tab);
+      else if (feedMode === 'feed') load(false);
+    }
   }
 
   onMount(() => {
@@ -519,9 +539,11 @@
         {/if}
         <!-- Обновить — значок: подпись остаётся в aria-label и в подсказке. Так строка колоды
              влезает в одну линию, как панель инструментов в Material 3. -->
-        <IconButton label="Обновить" variant="ghost" size="sm" on:click={() => load(false)}>
-          <Icon name="refresh" size={18} />
-        </IconButton>
+        {#if feedMode === 'feed'}
+          <IconButton label={refreshing ? 'Обновляю' : 'Обновить'} variant="ghost" size="sm" on:click={pullRefresh}>
+            <Icon name="refresh" size={18} />
+          </IconButton>
+        {/if}
         <!-- Полный экран: шапка и разделы уходят, карточка занимает экран. Выход — этой же кнопкой. -->
         <IconButton
           label={$immersive ? 'Обычный вид' : 'Полный экран'}
@@ -535,6 +557,11 @@
       {#if searchHint}
         <p class="deck-hint" role="status">{searchHint}</p>
       {/if}
+      {#if refreshingChannels.length}
+        <p class="deck-hint" role="status">
+          Ещё обновляются: {refreshingChannels.join(', ')}. Пока показываю последние загруженные посты.
+        </p>
+      {/if}
     </div>
 
     <div class="deck-stack" class:dragging bind:this={stack}>
@@ -546,14 +573,20 @@
       {:else if failed}
         <EmptyState title="Не удалось загрузить ленту" description="Проверь соединение и попробуй ещё раз.">
           <svelte:fragment slot="actions">
-            <Button on:click={() => load(false)}>Попробовать снова</Button>
+              <Button on:click={pullRefresh}>Попробовать снова</Button>
           </svelte:fragment>
         </EmptyState>
       {:else if !posts.length}
         <EmptyState title={deckEmptyTitle} description={deckEmptyText}>
           <svelte:fragment slot="actions">
-            {#if feedMode !== 'saved'}
-              <Button on:click={() => load(false)}>Проверить новые</Button>
+            {#if !query && feedMode === 'feed'}
+              {#if collection && !collectionHasChannels}
+                <Button on:click={() => dispatch('openChannels')}>Добавить каналы</Button>
+              {:else if !collection && !$subs.length}
+                <Button on:click={() => dispatch('openCatalog')}>Открыть каталог</Button>
+              {:else}
+                <Button on:click={pullRefresh}>Проверить новые</Button>
+              {/if}
             {/if}
           </svelte:fragment>
         </EmptyState>
@@ -579,21 +612,23 @@
       {/if}
     </div>
 
-    <!-- Кнопки делают то же, что жест: левая сохраняет, правая отмечает прочитанным, средняя делится ссылкой. -->
-    <div class="deck-actions">
-      <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('left')}>
-        <span class="deck-ring deck-save"><Icon name={inSaved ? 'close' : 'bookmark'} size={24} /></span>
-        <span class="deck-label">{leftLabel}</span>
-      </button>
-      <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('share')}>
-        <span class="deck-ring deck-share"><Icon name="share" size={22} /></span>
-        <span class="deck-label">Поделиться</span>
-      </button>
-      <button type="button" class="deck-btn" disabled={!posts.length} on:click={() => deckButton('right')}>
-        <span class="deck-ring deck-read"><Icon name="check" size={26} /></span>
-        <span class="deck-label">Прочитано</span>
-      </button>
-    </div>
+    {#if posts.length}
+      <!-- Действия появляются вместе с карточкой, чтобы не занимать место в пустой колоде. -->
+      <div class="deck-actions">
+        <button type="button" class="deck-btn" on:click={() => deckButton('left')}>
+          <span class="deck-ring deck-save"><Icon name={inSaved ? 'close' : 'bookmark'} size={24} /></span>
+          <span class="deck-label">{leftLabel}</span>
+        </button>
+        <button type="button" class="deck-btn" on:click={() => deckButton('share')}>
+          <span class="deck-ring deck-share"><Icon name="share" size={22} /></span>
+          <span class="deck-label">Поделиться</span>
+        </button>
+        <button type="button" class="deck-btn" on:click={() => deckButton('right')}>
+          <span class="deck-ring deck-read"><Icon name="check" size={26} /></span>
+          <span class="deck-label">Прочитано</span>
+        </button>
+      </div>
+    {/if}
   </div>
 {:else}
 <div
@@ -639,6 +674,11 @@
       {errors.map((e) => e.channel).join(', ')}
     </Notice>
   {/if}
+  {#if refreshingChannels.length}
+    <Notice tone="info" title="Каналы ещё обновляются">
+      {refreshingChannels.join(', ')}. Пока показываю последние загруженные публикации.
+    </Notice>
+  {/if}
 
   <div id="postList">
   {#if loading && !posts.length}
@@ -659,21 +699,31 @@
         ? 'Ничего не нашлось'
         : feedMode === 'saved'
           ? 'Сохранённых публикаций нет'
-          : collection
+          : collection && !collectionHasChannels
             ? 'В коллекции пока нет каналов'
-            : 'Пока пусто'}
+            : $subs.length
+              ? 'Ты всё прочитал'
+              : 'Пока пусто'}
       description={query
         ? 'Измени запрос или выбери канал.'
         : feedMode === 'saved'
           ? 'Публикацию сохраняет кнопка «Сохранить» у поста.'
-          : collection
+          : collection && !collectionHasChannels
             ? 'Добавь каналы в коллекцию — из списка каналов или со страницы канала.'
-            : 'Добавь канал в каталоге — и публикации появятся здесь.'}
+            : $subs.length
+              ? 'Новых публикаций нет. Загляни позже или проверь сейчас.'
+              : 'Добавь канал в каталоге — и публикации появятся здесь.'}
     >
       <svelte:fragment slot="actions">
         {#if query}
           <!-- Поле поиска в шапке общее с лентой: сбрасываем его там, а не только здесь. -->
           <Button on:click={() => dispatch('clearSearch')}>Сбросить поиск</Button>
+        {:else if feedMode === 'feed' && collection && !collectionHasChannels}
+          <Button on:click={() => dispatch('openChannels')}>Добавить каналы</Button>
+        {:else if feedMode === 'feed' && !collection && !$subs.length}
+          <Button on:click={() => dispatch('openCatalog')}>Открыть каталог</Button>
+        {:else if feedMode === 'feed'}
+          <Button on:click={pullRefresh}>Проверить новые</Button>
         {/if}
       </svelte:fragment>
     </EmptyState>

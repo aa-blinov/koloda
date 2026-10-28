@@ -204,7 +204,7 @@
         {#each $subs as channel (channel)}
           {@const item = historyBy.get(channel)}
           {@const name = $titles[channel] || channel}
-          <div class="row">
+          <div class="row" data-channel={channel}>
           <button type="button" class="chan" on:click={() => pickChannel(channel)}>
             <span class="photo" aria-hidden="true">
               {#if $avatars.get(channel) && !broken.has($avatars.get(channel))}

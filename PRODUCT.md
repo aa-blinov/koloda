@@ -53,9 +53,10 @@ person never reaches another.
 ## Operating Context
 
 The service is a page in a browser tab that stays open next to a chat. On a
-wide screen the feed is a column and is refreshed by pulling down at the top of
-the list; on a phone it is a deck of cards and is refreshed by the button over
-it. Nothing arrives on its own. The reader moves through the posts with the
+wide screen the feed is a column with an explicit refresh button in its top
+bar; on a phone it is a deck of cards with the same action over it. Pulling down
+at the top of the wide-screen list is an additional gesture. Nothing arrives
+on its own. The reader moves through the posts with the
 keyboard: `j` and `k` for the next and the previous post, `n` for the first
 unread, `u` to take a read mark back, `/` for the search, `?` for the list of
 the keys, `Esc` to close a dialog and to clear the search field; in an empty
@@ -210,7 +211,14 @@ Deliberately not true, and worth knowing before a change:
   is not searching. It counts the unread posts that are newer than the top one
   and shows a button "New posts: N", above the list or in the top row of the
   deck. The screen does not move: the posts come when the reader presses the
-  button, and the button goes away once they are in.
+  button, and the button goes away once they are in. The check reads the shared
+  server cache; a public channel is normally fetched from t.me every four to
+  six minutes. The explicit refresh button asks t.me immediately, waits up to
+  eight seconds, and reports channels that are still loading. To avoid duplicate
+  requests across profiles, it does not fetch a channel that was checked in the
+  last minute.
+- An empty feed has one direct action: "Open catalog" when there are no
+  subscriptions, or "Add channels" when the selected collection is empty.
 - A channel that the server has not read yet when the feed opens is asked for
   again by the page, up to three times, four seconds apart, so its posts arrive
   without a reload. Once it is read, the feed stops asking.
