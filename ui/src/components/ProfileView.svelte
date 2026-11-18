@@ -573,11 +573,13 @@
     justify-content: center;
     text-align: center;
     padding-inline: 2px;
-    font-size: 11px;
     letter-spacing: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+  /* Размер подписи вкладок — в app.css: класс кита на кнопке перебивает
+     унаследованный размер, и заданный здесь 11 px не применялся. */
 
   .email-form {
     display: flex;

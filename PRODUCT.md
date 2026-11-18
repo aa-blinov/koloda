@@ -306,6 +306,10 @@ and 0 forks, and it was created on 2026-10-15.
 - **The touch targets are large enough.** On a phone the buttons and the
   segments are at least 48 px on a finger device (44 px on a mouse screen),
   and the bottom bar is exactly 64 px.
+- **The narrowest phone holds.** From a width of 320 px no screen spills
+  sideways, and no label is cut short: the sign-in switcher wraps its labels,
+  and the five tabs of the profile step their font down before an ellipsis
+  could appear.
 - **The contrast of the text is at least 4.5:1** on every surface in every
   palette, and `ThemeContrastTest` checks it by reading the tokens out of the
   kit. A colour of one's own breaks the theme, and `check_ui.py` fails on it.

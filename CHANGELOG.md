@@ -19,9 +19,17 @@ All notable changes to koloda. Versions are ordered newest first.
   uploads were lost when the interface moved to the kit: the download stayed, the load
   went. The backup file now carries the collections, and the plain text list downloads
   again as `koloda-kanaly.txt`.
+- A browser check X5 walks the narrow phones: no screen spills sideways from a width of
+  320 px, and the labels of the profile tabs are not cut short.
 
 ### Fixed
 
+- The sign-in screen spilled sideways on narrow phones (44 px at 320, 4 px at 360): the
+  labels of the mode switcher wrapped nowhere. They wrap now, and only when the line
+  does not fit.
+- The five profile tabs were cut short with an ellipsis on phones below 372 px, and the
+  kit's 12 px with wide letter-spacing was winning over the intended 11 px. The labels
+  keep their whole text: 11 px, and 10 px below 372 px.
 - `audit_media.py` closes its database before it returns. On Windows the open handle kept
   the file locked, and the test suite could not clean up after the audit check.
 

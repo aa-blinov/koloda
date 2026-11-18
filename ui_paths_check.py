@@ -935,6 +935,41 @@ def x3(c):
     assert not small, "меньше 48 px: %s" % small
 
 
+@check("X5", "Узкий телефон: экраны без перелива, подписи вкладок целы", device="phone")
+def x5(c):
+    """От 320 px (маленький SE) до 420 px (обычный телефон): экраны держат ширину,
+    и подписи вкладок профиля не режутся многоточием."""
+    # экран входа виден без сессии: проверяем его до логина
+    for width in (320, 360, 420):
+        c.pg.set_viewport_size({"width": width, "height": 700})
+        c.pg.goto(BASE + "/")
+        c.pg.wait_for_selector("#authScreen")
+        c.pg.wait_for_timeout(600)
+        overflow = c.pg.evaluate("document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth")
+        assert overflow <= 0, "экран входа переливается на %d px: ширина %d" % (overflow, width)
+    login(c.pg, c.user)
+    for width in (320, 360, 420):
+        c.pg.set_viewport_size({"width": width, "height": 700})
+        c.pg.wait_for_timeout(900)
+        overflow = c.pg.evaluate("document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth")
+        assert overflow <= 0, "лента переливается на %d px: ширина %d" % (overflow, width)
+    for screen in ("Каталог", "Сохранённое"):
+        c.pg.get_by_role("button", name=screen, exact=True).first.click()
+        c.pg.wait_for_timeout(900)
+        overflow = c.pg.evaluate("document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth")
+        assert overflow <= 0, "%s переливается на %d px" % (screen, overflow)
+    open_profile(c.pg)
+    for width in (320, 360, 420):
+        c.pg.set_viewport_size({"width": width, "height": 700})
+        c.pg.wait_for_timeout(900)
+        overflow = c.pg.evaluate("document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth")
+        assert overflow <= 0, "профиль переливается на %d px: ширина %d" % (overflow, width)
+        clipped = c.pg.evaluate("""[...document.querySelectorAll('[role=tab]')]
+            .filter(e => e.offsetParent !== null && e.scrollWidth > e.clientWidth + 1)
+            .map(e => e.textContent.trim())""")
+        assert not clipped, "подписи вкладок обрезаны: %s (ширина %d)" % (clipped, width)
+
+
 @check("F22", "Отмена свайпа в колоде возвращает пост на его место по времени, а не наверх", device="phone")
 def f22(c):
     login(c.pg, c.user)

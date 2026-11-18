@@ -417,6 +417,13 @@
     margin-bottom: var(--ui-space-comfortable);
   }
 
+  /* Кит не переносит подписи в кнопках переключателя, а «Уже есть профиль» и
+     «Создать профиль» в одну строку занимают 314 px: экран входа переливался
+     на 44 px при ширине 320. Перенос срабатывает только когда строка не влезает. */
+  .auth-modes :global(button) {
+    white-space: normal;
+  }
+
   form {
     display: flex;
     flex-direction: column;
