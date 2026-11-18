@@ -20,6 +20,7 @@ import os
 import random
 import string
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -93,6 +94,18 @@ def new_user(prefix):
     for channel in CHANNELS:
         api("/api/state/subscription", {"channel": channel, "subscribed": True}, cookie)
     return {"name": name, "cookie": cookie}
+
+
+def empty_user(prefix):
+    """Пустой подтверждённый профиль без подписок: файл переноса вносят именно
+    в пустой профиль, слияние берёт из него каналы и коллекции только тогда."""
+    suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6))
+    name = "%s-%s" % (prefix, suffix)
+    seed_user(name)
+    status, cookie_header, _ = api("/api/auth/login", {"username": name, "password": PASSWORD})
+    if status != 200:
+        raise RuntimeError("вход в пустой профиль не прошёл: код %s" % status)
+    return {"name": name, "cookie": cookie_header.split(";")[0]}
 
 
 def make_collection(user, name, channels):
@@ -746,14 +759,67 @@ def v2(c):
     assert c.pg.evaluate("document.documentElement.dataset.font") == "serif", "шрифт не сохранился"
 
 
-@check("D1", "Резервная копия: «Скачать файл» отдаёт файл")
+@check("D1", "Резервная копия: файл скачан и внесён в другой профиль")
 def d1(c):
+    make_collection(c.user, "Перенос", ["rybolos_channel"])
+    # отметка читается: без неё файл не нёс бы записи read
+    api("/api/state/read", {"posts": ["rybolos_channel/1"]}, c.user["cookie"])
     login(c.pg, c.user)
     open_profile(c.pg)
     c.pg.get_by_role("tab", name="Данные").click()
     with c.pg.expect_download(timeout=20000) as download:
         c.pg.get_by_role("link", name="Скачать koloda-lenta.jsonl").click()
-    assert download.value.suggested_filename, "файл без имени"
+    assert download.value.suggested_filename == "koloda-lenta.jsonl", "имя файла не то"
+    path = os.path.join(tempfile.gettempdir(), "koloda-d1-%s.jsonl" % c.user["name"])
+    download.value.save_as(path)
+    # файл выгрузки несёт и коллекции, иначе перенос терял бы группы каналов
+    with open(path, encoding="utf-8") as saved:
+        records = [json.loads(line) for line in saved if line.strip()]
+    kinds = {record.get("type") for record in records}
+    assert {"channel", "read", "collection"} <= kinds, "в файле не все виды записей: %s" % sorted(kinds)
+    # второй профиль пустой: слияние берёт каналы и коллекции только из пустого
+    second = empty_user("d1")
+    c.ctx.clear_cookies()
+    login(c.pg, second)
+    open_profile(c.pg)
+    c.pg.get_by_role("tab", name="Данные").click()
+    c.pg.locator("input[type=file][accept='.jsonl']").set_input_files(path)
+    c.pg.wait_for_function(
+        "() => [...document.querySelectorAll('[role=status]')]"
+        ".some(e => e.textContent.includes('Загружено'))", timeout=20000)
+    assert set(subscriptions_of(second)) == set(CHANNELS), "подписки не переехали"
+    names = {coll["name"] for coll in collections_of(second)}
+    assert "Перенос" in names, "коллекции не переехали: %s" % sorted(names)
+    status, _, state = api("/api/state", None, second["cookie"])
+    assert "rybolos_channel/1" in state.get("reads", []), "отметки не переехали"
+    os.remove(path)
+
+
+@check("D2", "Список для переноса: скачан и внесён в другой профиль")
+def d2(c):
+    login(c.pg, c.user)
+    open_profile(c.pg)
+    c.pg.get_by_role("tab", name="Данные").click()
+    with c.pg.expect_download(timeout=20000) as download:
+        c.pg.get_by_role("button", name="Скачать список").click()
+    assert download.value.suggested_filename == "koloda-kanaly.txt", "имя файла не то"
+    path = os.path.join(tempfile.gettempdir(), "koloda-d2-%s.txt" % c.user["name"])
+    download.value.save_as(path)
+    with open(path, encoding="utf-8") as saved:
+        lines = {line.strip() for line in saved if line.strip()}
+    assert lines == {"https://t.me/" + channel for channel in CHANNELS}, "в файле не те ссылки: %s" % sorted(lines)
+    second = empty_user("d2")
+    c.ctx.clear_cookies()
+    login(c.pg, second)
+    open_profile(c.pg)
+    c.pg.get_by_role("tab", name="Данные").click()
+    c.pg.locator("input[type=file][accept='.txt,text/plain']").set_input_files(path)
+    c.pg.wait_for_function(
+        "() => [...document.querySelectorAll('[role=status]')]"
+        ".some(e => e.textContent.includes('Загружено каналов'))", timeout=20000)
+    assert set(subscriptions_of(second)) == set(CHANNELS), "каналы из списка не переехали"
+    assert collections_of(second) == [], "из простого списка возникли коллекции"
+    os.remove(path)
 
 
 # ---------- K, P: каталог и канал ----------

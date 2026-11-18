@@ -69,6 +69,15 @@ def fetch_window(channel):
 
 def main(path):
     db = sqlite3.connect(path)
+    # Соединение закрываем сами: на Windows открытый дескриптор держит файл,
+    # и временную базу теста потом не убрать из каталога.
+    try:
+        return audit(db, path)
+    finally:
+        db.close()
+
+
+def audit(db, path):
     channels = [r[0] for r in db.execute("SELECT DISTINCT channel FROM posts")]
     total = db.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     if not channels:

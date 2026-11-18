@@ -13,6 +13,18 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ## [Unreleased]
 
+### Added
+
+- The data tab of the profile can load the backup file and the channel list back. The
+  uploads were lost when the interface moved to the kit: the download stayed, the load
+  went. The backup file now carries the collections, and the plain text list downloads
+  again as `koloda-kanaly.txt`.
+
+### Fixed
+
+- `audit_media.py` closes its database before it returns. On Windows the open handle kept
+  the file locked, and the test suite could not clean up after the audit check.
+
 ## 0.3.15 — 2026-10-25
 
 ### Changed

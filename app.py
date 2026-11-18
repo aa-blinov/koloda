@@ -1683,6 +1683,56 @@ def prune_collections(db, cid):
                "AND channel NOT IN (SELECT channel FROM user_subs WHERE profile=?)", (cid, cid))
 
 
+def incoming_collections(data):
+    """Коллекции из тела слияния — в том же виде, в каком их пишет выгрузка:
+    name и channels. Кривая запись пропускается, как пропускается кривое имя
+    канала в подписках: одно битое поле не должно ронять весь перенос."""
+    out = []
+    for item in string_list(data, "collections"):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        name = name.strip() if isinstance(name, str) else ""
+        channels = [c for c in string_list(item, "channels") if valid_feed_channel(c)]
+        if not 1 <= len(name) <= COLLECTION_NAME_MAX or not name.isprintable():
+            continue
+        out.append({"name": name, "channels": channels})
+    return out
+
+
+def import_collections(db, cid, incoming, subs):
+    """Коллекции файла выгрузки в пустой профиль, одной транзакцией с подписками.
+    Канал, которого нет среди подписок, из состава выпадает — как при отписке.
+    Название, занятое на профиле или повторённое в самом файле, пропускается:
+    существующее важнее. Лимиты называются, как их называет редактор коллекции."""
+    rows = []
+    with _collections_lock:
+        taken = {name.casefold() for name, in
+                 db.execute("SELECT name FROM collections WHERE profile=?", (cid,))}
+        for item in incoming:
+            key = item["name"].casefold()
+            if key in taken:
+                continue
+            # лимит проверяем по заявленному составу, до отсечения лишнего:
+            # выгрузка состава больше подписок не пишет, значит файл повреждён
+            channels = list(dict.fromkeys(item["channels"]))
+            if len(channels) > COLLECTION_CHANNELS_CAP:
+                db.rollback()
+                raise ValueError("В коллекции «%s» не больше %d каналов"
+                                  % (item["name"], COLLECTION_CHANNELS_CAP))
+            taken.add(key)
+            rows.append((item["name"], [c for c in channels if c in subs]))
+        count = db.execute("SELECT COUNT(*) FROM collections WHERE profile=?", (cid,)).fetchone()[0]
+        if count + len(rows) > COLLECTIONS_CAP:
+            db.rollback()
+            raise ValueError("коллекций не больше %d" % COLLECTIONS_CAP)
+        for name, channels in rows:
+            collection = db.execute("INSERT INTO collections (profile, name, created) VALUES (?,?,?)",
+                                    (cid, name, int(time.time()))).lastrowid
+            db.executemany("INSERT INTO collection_channels VALUES (?,?)",
+                           [(collection, c) for c in channels])
+
+
 def save_state(db, cid, data):
     # Приватные каналы тоже подписки: без них полная замена состояния стирала
     # бы подписку на приватный канал, а её больше негде восстановить.
@@ -1702,8 +1752,10 @@ def save_state(db, cid, data):
 def merge_state(db, cid, data):
     """Однократно соединяет локальное состояние с уже существующим профилем.
     Подписки из слияния берутся только у пустого профиля (ни одной подписки): иначе устаревшая
-    вкладка или другое устройство вернули бы канал, от которого отписались. Отметки сливаются всегда."""
+    вкладка или другое устройство вернули бы канал, от которого отписались. Коллекции идут
+    с ними и по той же причине. Отметки сливаются всегда."""
     incoming_subs = [c for c in string_list(data, "subs") if valid_channel(c)]
+    collections_in = incoming_collections(data)
     reads = list(dict.fromkeys(r for r in string_list(data, "reads") if valid_post_key(r)))
     # Вставка открывает транзакцию с блокировкой записи, и проверка пустоты идёт уже под ней.
     db.execute("INSERT OR IGNORE INTO profiles (code,created) VALUES (?,?)",
@@ -1714,6 +1766,8 @@ def merge_state(db, cid, data):
             db.rollback()
             raise ValueError("После объединения получится больше 200 каналов")
         db.executemany("INSERT OR IGNORE INTO user_subs VALUES (?,?)", [(cid, c) for c in subs])
+        if collections_in:
+            import_collections(db, cid, collections_in, set(subs))
     db.executemany("INSERT OR IGNORE INTO user_reads VALUES (?,?)", [(cid, r) for r in reads])
     # итог, а не входящий список: новые отметки вместе со старыми не должны пройти мимо предела
     total = db.execute("SELECT COUNT(*) FROM user_reads WHERE profile=?", (cid,)).fetchone()[0]
@@ -2774,6 +2828,11 @@ class Handler(BaseHTTPRequestHandler):
                 state = load_state(db, cid)
                 lines = [json.dumps({"type": "channel", "channel": c}, ensure_ascii=False)
                          for c in state["subs"]]
+                # коллекции идут за каналами: файл читают и глазами, и группы
+                # рядом с каналами понятнее, чем в конце
+                lines += [json.dumps({"type": "collection", "name": coll["name"],
+                                       "channels": coll["channels"]}, ensure_ascii=False)
+                          for coll in list_collections(db, cid)]
                 lines += [json.dumps({"type": "read", "post": r}, ensure_ascii=False)
                           for r in state["reads"]]
                 return self._send(200, "\n".join(lines) + ("\n" if lines else ""),

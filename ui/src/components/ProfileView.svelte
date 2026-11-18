@@ -5,11 +5,16 @@
    */
   import { onMount } from 'svelte';
   import { createEventDispatcher } from 'svelte';
+  import { get } from 'svelte/store';
   import { Button, DescriptionList, Kbd, Notice, SegmentedControl, Select, Separator, Tabs, TextField } from '@monos/ui';
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
-  import { session, settings, saveSettings, THEMES, MODES, FONTS, setSubscription } from '../lib/stores.js';
+  import { buildChannelList, parseBackup, parseChannelList } from '../lib/backup.js';
+  import {
+    session, settings, saveSettings, THEMES, MODES, FONTS, setSubscription,
+    subs, applyState, refreshCollections,
+  } from '../lib/stores.js';
 
   const dispatch = createEventDispatcher();
 
@@ -204,6 +209,85 @@
       tgProblem = err && err.message ? err.message : 'Не получилось.';
     }
   }
+
+  // --- перенос: файл ленты и список каналов ---
+
+  let backupInput;
+  let listInput;
+  let dataBusy = false;
+  let backupMessage = '';
+  let backupProblem = '';
+  let listMessage = '';
+  let listProblem = '';
+
+  // Файл ленты: каналы, коллекции и отметки одним слиянием. Разбор идёт в
+  // браузере, а проверка — на сервере, как у всякого входа из браузера.
+  async function importBackup(event) {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    backupMessage = '';
+    backupProblem = '';
+    dataBusy = true;
+    try {
+      const parsed = parseBackup(await file.text());
+      const answer = await api.mergeState({
+        subs: parsed.subs,
+        reads: parsed.reads,
+        collections: parsed.collections,
+      });
+      applyState(answer);
+      await refreshCollections();
+      const parts = ['каналов ' + parsed.subs.length, 'отметок ' + parsed.reads.length];
+      if (parsed.collections.length) parts.push('коллекций ' + parsed.collections.length);
+      backupMessage = 'Загружено: ' + parts.join(', ') + '.';
+    } catch (err) {
+      backupProblem = err && err.message ? err.message : 'Не удалось загрузить файл.';
+    } finally {
+      dataBusy = false;
+    }
+  }
+
+  // Список каналов: только имена, без отметок. Он дополняет подписки, но
+  // работает по тем же правилам слияния: пустой профиль забирает всё.
+  async function importChannelList(event) {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    listMessage = '';
+    listProblem = '';
+    dataBusy = true;
+    try {
+      const names = parseChannelList(await file.text());
+      if (!names.length) throw new Error('В файле нет ссылок на каналы.');
+      const answer = await api.mergeState({ subs: names, reads: [], collections: [] });
+      applyState(answer);
+      listMessage = 'Загружено каналов: ' + names.length + '.';
+    } catch (err) {
+      listProblem = err && err.message ? err.message : 'Не удалось загрузить список.';
+    } finally {
+      dataBusy = false;
+    }
+  }
+
+  function downloadChannelList() {
+    const names = get(subs);
+    listMessage = '';
+    listProblem = '';
+    if (!names.length) {
+      listProblem = 'Подписок пока нет, список пустой.';
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([buildChannelList(names)], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'koloda-kanaly.txt';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    listMessage = 'Список скачан: каналов ' + names.length + '.';
+  }
 </script>
 
 <div class="column profile">
@@ -334,12 +418,44 @@
         <section class="panel">
           <h2>Резервная копия</h2>
           <p class="hint">
-            Файл со списком каналов и отметок о прочитанном. В нём всё, что сервис знает о профиле.
+            Файл с каналами, коллекциями и отметками о прочитанном: всё, что сервис знает
+            о профиле. На другом устройстве войди в свой профиль и загрузи файл. Лента
+            восстановится.
           </p>
-          <a class="export" href="/api/state/export" download="koloda-lenta.jsonl">
-            <Icon name="download" size={14} />
-            Скачать koloda-lenta.jsonl
-          </a>
+          <div class="data-actions">
+            <a class="export" href="/api/state/export" download="koloda-lenta.jsonl">
+              <Icon name="download" size={14} />
+              Скачать koloda-lenta.jsonl
+            </a>
+            <Button on:click={() => backupInput.click()} loading={dataBusy}>Загрузить файл</Button>
+          </div>
+          <input type="file" accept=".jsonl" hidden bind:this={backupInput} on:change={importBackup} />
+          {#if backupMessage}
+            <p class="hint" role="status">{backupMessage}</p>
+          {/if}
+          {#if backupProblem}
+            <Notice tone="danger" title="Не получилось">{backupProblem}</Notice>
+          {/if}
+
+          <Separator />
+
+          <h2>Список для переноса</h2>
+          <p class="hint">
+            Ссылки на каналы, по одной в строке. Список можно открыть в блокноте, переслать
+            другому человеку или загрузить в другой профиль. Отметки о прочитанном в него
+            не входят: для них есть файл выше.
+          </p>
+          <div class="data-actions">
+            <Button variant="text" on:click={downloadChannelList}>Скачать список</Button>
+            <Button variant="text" on:click={() => listInput.click()}>Загрузить список</Button>
+          </div>
+          <input type="file" accept=".txt,text/plain" hidden bind:this={listInput} on:change={importChannelList} />
+          {#if listMessage}
+            <p class="hint" role="status">{listMessage}</p>
+          {/if}
+          {#if listProblem}
+            <Notice tone="danger" title="Не получилось">{listProblem}</Notice>
+          {/if}
         </section>
       {:else if active === 'view'}
         <section class="panel">
@@ -507,6 +623,16 @@
 
   .tg-actions {
     display: flex;
+    gap: var(--ui-space-base);
+    flex-wrap: wrap;
+    margin-bottom: var(--ui-space-snug);
+  }
+
+  /* Ряд «скачать — загрузить»: действия переноса стоят рядом, а не друг
+     под другом, и на телефоне не сужают друг друга. */
+  .data-actions {
+    display: flex;
+    align-items: center;
     gap: var(--ui-space-base);
     flex-wrap: wrap;
     margin-bottom: var(--ui-space-snug);

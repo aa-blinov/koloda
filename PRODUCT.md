@@ -191,8 +191,11 @@ Confirmed by the code:
   served with Range.
 - A post can be saved to the profile: public and private alike. The saved list
   shows both, and only the posts of the profile that saved them.
-- The backup file `koloda-lenta.jsonl` holds the channels and the read marks; a
-  plain text list holds the channel links.
+- The backup file `koloda-lenta.jsonl` holds the channels, the collections and the read
+  marks. The data tab of the profile loads it back: the channels and the collections go
+  into a profile without subscriptions, the read marks merge into any. A plain text list
+  of the channel links, one per line, downloads from the same tab and loads back the
+  same way.
 - The interface is on the Monos kit: the palette, the radii, the spacing and the
   controls are the kit's, and the product adds only the column of the feed, the
   text of a post and the rows of the catalog.

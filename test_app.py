@@ -1166,6 +1166,86 @@ class FeedAPITest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertNotIn(("alpha", 1), {(p["channel"], p["msg_id"]) for p in feed["posts"]})
 
+    def test_export_and_merge_carry_collections(self):
+        self.register("collector", "long-password")
+        status, _ = self.request("/api/state/merge", method="POST",
+                                 data={"subs": ["alpha", "beta"], "reads": ["alpha/1"],
+                                       "collections": [
+                                           {"name": "Чтение", "channels": ["alpha", "beta"]},
+                                           {"name": "рабочее", "channels": ["beta", "alpha", "beta"]},
+                                       ]})
+        self.assertEqual(status, 200)
+
+        # выгрузка пишет коллекции теми же строками, что и каналы; состав по алфавиту,
+        # как его отдаёт список коллекций
+        status, _, body = self.request_raw("/api/state/export")
+        self.assertEqual(status, 200)
+        records = [json.loads(line) for line in body.decode().splitlines() if line.strip()]
+        by_type = {}
+        for record in records:
+            by_type.setdefault(record["type"], []).append(record)
+        self.assertEqual({r["channel"] for r in by_type["channel"]}, {"alpha", "beta"})
+        self.assertEqual({(r["name"], tuple(r["channels"])) for r in by_type["collection"]},
+                         {("Чтение", ("alpha", "beta")), ("рабочее", ("alpha", "beta"))})
+
+        # файл выгрузки целиком возвращается слиянием в пустой профиль
+        self.register("mover", "long-password")
+        status, moved = self.request("/api/state/merge", method="POST",
+                                     data={"subs": [r["channel"] for r in by_type["channel"]],
+                                           "reads": [r["post"] for r in by_type["read"]],
+                                           "collections": by_type["collection"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(set(moved["subs"]), {"alpha", "beta"})
+        self.assertIn("alpha/1", moved["reads"])
+        status, answer = self.request("/api/collections")
+        self.assertEqual({(c["name"], tuple(c["channels"])) for c in answer["collections"]},
+                         {("Чтение", ("alpha", "beta")), ("рабочее", ("alpha", "beta"))})
+
+        # профиль с подписками файл не меняет: его каналы и коллекции остаются
+        status, _ = self.request("/api/state/merge", method="POST",
+                                 data={"subs": ["gamma"],
+                                       "collections": [{"name": "Стороннее", "channels": []}]})
+        self.assertEqual(status, 200)
+        status, answer = self.request("/api/collections")
+        self.assertEqual({c["name"] for c in answer["collections"]}, {"Чтение", "рабочее"})
+
+        # кривые записи пропускаются, а канал вне подписок выпадает из состава
+        self.register("damaged", "long-password")
+        status, _ = self.request("/api/state/merge", method="POST",
+                                 data={"subs": ["alpha"],
+                                       "collections": [{"name": "Целое", "channels": ["alpha", "ghost"]},
+                                                       {"name": "   ", "channels": ["alpha"]},
+                                                       "не словарь"]})
+        self.assertEqual(status, 200)
+        status, answer = self.request("/api/collections")
+        self.assertEqual([(c["name"], c["channels"]) for c in answer["collections"]],
+                         [("Целое", ["alpha"])])
+
+        # дубль названия в одном файле не создаёт вторую коллекцию
+        self.register("dupes", "long-password")
+        status, _ = self.request("/api/state/merge", method="POST",
+                                 data={"subs": ["alpha"],
+                                       "collections": [{"name": "Одно", "channels": ["alpha"]},
+                                                       {"name": "одно", "channels": ["alpha"]}]})
+        self.assertEqual(status, 200)
+        status, answer = self.request("/api/collections")
+        self.assertEqual([c["name"] for c in answer["collections"]], ["Одно"])
+
+        # лимиты называются, как их называет редактор, и слияние не применяется наполовину
+        self.register("capcase", "long-password")
+        oversize = [{"name": "big", "channels": ["c%03d" % i for i in range(201)]}]
+        status, payload = self.request("/api/state/merge", method="POST",
+                                       data={"subs": ["alpha"], "collections": oversize})
+        self.assertEqual(status, 409)
+        self.assertIn("не больше 200", payload["error"])
+        fifty_one = [{"name": "c%02d" % i, "channels": []} for i in range(51)]
+        status, payload = self.request("/api/state/merge", method="POST",
+                                       data={"subs": ["alpha"], "collections": fifty_one})
+        self.assertEqual(status, 409)
+        self.assertIn("50", payload["error"])
+        status, state = self.request("/api/state")
+        self.assertEqual(state["subs"], [], "отказ должен откатить и подписки")
+
 
 class FetchChannelTest(unittest.TestCase):
     """Пустая страница значит разное: без before это канал без постов, с before — конец истории."""
