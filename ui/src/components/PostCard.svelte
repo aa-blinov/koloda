@@ -4,7 +4,7 @@
    * marks are allowed, nothing else.
    */
   import { createEventDispatcher } from 'svelte';
-  import { Button } from '@monos/ui';
+  import { Button, toast } from '@monos/ui';
 
   import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
@@ -93,10 +93,32 @@
     dispatch('lightbox', { items, index });
   }
 
-  function share() {
+  // Ссылка уходит в буфер, читатель видит подтверждение. Без него кнопка
+  // выглядит мёртвой: копирование уже происходило, но молча.
+  async function share() {
     const url = postLink(post);
-    if (navigator.clipboard) navigator.clipboard.writeText(url);
-    else window.prompt('Ссылка на публикацию', url);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        throw new Error('no clipboard');
+      }
+      toast('Ссылка скопирована');
+    } catch (err) {
+      try {
+        const area = document.createElement('textarea');
+        area.value = url;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        document.body.removeChild(area);
+        toast('Ссылка скопирована');
+      } catch (fallbackErr) {
+        window.prompt('Ссылка на публикацию', url);
+      }
+    }
   }
 
   // --- жест по карточке, как в приложениях для знакомств ---
