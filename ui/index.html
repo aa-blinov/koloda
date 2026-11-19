@@ -10,6 +10,12 @@
     <meta name="theme-color" id="themeColor" />
     <title>Лента</title>
     <link rel="icon" href="data:," />
+    <!-- QR входа в Telegram: бумага всегда светлая, код всегда тёмный, в обеих
+         темах, иначе сканер его не берёт. qrsvg.py красит только классами. -->
+    <style>
+      .qr-paper { fill: #ffffff; }
+      .qr-ink { fill: #000000; }
+    </style>
   </head>
   <body>
     <div id="app"></div>

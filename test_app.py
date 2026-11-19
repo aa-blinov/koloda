@@ -2055,6 +2055,15 @@ class QrSvgTest(unittest.TestCase):
         # цвета задаются классами из index.html, сами по себе в SVG их нет
         self.assertNotIn("#", drawn)
 
+    def test_the_page_defines_the_qr_colours(self):
+        # SVG красит только классами: без них в index.html код — чёрный квадрат
+        # на чёрном, и сканеру брать нечего. Классы и SVG проверяют парой.
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui", "index.html")
+        with open(path, encoding="utf-8") as handle:
+            page = handle.read()
+        for cls in ("qr-paper", "qr-ink"):
+            self.assertIn(cls, page, "index.html не задаёт ." + cls)
+
 
 class QrLinkResponseTest(unittest.TestCase):
     """Вход в Telegram отдаёт QR вместе со ссылкой, пока вход ждёт подтверждения."""
