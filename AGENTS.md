@@ -83,6 +83,11 @@ The request log is off by default: `LENTELE_LOG=1 docker compose up -d`.
 - **`accounts.email` is unique for the values that are not empty.** Write a
   missing address as `None` and not as an empty string, or the second profile
   without an address gets a 409.
+- **Цвета QR заданы в `ui/index.html`, а не в SVG.** `qrsvg.py` красит код только
+  классами `qr-paper` и `qr-ink`. Когда эти два правила пропали со страницы, код
+  рисовался чёрным по чёрному и вход в Telegram выглядел как чёрный квадрат:
+  сканеру нечего было брать. Оба цвета проверяет проверка D4 в браузере и тест
+  `test_the_page_defines_the_qr_colours` в `test_app.py`.
 - **The content policy is in two places, and they must match.** `CSP` in
   `app.py` goes out as the header, and `ui/index.html` repeats it in a
   `<meta http-equiv>` without `frame-ancestors`. The production proxy replaces

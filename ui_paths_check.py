@@ -795,6 +795,33 @@ def d1(c):
     os.remove(path)
 
 
+@check("D4", "Вход в Telegram: QR виден и читается сканером")
+def d4(c):
+    login(c.pg, c.user)
+    open_profile(c.pg)
+    c.pg.get_by_role("tab", name="Telegram").click()
+    connect = c.pg.get_by_role("button", name="Подключить Telegram")
+    if not connect.count():
+        raise Skip("Telethon не установлен на стенде")
+    connect.click()
+    # QR рисуется классами из index.html, а не своими цветами в SVG: без
+    # белой бумаги и чёрного кода сканеру нечего брать.
+    qr = c.pg.locator("svg.qr")
+    qr.wait_for(state="visible", timeout=20000)
+    box = qr.bounding_box()
+    assert box and box["width"] >= 100 and box["height"] >= 100, "QR слишком мал: %s" % box
+
+    def fill(selector):
+        return c.pg.locator(selector).evaluate("el => getComputedStyle(el).fill")
+
+    assert fill("svg.qr .qr-paper") == "rgb(255, 255, 255)", "бумага не белая"
+    assert fill("svg.qr .qr-ink") == "rgb(0, 0, 0)", "код не чёрный"
+    cells = c.pg.locator("svg.qr path").get_attribute("d") or ""
+    assert cells.count("h1v1h-1z") > 100, "в QR почти нет клеток"
+    c.pg.get_by_role("button", name="Отменить").click()
+    qr.wait_for(state="detached", timeout=10000)
+
+
 @check("D2", "Список для переноса: скачан и внесён в другой профиль")
 def d2(c):
     login(c.pg, c.user)

@@ -24,6 +24,13 @@ All notable changes to koloda. Versions are ordered newest first.
 
 ### Fixed
 
+- The QR of the Telegram sign-in was black on black: `qrsvg.py` colours the code with
+  `.qr-paper` and `.qr-ink`, but `index.html` no longer defined them. The page defines both,
+  and a browser check D4 walks the whole sign-in screen to make sure the code is scannable.
+- The back button stood after the screen title, so the header of a sub-screen looked broken.
+  The button comes first, and the title stays visible on a desktop too.
+- «Поделиться» copied the link silently and looked dead. It now confirms the copy and falls
+  back to a text selection when the clipboard is not available.
 - The sign-in screen spilled sideways on narrow phones (44 px at 320, 4 px at 360): the
   labels of the mode switcher wrapped nowhere. They wrap now, and only when the line
   does not fit.
