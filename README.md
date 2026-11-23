@@ -74,14 +74,15 @@ The interface is in Russian; the labels quoted here are translated.
 - **The feed.** The posts of the chosen channels mixed together, in the order of
   publication. 80 entries on a page, and "Load more" continues the same
   chronology. Up to 200 channels in one feed.
-- **Read.** A post counts as read once you scroll it above the top of the
-  screen, so nothing has to be clicked. The `u` key takes a read mark back.
-  Read posts stay out of the feed on the next open: the "Hide read" button above
-  the feed is on by default, and turning it off brings them back. New posts do
-  not change the feed by themselves. The pull-down gesture at the top of the
-  feed refreshes it on a desktop, and the read posts leave the screen. A post
-  that the refresh puts above the screen stays unread until you scroll past
-  it. Until the refresh, what you read in this session stays in place.
+- **Read.** A post is read only by your own action: the "Mark as read" button
+  under the post, the `u` key, or a swipe in the deck on a phone. Scrolling
+  never marks a post, and neither does a refresh or the next page. The same
+  button or the `u` key takes the mark back. Read posts stay out of the feed
+  on the next open: the "Hide read" button above the feed is on by default,
+  and turning it off brings them back. New posts do not change the feed by
+  themselves. The pull-down gesture at the top of the feed refreshes it on a
+  desktop, and the read posts leave the screen. Until the refresh, what you
+  read in this session stays in place.
 - **Search.** Over the posts of the feed and over the names in the catalog. The
   search waits 320 ms after the last keystroke.
 - **Channel tabs.** A quick jump to one channel.
